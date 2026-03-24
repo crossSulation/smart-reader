@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@mui/icons-material": "^7.3.9",
+    "@mui/material": "^7.3.9",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-pdf": "^10.4.1",

@@ -10,7 +10,11 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8000', // 后端地址
         changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
       }
     }
+  },
+  optimizeDeps: {
+    include: ['@mui/material']
   },
 })

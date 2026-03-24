@@ -1,48 +1,99 @@
-# backend/app/routers/books.py
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from typing import List
+from pydantic import BaseModel
+
 from app.database import get_db
-from app.models import Book
+from app.schemas import Book, BookCreate
+from app.services.file_service import FileService
+from app.routers.auth import get_current_user
 
-router = APIRouter(prefix="/api/books", tags=["books"])
+router = APIRouter(prefix="/books", tags=["books"])
 
-@router.get("/")
+
+class UpdateProgressRequest(BaseModel):
+    current_page: int
+    total_pages: int = None
+
+
+class AddNotesRequest(BaseModel):
+    notes: str
+
+
+@router.get("/", response_model=List[Book])
 async def list_books(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    books = db.query(Book).filter(Book.user_id == user["id"]).all()
-    return [{
-        "id": str(b.id),
-        "title": b.title,
-        "author": b.author,
-        "file_type": b.file_type,
-        "cover_path": b.cover_path,
-        "current_page": b.current_page,
-        "created_at": b.created_at
-    } for b in books]
+    # 实现书籍列表功能
+    file_service = FileService(db)
+    books = file_service.get_user_books(user['id'])
+    return books
 
-@router.get("/{book_id}")
-async def get_book(book_id: str, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    book = db.query(Book).filter(Book.id == book_id, Book.user_id == user["id"]).first()
+
+@router.post("/", response_model=Book)
+async def create_book(book: BookCreate, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    # 实现创建书籍功能
+    file_service = FileService(db)
+    new_book = file_service.create_book(user['id'], book)
+    return new_book
+
+
+@router.get("/{book_id}", response_model=Book)
+async def get_book(book_id: int, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    # 实现获取特定书籍功能
+    file_service = FileService(db)
+    book = file_service.get_book(book_id, user['id'])
     if not book:
-        raise HTTPException(404, "书本不存在")
-    return {
-        "id": str(book.id),
-        "title": book.title,
-        "file_path": f"/api/files/{book.id}",  # 受保护的文件访问
-        "file_type": book.file_type,
-        "total_pages": book.total_pages,
-        "current_page": book.current_page
-    }
+        raise HTTPException(status_code=404, detail="Book not found")
+    return book
+
 
 @router.put("/{book_id}/progress")
-async def update_progress(
-    book_id: str,
-    page: int,
-    user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    book = db.query(Book).filter(Book.id == book_id, Book.user_id == user["id"]).first()
+async def update_book_progress(book_id: int, progress_data: UpdateProgressRequest, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    """更新书籍阅读进度"""
+    file_service = FileService(db)
+    book = file_service.update_book_progress(
+        book_id=book_id,
+        user_id=user['id'],
+        current_page=progress_data.current_page,
+        total_pages=progress_data.total_pages
+    )
     if not book:
-        raise HTTPException(404, "书本不存在")
-    book.current_page = page
-    db.commit()
-    return {"current_page": page}
+        raise HTTPException(status_code=404, detail="Book not found")
+    return book
+
+
+@router.get("/{book_id}/progress", response_model=Book)
+async def get_book_progress(book_id: int, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    """获取书籍阅读进度"""
+    file_service = FileService(db)
+    book = file_service.get_book(book_id, user['id'])
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    return book
+
+
+@router.put("/{book_id}/notes")
+async def add_book_notes(book_id: int, notes_data: AddNotesRequest, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    """为书籍添加笔记"""
+    file_service = FileService(db)
+    book = file_service.add_book_notes(book_id, user['id'], notes_data.notes)
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    return book
+
+
+@router.get("/stats")
+async def get_reading_stats(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    """获取用户的阅读统计数据"""
+    file_service = FileService(db)
+    stats = file_service.get_user_reading_stats(user['id'])
+    return stats
+
+
+@router.delete("/{book_id}")
+async def delete_book(book_id: int, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    # 实现删除书籍功能
+    file_service = FileService(db)
+    success = file_service.delete_book(book_id, user['id'])
+    if not success:
+        raise HTTPException(status_code=404, detail="Book not found")
+    return {"message": "Book deleted successfully"}

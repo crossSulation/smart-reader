@@ -31,7 +31,7 @@ function Register() {
 
     try {
       // 发送注册请求到后端
-      const response = await fetch('http://localhost:8000/api/auth/register', {
+      const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -63,8 +63,8 @@ function Register() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-white rounded-xl shadow-lg p-8 text-center">
+      <div className="min-h-screen bg-gradient-to-br to-indigo-100 flex items-center justify-center p-4">
+        <div className="w-full max-w-md min-w-[350px] bg-white rounded-xl shadow-lg p-6 sm:p-8 space-y-6 mx-auto lg:min-w-[800px] lg:w-auto lg:max-w-2xl">
           <div className="mx-auto bg-green-100 text-green-700 rounded-full w-16 h-16 flex items-center justify-center mb-4">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -78,8 +78,8 @@ function Register() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-xl shadow-lg p-8 space-y-6">
+    <div className="min-h-screen bg-gradient-to-br to-indigo-100 flex items-center justify-center p-4">
+      <div className="w-full max-w-md min-w-[350px] bg-white rounded-xl shadow-lg p-8 space-y-6 mx-auto lg:min-w-[800px] lg:w-auto lg:max-w-2xl">
         <div className="text-center">
           <h2 className="text-3xl font-bold text-gray-800">创建账户</h2>
           <p className="mt-2 text-gray-600">加入Smart Reader大家庭</p>

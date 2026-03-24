@@ -1,13 +1,32 @@
-# backend/app/routers/files.py
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
-import os
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from typing import List
 
-router = APIRouter(prefix="/api/files", tags=["files"])
+from app.database import get_db
+from app.schemas import FileMetadataResponse
+from app.services.file_service import FileService
+from app.routers.auth import get_current_user
 
-@router.get("/{book_id}")
-async def get_file(book_id: str, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    book = db.query(Book).filter(Book.id == book_id, Book.user_id == user["id"]).first()
-    if not book or not os.path.exists(book.file_path):
-        raise HTTPException(404, "文件不存在")
-    return FileResponse(book.file_path, media_type="application/pdf")
+router = APIRouter(prefix="/files", tags=["files"])
+
+@router.get("/", response_model=List[FileMetadataResponse])
+async def list_files(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    file_service = FileService(db)
+    files = file_service.get_user_files(user['id'])
+    return files
+
+@router.get("/{file_id}", response_model=FileMetadataResponse)
+async def get_file(file_id: int, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    file_service = FileService(db)
+    file = file_service.get_file(file_id, user['id'])
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+    return file
+
+@router.delete("/{file_id}")
+async def delete_file(file_id: int, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    file_service = FileService(db)
+    success = file_service.delete_file(file_id, user['id'])
+    if not success:
+        raise HTTPException(status_code=404, detail="File not found")
+    return {"message": "File deleted successfully"}

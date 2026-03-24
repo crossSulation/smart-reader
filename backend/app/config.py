@@ -1,67 +1,61 @@
-from pydantic_settings import BaseSettings
-from typing import Optional
 import os
+from typing import Optional
+from pydantic_settings import BaseSettings
+
 
 class Settings(BaseSettings):
-    # 数据库配置 - 支持多种数据库
-    DATABASE_URL: str = "sqlite:///./smart_reader.db"  # 默认使用SQLite
-    DB_ECHO: bool = False
-    
-    # JWT配置
-    SECRET_KEY: str = "your-default-secret-key-change-in-production"
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./smart_reader.db")
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-here")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    
-    # 上传配置
-    UPLOAD_DIR: str = "uploads"
-    MAX_FILE_SIZE: int = 50 * 1024 * 1024  # 50MB
-    ALLOWED_EXTENSIONS: set = {"pdf", "epub", "mobi", "txt"}
-    
-    # 环境配置
-    ENVIRONMENT: str = "development"
-    
-    # 日志配置
-    LOG_LEVEL: str = "INFO"
-    
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+    DB_ECHO: bool = os.getenv("DB_ECHO", "False").lower() == "true"
+    LOG_LEVEL: str = "INFO"  # 添加日志级别配置
+
     class Config:
         env_file = ".env"
-        case_sensitive = True
+
 
 class DevelopmentSettings(Settings):
-    ENVIRONMENT: str = "development"
-    DB_ECHO: bool = True
-    LOG_LEVEL: str = "DEBUG"
-    
-    # 可以通过环境变量指定使用PostgreSQL
-    DATABASE_URL: str = os.getenv("DEV_DATABASE_URL", "sqlite:///./smart_reader_dev.db")
-    
-    class Config:
-        env_prefix = "DEV_"
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./smart_reader.db")
+    DEBUG: bool = True
+    DB_ECHO: bool = os.getenv("DB_ECHO", "True").lower() == "true"  # 开发环境默认开启数据库回显
+    LOG_LEVEL: str = "DEBUG"  # 添加日志级别配置
 
-class StagingSettings(Settings):
-    ENVIRONMENT: str = "staging"
-    LOG_LEVEL: str = "WARNING"
-    DATABASE_URL: str = os.environ.get("STAGE_DATABASE_URL", "postgresql+asyncpg://user:password@localhost/stage_smart_reader")
-    
     class Config:
-        env_prefix = "STAGE_"
+        env_file = ".env.dev"
+
+
+class TestSettings(Settings):
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./test_smart_reader.db")
+    TESTING: bool = True
+    DB_ECHO: bool = False
+    LOG_LEVEL: str = "WARNING"  # 测试环境减少日志输出
+
+    class Config:
+        env_file = ".env.stage"
+
 
 class ProductionSettings(Settings):
-    ENVIRONMENT: str = "production"
-    SECRET_KEY: str = os.environ.get("PROD_SECRET_KEY", "")
-    DB_ECHO: bool = False
-    LOG_LEVEL: str = "ERROR"
-    DATABASE_URL: str = os.environ.get("PROD_DATABASE_URL", "postgresql+asyncpg://user:password@localhost/prod_smart_reader")
-    
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://user:password@localhost/prod_db")
+    DEBUG: bool = False
+    DB_ECHO: bool = os.getenv("DB_ECHO", "False").lower() == "true"
+    LOG_LEVEL: str = "WARNING"  # 生产环境只记录警告及以上级别
+
     class Config:
-        env_prefix = "PROD_"
+        env_file = ".env.prod"
+
 
 def get_settings():
-    env = os.getenv("ENVIRONMENT", "development").lower()
-    
-    if env == "production":
-        return ProductionSettings()
-    elif env == "staging":
-        return StagingSettings()
-    else:
+    env = os.getenv("ENVIRONMENT", "development")
+    if env == "development":
         return DevelopmentSettings()
+    elif env == "testing":
+        return TestSettings()
+    elif env == "production":
+        return ProductionSettings()
+    else:
+        return Settings()
+
+
+settings = get_settings()

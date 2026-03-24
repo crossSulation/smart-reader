@@ -17,8 +17,8 @@ function Login() {
     }
 
     try {
-      // 发送登录请求到后端
-      const response = await fetch('http://localhost:8000/api/auth/login', {
+      // 发送登录请求到后端 - 现在使用JSON格式
+      const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -31,7 +31,6 @@ function Login() {
       if (response.ok) {
         // 登录成功，保存token并跳转
         localStorage.setItem('token', data.access_token);
-        localStorage.setItem('user', JSON.stringify(data.user));
         navigate('/library'); // 跳转到图书馆页面
       } else {
         setError(data.detail || '登录失败，请检查用户名和密码');
@@ -42,10 +41,10 @@ function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-xl shadow-lg p-8 space-y-6">
+    <div className="min-h-screen bg-gradient-to-br to-indigo-100 flex items-center justify-center p-4 sm:p-6 md:p-8">
+      <div className="w-full max-w-md min-w-[350px] bg-white rounded-xl shadow-lg p-6 sm:p-8 space-y-6 mx-auto lg:min-w-[800px] lg:w-auto lg:max-w-2xl">
         <div className="text-center">
-          <h2 className="text-3xl font-bold text-gray-800">欢迎回来</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-800">欢迎回来</h2>
           <p className="mt-2 text-gray-600">请登录您的账户</p>
         </div>
 
@@ -84,7 +83,7 @@ function Login() {
             />
           </div>
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center">
               <input
                 id="remember-me"

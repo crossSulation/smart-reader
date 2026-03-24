@@ -1,31 +1,54 @@
-from sqlalchemy import Column, Integer, String, DateTime, BigInteger, Text, UUID
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-import uuid
+from app.database import Base
 
-Base = declarative_base()
 
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(PostgresUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    email = Column(String, unique=True, index=True, nullable=False)
+    id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
-    password = Column(String, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # 关系
+    files = relationship("FileMetadata", back_populates="owner")
+    books = relationship("Book", back_populates="owner")
+
+
+class FileMetadata(Base):
+    __tablename__ = "files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    original_name = Column(String, nullable=False)
+    stored_name = Column(String, nullable=False)
+    file_type = Column(String, nullable=False)
+    file_size = Column(Integer)  # 文件大小（字节）
+    pages = Column(Integer, nullable=True)  # 页数（如果是文档）
+    upload_date = Column(DateTime(timezone=True), server_default=func.now())
+    uploaded_by = Column(Integer, ForeignKey("users.id"))
+
+    # 关系
+    owner = relationship("User", back_populates="files")
+
 
 class Book(Base):
     __tablename__ = "books"
 
-    id = Column(PostgresUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(PostgresUUID(as_uuid=True), nullable=False)
+    id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
-    author = Column(String, nullable=True)
-    file_path = Column(String, nullable=False)
-    file_type = Column(String, nullable=False)  # 'pdf', 'epub', etc.
-    file_size = Column(BigInteger, nullable=False)
-    total_pages = Column(Integer, nullable=True)
-    current_page = Column(Integer, default=0)
-    cover_path = Column(String, nullable=True)
+    owner_id = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # 关系
+    owner = relationship("User", back_populates="books")
+    # 添加进度跟踪字段
+    current_page = Column(Integer, default=0)  # 当前阅读页数
+    total_pages = Column(Integer)  # 总页数
+    progress_percentage = Column(Integer, default=0)  # 阅读进度百分比
+    last_read_time = Column(DateTime(timezone=True), server_default=func.now())  # 最后阅读时间
+    notes = Column(Text)  # 笔记
