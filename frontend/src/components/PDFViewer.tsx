@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Document, Page } from "react-pdf";
-import * as pdfjs from "pdfjs-dist";
+import * as pdfjs from "pdf-dist";
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
   import.meta.url
@@ -11,7 +11,7 @@ type PDFViewerProps = {
   initPage?: number;
 };
 export default function PDFViewer({ bookId, initPage = 1 }: PDFViewerProps) {
-  const [numPages, setNumPages] = useState<number | null>(null);
+  const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState(1);
   const [fileUrl, setFileUrl] = useState("");
 
@@ -51,17 +51,17 @@ export default function PDFViewer({ bookId, initPage = 1 }: PDFViewerProps) {
           disabled={pageNumber <= 1}
           className="px-4 py-2 bg-gray-200 rounded disabled:opacity-50"
         >
-          上一页
+          previous
         </button>
         <span>
-          第 {pageNumber} / {numPages || "?"} 页
+           Page {pageNumber} / {numPages || "?"}
         </span>
         <button
           onClick={() => setPageNumber((prev) => Math.min(prev + 1, numPages))}
           disabled={pageNumber >= numPages}
           className="px-4 py-2 bg-gray-200 rounded disabled:opacity-50"
         >
-          下一页
+          next
         </button>
       </div>
 
@@ -72,7 +72,7 @@ export default function PDFViewer({ bookId, initPage = 1 }: PDFViewerProps) {
       >
         <Page
           pageNumber={pageNumber}
-          width={600}
+          width={window.innerWidth * 0.8}
           onRenderSuccess={() => saveProgress(pageNumber)}
         />
       </Document>

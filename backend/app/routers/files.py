@@ -1,32 +1,58 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
-from typing import List
+from fastapi.responses import FileResponse
+from typing import Optional
+import os
 
 from app.database import get_db
-from app.schemas import FileMetadataResponse
-from app.services.file_service import FileService
+from app.models import FileMetadata
 from app.routers.auth import get_current_user
+from app.services.oss_service import OSSManager
 
 router = APIRouter(prefix="/files", tags=["files"])
 
-@router.get("/", response_model=List[FileMetadataResponse])
-async def list_files(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    file_service = FileService(db)
-    files = file_service.get_user_files(user['id'])
-    return files
-
-@router.get("/{file_id}", response_model=FileMetadataResponse)
-async def get_file(file_id: int, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    file_service = FileService(db)
-    file = file_service.get_file(file_id, user['id'])
-    if not file:
+@router.get("/download/{file_name}")
+async def download_file(
+    file_name: str,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """下载文件 - 重定向到OSS URL"""
+    # 查找文件记录
+    file_record = db.query(FileMetadata).filter(
+        FileMetadata.stored_name == file_name,
+        FileMetadata.uploaded_by == user['id']
+    ).first()
+    
+    if not file_record:
         raise HTTPException(status_code=404, detail="File not found")
-    return file
+    
+    # 直接重定向到OSS URL
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=file_record.file_url)
 
-@router.delete("/{file_id}")
-async def delete_file(file_id: int, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    file_service = FileService(db)
-    success = file_service.delete_file(file_id, user['id'])
-    if not success:
+@router.get("/{file_id}")
+async def get_file_info(
+    file_id: int,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取文件信息"""
+    file_record = db.query(FileMetadata).filter(
+        FileMetadata.id == file_id,
+        FileMetadata.uploaded_by == user['id']
+    ).first()
+    
+    if not file_record:
         raise HTTPException(status_code=404, detail="File not found")
-    return {"message": "File deleted successfully"}
+    
+    return {
+        "id": file_record.id,
+        "original_name": file_record.original_name,
+        "stored_name": file_record.stored_name,
+        "file_type": file_record.file_type,
+        "file_size": file_record.file_size,
+        "pages": file_record.pages,
+        "upload_date": file_record.upload_date,
+        "file_url": file_record.file_url
+    }

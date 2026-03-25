@@ -5,12 +5,14 @@ from typing import Dict, Any
 import os
 import uuid
 from datetime import datetime
+import tempfile
 
 from app.database import get_db
 from app.models import FileMetadata
 from app.services.file_service import FileService
 from app.services.pdf_service import extract_pdf_info, get_pdf_page_count
 from app.routers.auth import get_current_user
+from app.services.oss_service import OSSManager
 
 router = APIRouter(prefix="/upload", tags=["upload"])
 
@@ -38,52 +40,63 @@ async def upload_file(
             raise HTTPException(status_code=400, detail="File type not allowed")
         
         # 生成唯一文件名
-        unique_filename = f"{uuid.uuid4()}_{file.filename}"
-        file_path = os.path.join("uploads", unique_filename)
+        unique_filename = f"{user['id']}/{uuid.uuid4()}_{file.filename}"
         
-        # 确保上传目录存在
-        os.makedirs("uploads", exist_ok=True)
-        
-        # 保存文件
-        with open(file_path, "wb") as buffer:
-            buffer.write(await file.read())
-        
-        # 提取文件信息
-        file_size = os.path.getsize(file_path)
-        
-        # 如果是PDF文件，提取额外信息
-        pages = None
-        if file.content_type == "application/pdf":
-            try:
-                pages = get_pdf_page_count(file_path)
-            except Exception as e:
-                print(f"Error extracting PDF info: {str(e)}")
-                pages = None
-        
-        # 创建文件服务实例并保存元数据
-        file_service = FileService(db)
-        file_metadata = FileMetadata(
-            original_name=file.filename,
-            stored_name=unique_filename,
-            file_type=file.content_type,
-            file_size=file_size,
-            upload_date=datetime.utcnow(),
-            uploaded_by=user['id'],
-            pages=pages  # 添加页数信息
-        )
-        
-        db.add(file_metadata)
-        db.commit()
-        db.refresh(file_metadata)
-        
-        return {
-            "filename": file.filename,
-            "stored_name": unique_filename,
-            "file_type": file.content_type,
-            "file_size": file_size,
-            "pages": pages,
-            "id": file_metadata.id
-        }
+        # 创建临时文件
+        temp_file_path = None
+        try:
+            # 创建临时文件来保存上传的数据
+            with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_file:
+                temp_file.write(await file.read())
+                temp_file_path = temp_file.name
+            
+            # 如果是PDF文件，提取额外信息
+            pages = None
+            if file.content_type == "application/pdf":
+                try:
+                    pages = get_pdf_page_count(temp_file_path)
+                except Exception as e:
+                    print(f"Error extracting PDF info: {str(e)}")
+                    pages = None
+            
+            # 获取文件大小
+            file_size = os.path.getsize(temp_file_path)
+            
+            # 初始化OSS管理器并上传文件
+            oss_manager = OSSManager()
+            file_url = oss_manager.upload_file(temp_file_path, unique_filename)
+            
+            # 创建文件服务实例并保存元数据
+            file_service = FileService(db)
+            file_metadata = FileMetadata(
+                original_name=file.filename,
+                stored_name=unique_filename,  # 存储OSS中的对象名称
+                file_type=file.content_type,
+                file_size=file_size,
+                upload_date=datetime.utcnow(),
+                uploaded_by=user['id'],
+                pages=pages,  # 添加页数信息
+                file_url=file_url  # 存储文件的访问URL
+            )
+            
+            db.add(file_metadata)
+            db.commit()
+            db.refresh(file_metadata)
+            
+            return {
+                "filename": file.filename,
+                "stored_name": unique_filename,
+                "file_type": file.content_type,
+                "file_size": file_size,
+                "pages": pages,
+                "id": file_metadata.id,
+                "file_url": file_url  # 返回文件URL
+            }
+            
+        finally:
+            # 清理临时文件
+            if temp_file_path and os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
@@ -106,5 +119,6 @@ async def get_upload_status(file_id: int, user: dict = Depends(get_current_user)
         "pages": file_metadata.pages,
         "file_type": file_metadata.file_type,
         "file_size": file_metadata.file_size,
-        "upload_date": file_metadata.upload_date
+        "upload_date": file_metadata.upload_date,
+        "file_url": file_metadata.file_url  # 包含文件URL
     }

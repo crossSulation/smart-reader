@@ -32,7 +32,8 @@ const NoBooks: React.FC<NoBooksProps> = ({ onUploadClick }) => {
         backgroundColor: '#fafafa',
         borderRadius: '8px',
         border: '2px dashed #e0e0e0',
-        margin: '16px'
+        margin: '16px',
+        width: '100%',
       }}
     >
       <div style={{ marginBottom: '24px' }}>

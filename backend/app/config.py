@@ -11,6 +11,16 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
     DB_ECHO: bool = os.getenv("DB_ECHO", "False").lower() == "true"
     LOG_LEVEL: str = "INFO"  # 添加日志级别配置
+    # OSS配置
+    OSS_PROVIDER: str = os.getenv("OSS_PROVIDER", "local")  # 可选: local, aws_s3, aliyun
+    AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID", "")
+    AWS_SECRET_ACCESS_KEY: str = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+    AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
+    AWS_S3_BUCKET_NAME: str = os.getenv("AWS_S3_BUCKET_NAME", "your-bucket-name")
+    ALIYUN_ACCESS_KEY_ID: str = os.getenv("ALIYUN_ACCESS_KEY_ID", "")
+    ALIYUN_SECRET_ACCESS_KEY: str = os.getenv("ALIYUN_SECRET_ACCESS_KEY", "")
+    ALIYUN_OSS_ENDPOINT: str = os.getenv("ALIYUN_OSS_ENDPOINT", "")
+    ALIYUN_OSS_BUCKET_NAME: str = os.getenv("ALIYUN_OSS_BUCKET_NAME", "your-bucket-name")
 
     class Config:
         env_file = ".env"

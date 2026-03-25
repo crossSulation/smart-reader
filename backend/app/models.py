@@ -24,12 +24,13 @@ class FileMetadata(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     original_name = Column(String, nullable=False)
-    stored_name = Column(String, nullable=False)
+    stored_name = Column(String, nullable=False)  # OSS中的对象键
     file_type = Column(String, nullable=False)
     file_size = Column(Integer)  # 文件大小（字节）
     pages = Column(Integer, nullable=True)  # 页数（如果是文档）
     upload_date = Column(DateTime(timezone=True), server_default=func.now())
     uploaded_by = Column(Integer, ForeignKey("users.id"))
+    file_url = Column(String, nullable=True)  # 文件访问URL
 
     # 关系
     owner = relationship("User", back_populates="files")

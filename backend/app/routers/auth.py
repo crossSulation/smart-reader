@@ -14,7 +14,7 @@ from app.config import get_settings
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 # 安全配置
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
 security = HTTPBearer()
 
 # JWT配置
