@@ -9,5 +9,6 @@ export type Book = {
   stock: number;
   current_page: number;
   file_type: string;
+  last_read?: string;
   id: string;
 };

@@ -1,10 +1,13 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface NoBooksProps {
   onUploadClick?: () => void;
 }
 
 const NoBooks: React.FC<NoBooksProps> = ({ onUploadClick }) => {
+  const { t } = useTranslation();
+
   const handleClick = () => {
     if (onUploadClick) {
       onUploadClick();
@@ -38,13 +41,13 @@ const NoBooks: React.FC<NoBooksProps> = ({ onUploadClick }) => {
     >
       <div style={{ marginBottom: '24px' }}>
         <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: '#666', marginBottom: '8px' }}>
-          📚 暂无书籍
+          {t('noBooks.title')}
         </h2>
         <h3 style={{ fontSize: '18px', color: '#333', marginBottom: '16px' }}>
-          还没有上传任何书籍
+          {t('noBooks.subtitle')}
         </h3>
         <p style={{ color: '#666', maxWidth: '600px' }}>
-          您可以上传PDF、EPUB或其他支持的电子书格式文件，开始您的智能阅读体验
+          {t('noBooks.description')}
         </p>
       </div>
       
@@ -65,21 +68,21 @@ const NoBooks: React.FC<NoBooksProps> = ({ onUploadClick }) => {
         }}
       >
         <span>📤</span>
-        上传第一本书
+        {t('noBooks.uploadButton')}
       </button>
       
       <div style={{ marginTop: '32px', textAlign: 'left', maxWidth: '600px' }}>
         <p style={{ fontWeight: 'bold', color: '#666', marginBottom: '8px' }}>
-          支持的文件格式:
+          {t('noBooks.supportedFormatsTitle')}
         </p>
         <p style={{ color: '#666', marginBottom: '4px' }}>
-          • PDF (.pdf) - 便携式文档格式
+          {t('noBooks.supportedFormats.pdf')}
         </p>
         <p style={{ color: '#666', marginBottom: '4px' }}>
-          • EPUB (.epub) - 电子出版物格式
+          {t('noBooks.supportedFormats.epub')}
         </p>
         <p style={{ color: '#666' }}>
-          • 文档 (.doc, .docx) - Microsoft Word文档
+          {t('noBooks.supportedFormats.doc')}
         </p>
       </div>
     </div>

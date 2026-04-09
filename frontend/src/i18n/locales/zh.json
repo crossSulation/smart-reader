@@ -1,0 +1,89 @@
+{
+  "common": {
+    "appName": "智能阅读器",
+    "home": "首页",
+    "library": "书架",
+    "profile": "个人资料",
+    "login": "登录",
+    "register": "注册",
+    "logout": "退出登录",
+    "cancel": "取消",
+    "save": "保存",
+    "delete": "删除",
+    "edit": "编辑",
+    "upload": "上传",
+    "search": "搜索",
+    "settings": "设置"
+  },
+  "noBooks": {
+    "title": "📚 暂无书籍",
+    "subtitle": "还没有上传任何书籍",
+    "description": "您可以上传PDF、EPUB或其他支持的电子书格式文件，开始您的智能阅读体验",
+    "uploadButton": "上传第一本书",
+    "supportedFormatsTitle": "支持的文件格式:",
+    "supportedFormats": {
+      "pdf": "• PDF (.pdf) - 便携式文档格式",
+      "epub": "• EPUB (.epub) - 电子出版物格式",
+      "doc": "• 文档 (.doc, .docx) - Microsoft Word文档"
+    }
+  },
+  "library": {
+    "pageTitle": "我的书架",
+    "uploadButton": "📤 上传书籍",
+    "sortBy": {
+      "title": "书名",
+      "author": "作者",
+      "progress": "阅读进度",
+      "dateAdded": "添加日期"
+    }
+  },
+  "login": {
+    "pageTitle": "登录",
+    "usernameLabel": "用户名",
+    "passwordLabel": "密码",
+    "loginButton": "登录",
+    "registerLink": "还没有账户？立即注册",
+    "error": "用户名或密码错误"
+  },
+  "register": {
+    "pageTitle": "注册",
+    "usernameLabel": "用户名",
+    "emailLabel": "邮箱",
+    "passwordLabel": "密码",
+    "confirmPasswordLabel": "确认密码",
+    "registerButton": "注册",
+    "loginLink": "已有账户？立即登录"
+  },
+  "profile": {
+    "pageTitle": "个人资料",
+    "username": "用户名",
+    "email": "邮箱",
+    "memberSince": "注册时间",
+    "changePassword": "修改密码",
+    "currentPassword": "当前密码",
+    "newPassword": "新密码",
+    "confirmPassword": "确认新密码",
+    "passwordHint": "密码长度至少为6位",
+    "updatePassword": "更新密码",
+    "updating": "更新中...",
+    "errors": {
+      "fillAllFields": "请填写所有必填字段",
+      "passwordMismatch": "两次输入的密码不一致",
+      "passwordTooShort": "密码长度至少为6位"
+    },
+    "success": {
+      "passwordChanged": "密码修改成功"
+    }
+  },
+  "bookCard": {
+    "readingProgress": "阅读进度",
+    "lastRead": "上次阅读",
+    "continueReading": "继续阅读"
+  },
+  "pdfViewer": {
+    "previous": "上一页",
+    "next": "下一页",
+    "page": "页",
+    "of": "/"
+  }
+}

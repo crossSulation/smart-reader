@@ -1,0 +1,89 @@
+{
+  "common": {
+    "appName": "Smart Reader",
+    "home": "Home",
+    "library": "Library",
+    "profile": "Profile",
+    "login": "Login",
+    "register": "Register",
+    "logout": "Logout",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "upload": "Upload",
+    "search": "Search",
+    "settings": "Settings"
+  },
+  "noBooks": {
+    "title": "📚 No Books Yet",
+    "subtitle": "No books uploaded yet",
+    "description": "You can upload PDF, EPUB or other supported e-book format files to start your smart reading experience",
+    "uploadButton": "Upload Your First Book",
+    "supportedFormatsTitle": "Supported file formats:",
+    "supportedFormats": {
+      "pdf": "• PDF (.pdf) - Portable Document Format",
+      "epub": "• EPUB (.epub) - Electronic Publication Format",
+      "doc": "• Documents (.doc, .docx) - Microsoft Word Documents"
+    }
+  },
+  "library": {
+    "pageTitle": "My Library",
+    "uploadButton": "📤 Upload Book",
+    "sortBy": {
+      "title": "Title",
+      "author": "Author",
+      "progress": "Reading Progress",
+      "dateAdded": "Date Added"
+    }
+  },
+  "login": {
+    "pageTitle": "Login",
+    "usernameLabel": "Username",
+    "passwordLabel": "Password",
+    "loginButton": "Login",
+    "registerLink": "Don't have an account? Register now",
+    "error": "Invalid username or password"
+  },
+  "register": {
+    "pageTitle": "Register",
+    "usernameLabel": "Username",
+    "emailLabel": "Email",
+    "passwordLabel": "Password",
+    "confirmPasswordLabel": "Confirm Password",
+    "registerButton": "Register",
+    "loginLink": "Already have an account? Login now"
+  },
+  "profile": {
+    "pageTitle": "Profile",
+    "username": "Username",
+    "email": "Email",
+    "memberSince": "Member since",
+    "changePassword": "Change Password",
+    "currentPassword": "Current Password",
+    "newPassword": "New Password",
+    "confirmPassword": "Confirm New Password",
+    "passwordHint": "Password must be at least 6 characters long",
+    "updatePassword": "Update Password",
+    "updating": "Updating...",
+    "errors": {
+      "fillAllFields": "Please fill in all fields",
+      "passwordMismatch": "New passwords do not match",
+      "passwordTooShort": "Password must be at least 6 characters long"
+    },
+    "success": {
+      "passwordChanged": "Password changed successfully"
+    }
+  },
+  "bookCard": {
+    "readingProgress": "Reading Progress",
+    "lastRead": "Last Read",
+    "continueReading": "Continue Reading"
+  },
+  "pdfViewer": {
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page",
+    "of": "of"
+  }
+}

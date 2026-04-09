@@ -1,17 +1,31 @@
 import {BrowserRouter as Router, Route, Routes} from 'react-router-dom'
 import Login from'../pages/Login'
 import Register from'../pages/Register'
-import Library from '../pages/Libary'
+import Library from '../pages/Library'
 import Reader from '../pages/Reader'
+import Profile from '../pages/Profile'
+import Layout from '../Layout'
+import ProtectedRoute from '../components/ProtectedRouter'
 
 function RouterContainer() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<Library />} />
+        {/* Public routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/reader" element={<Reader />} />
+        
+        {/* Protected routes with Layout */}
+        <Route element={
+          <ProtectedRoute>
+            <Layout/>
+          </ProtectedRoute>
+        }>
+          <Route path="/" element={<Library />} />
+          <Route path="/library" element={<Library />} />
+          <Route path="/reader/:id" element={<Reader />} />
+          <Route path="/profile" element={<Profile />} />
+        </Route>
       </Routes>
     </Router>
   )

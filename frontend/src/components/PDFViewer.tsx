@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Document, Page } from "react-pdf";
 import * as pdfjs from "pdf-dist";
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -14,6 +14,8 @@ export default function PDFViewer({ bookId, initPage = 1 }: PDFViewerProps) {
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState(1);
   const [fileUrl, setFileUrl] = useState("");
+  const currentPageRef = useRef<number>(1);
+  const lastSavedPageRef = useRef<number | null>(null);
 
   useEffect(() => {
     const fetchFile = async () => {
@@ -28,19 +30,41 @@ export default function PDFViewer({ bookId, initPage = 1 }: PDFViewerProps) {
   }, [bookId]);
 
   const saveProgress = async (page: number) => {
-    await fetch(`/api/books/${bookId}/progress`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${localStorage.getItem("token")}`,
-      },
-      body: JSON.stringify({ page }),
-    });
+    try {
+      await fetch(`/api/books/${bookId}/progress`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({ page }),
+      });
+      lastSavedPageRef.current = page;
+    } catch (err) {
+      console.error("Failed to save progress:", err);
+    }
   };
+
+  useEffect(() => {
+    currentPageRef.current = pageNumber;
+    if (numPages > 0) {
+      saveProgress(pageNumber);
+    }
+  }, [pageNumber, numPages]);
+
+  useEffect(() => {
+    return () => {
+      const pageToSave = currentPageRef.current;
+      if (pageToSave && pageToSave !== lastSavedPageRef.current) {
+        saveProgress(pageToSave);
+      }
+    };
+  }, []);
+
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
-    setPageNumber(initPage);
-    saveProgress(initPage);
+    const initial = Math.min(Math.max(initPage, 1), numPages);
+    setPageNumber(initial);
   }
 
   return (
@@ -73,7 +97,6 @@ export default function PDFViewer({ bookId, initPage = 1 }: PDFViewerProps) {
         <Page
           pageNumber={pageNumber}
           width={window.innerWidth * 0.8}
-          onRenderSuccess={() => saveProgress(pageNumber)}
         />
       </Document>
     </div>
