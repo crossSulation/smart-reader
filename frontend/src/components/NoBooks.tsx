@@ -15,7 +15,7 @@ const NoBooks: React.FC<NoBooksProps> = ({ onUploadClick }) => {
       // 触发父组件中的上传功能
       const uploadBtn = document.querySelector('button[aria-label="upload-book"]');
       if (uploadBtn) {
-        uploadBtn.click();
+        (uploadBtn as HTMLButtonElement).click();
       } else {
         console.log("请在父组件中添加上传按钮");
       }

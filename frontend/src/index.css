@@ -13,10 +13,43 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+@keyframes pageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pageSlideOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+}
+
+.page-transition {
+  animation: pageSlideIn 0.3s ease-out;
+}
+
+.page-transition-exit {
+  animation: pageSlideOut 0.3s ease-in;
+}
+
+/* Smooth transitions for touch interactions */
+.pdf-page, .epub-viewer {
+  transition: opacity 0.3s ease-in-out;
+}
+
+.pdf-page.animating, .epub-viewer.animating {
+  opacity: 0.7;
 }
 a:hover {
   color: #535bf2;
