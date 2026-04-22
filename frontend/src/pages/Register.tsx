@@ -56,7 +56,7 @@ function Register() {
       } else {
         setError(data.detail || '注册失败，请稍后再试');
       }
-    } catch (err) {
+    } catch {
       setError('网络错误，请稍后再试');
     }
   };

@@ -8,13 +8,40 @@ from datetime import datetime
 import tempfile
 
 from app.database import get_db
-from app.models import FileMetadata
+from app.models import FileMetadata, Book
 from app.services.file_service import FileService
 from app.services.pdf_service import extract_pdf_info, get_pdf_page_count
 from app.routers.auth import get_current_user
 from app.services.oss_service import OSSManager
 
 router = APIRouter(prefix="/upload", tags=["upload"])
+
+
+def _is_allowed_file(file_name: str, content_type: str | None) -> bool:
+    allowed_types = {
+        "application/pdf",
+        "application/epub+zip",
+        "application/octet-stream",
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/bmp",
+        "image/tiff",
+        "text/plain",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }
+    allowed_extensions = {".pdf", ".epub", ".txt", ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".doc", ".docx"}
+
+    ext = os.path.splitext(file_name)[1].lower()
+    if content_type in allowed_types and ext in allowed_extensions:
+        return True
+
+    # Some clients upload EPUB with generic content type.
+    if ext == ".epub":
+        return True
+
+    return False
 
 @router.post("/")
 async def upload_file(
@@ -24,19 +51,7 @@ async def upload_file(
 ):
     try:
         # 验证文件类型
-        allowed_types = [
-            "application/pdf",
-            "image/jpeg", 
-            "image/png",
-            "image/gif",
-            "image/bmp",
-            "image/tiff",
-            "text/plain",
-            "application/msword",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        ]
-        
-        if file.content_type not in allowed_types:
+        if not _is_allowed_file(file.filename, file.content_type):
             raise HTTPException(status_code=400, detail="File type not allowed")
         
         # 生成唯一文件名
@@ -82,6 +97,23 @@ async def upload_file(
             db.add(file_metadata)
             db.commit()
             db.refresh(file_metadata)
+
+            # Uploads should appear in the library immediately.
+            existing_book = db.query(Book).filter(
+                Book.owner_id == user['id'],
+                Book.title == file.filename
+            ).first()
+            if not existing_book:
+                book = Book(
+                    title=file.filename,
+                    owner_id=user['id'],
+                    current_page=0,
+                    total_pages=pages,
+                    progress_percentage=0,
+                    last_read_time=datetime.utcnow(),
+                )
+                db.add(book)
+                db.commit()
             
             return {
                 "filename": file.filename,

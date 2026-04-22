@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 
@@ -37,6 +37,8 @@ class Book(BookBase):
     progress_percentage: Optional[int] = 0
     last_read_time: Optional[datetime] = None
     notes: Optional[str] = None
+    file_type: Optional[str] = None
+    file_url: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -61,6 +63,73 @@ class FileMetadataResponse(FileMetadataBase):
 
     class Config:
         from_attributes = True
+
+
+class DocumentChunk(BaseModel):
+    id: int
+    book_id: int
+    chunk_index: int
+    text: str
+    page_start: Optional[int] = None
+    page_end: Optional[int] = None
+    token_count: Optional[int] = None
+    embedding_model: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class SearchResult(BaseModel):
+    chunk_id: int
+    chunk_index: int
+    text: str
+    page_start: Optional[int] = None
+    page_end: Optional[int] = None
+    score: float
+
+
+class QARequest(BaseModel):
+    question: str
+    top_k: int = 5
+
+
+class QAResponse(BaseModel):
+    question: str
+    answer: str
+    sources: List[SearchResult]
+    provider: str
+
+
+class SummaryResponse(BaseModel):
+    book_id: int
+    title: str
+    summary: str
+    provider: str
+    chunks_used: int
+
+
+class WebReferenceItem(BaseModel):
+    title: str
+    snippet: str
+    url: str
+    source: str
+
+
+class WebReferenceRequest(BaseModel):
+    term: str
+    limit: int = 3
+
+
+class WebReferenceResponse(BaseModel):
+    term: str
+    references: List[WebReferenceItem]
+
+
+class IndexStatus(BaseModel):
+    book_id: int
+    chunks_stored: int
+    status: str
 
 
 class Token(BaseModel):

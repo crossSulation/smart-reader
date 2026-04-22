@@ -7,12 +7,12 @@ function BookCard({ book }: { book: Book }) {
   const navigate = useNavigate();
   const { t } = useTranslation();
 
-  const formattedLastRead = book.last_read
+  const formattedLastRead = book.last_read_time
     ? new Intl.DateTimeFormat(undefined, {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
-      }).format(new Date(book.last_read))
+      }).format(new Date(book.last_read_time))
     : null;
 
   const handleContinueClick = (event: MouseEvent<HTMLButtonElement>) => {

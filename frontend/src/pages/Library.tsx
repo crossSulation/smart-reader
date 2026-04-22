@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import { SearchOutlined, SortOutlined } from '@mui/icons-material';
 import BookCard from "../components/BookCard";
 import FileUpload from "../components/FileUpload";
@@ -12,7 +11,6 @@ type SortOrder = 'asc' | 'desc';
 
 function Library() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const [books, setBooks] = useState<Book[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>('title');
@@ -33,7 +31,7 @@ function Library() {
       if (res.status === 401 || res.status === 403) {
         localStorage.removeItem("token");
         localStorage.removeItem("user");
-        navigate("/login", { replace: true });
+        window.location.href = "/login";
         return;
       }
       

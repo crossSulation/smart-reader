@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from app.database import get_db
 from app.schemas import Book, BookCreate
@@ -12,12 +12,40 @@ router = APIRouter(prefix="/books", tags=["books"])
 
 
 class UpdateProgressRequest(BaseModel):
-    current_page: int
-    total_pages: int = None
+    current_page: int | None = None
+    page: int | None = None
+    total_pages: int | None = None
+
+    @model_validator(mode="after")
+    def normalize_page_field(self):
+        if self.current_page is None and self.page is None:
+            raise ValueError("Either current_page or page must be provided")
+        if self.current_page is None:
+            self.current_page = self.page
+        return self
 
 
 class AddNotesRequest(BaseModel):
     notes: str
+
+
+def _normalize_file_type(file_type: str | None) -> str | None:
+    if not file_type:
+        return None
+    lowered = file_type.lower()
+    if "epub" in lowered:
+        return "epub"
+    if "pdf" in lowered:
+        return "pdf"
+    return lowered
+
+
+def _attach_file_fields(file_service: FileService, user_id: int, book: Book):
+    file_info = file_service.get_file_by_original_name(book.title, user_id)
+    if file_info:
+        setattr(book, "file_url", file_info.file_url)
+        setattr(book, "file_type", _normalize_file_type(file_info.file_type))
+    return book
 
 
 @router.get("/", response_model=List[Book])
@@ -25,7 +53,7 @@ async def list_books(user: dict = Depends(get_current_user), db: Session = Depen
     # 实现书籍列表功能
     file_service = FileService(db)
     books = file_service.get_user_books(user['id'])
-    return books
+    return [_attach_file_fields(file_service, user['id'], book) for book in books]
 
 
 @router.post("/", response_model=Book)
@@ -43,7 +71,7 @@ async def get_book(book_id: int, user: dict = Depends(get_current_user), db: Ses
     book = file_service.get_book(book_id, user['id'])
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
-    return book
+    return _attach_file_fields(file_service, user['id'], book)
 
 
 @router.put("/{book_id}/progress")

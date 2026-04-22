@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -53,3 +53,35 @@ class Book(Base):
     progress_percentage = Column(Integer, default=0)  # 阅读进度百分比
     last_read_time = Column(DateTime(timezone=True), server_default=func.now())  # 最后阅读时间
     notes = Column(Text)  # 笔记
+    chunks = relationship("DocumentChunk", back_populates="book", cascade="all, delete-orphan")
+
+
+class DocumentChunk(Base):
+    __tablename__ = "document_chunks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    book_id = Column(Integer, ForeignKey("books.id"), nullable=False, index=True)
+    chunk_index = Column(Integer, nullable=False)   # ordering within the document
+    text = Column(Text, nullable=False)
+    page_start = Column(Integer, nullable=True)     # first page this chunk covers
+    page_end = Column(Integer, nullable=True)       # last page this chunk covers
+    token_count = Column(Integer, nullable=True)    # approximate word/token count
+    embedding = Column(Text, nullable=True)          # JSON-serialised float list
+    embedding_model = Column(String, nullable=True)  # model name used
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    book = relationship("Book", back_populates="chunks")
+
+
+class AIInteraction(Base):
+    __tablename__ = "ai_interactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    book_id = Column(Integer, ForeignKey("books.id"), nullable=False, index=True)
+    interaction_type = Column(String, nullable=False)   # "qa" | "summary"
+    query = Column(Text, nullable=True)                 # user question (QA only)
+    response = Column(Text, nullable=False)
+    provider = Column(String, nullable=True)            # llm provider used
+    chunks_used = Column(Integer, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

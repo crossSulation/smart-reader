@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, type TouchEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 type EPUBViewerProps = {
   bookId: string;
   initPage?: number;
+  onTextSelected?: (text: string) => void;
 };
 
-export default function EPUBViewer({ bookId }: EPUBViewerProps) {
+export default function EPUBViewer({ bookId, onTextSelected }: EPUBViewerProps) {
   const { t } = useTranslation();
   const viewerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
@@ -65,10 +66,22 @@ export default function EPUBViewer({ bookId }: EPUBViewerProps) {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${localStorage.getItem("token")}`,
               },
-              body: JSON.stringify({ page: location.start.index || 0 }),
+              body: JSON.stringify({ current_page: location.start.index || 0 }),
             });
           } catch (err) {
             console.error('Failed to save progress:', err);
+          }
+        });
+
+        // Capture selected text from the EPUB iframe and pass to parent.
+        rendition.on('selected', (_cfiRange: string, contents: any) => {
+          try {
+            const text = contents?.window?.getSelection?.()?.toString?.().trim?.() || '';
+            if (text) {
+              onTextSelected?.(text);
+            }
+          } catch {
+            // Ignore selection extraction errors; reading must continue.
           }
         });
 
@@ -87,7 +100,7 @@ export default function EPUBViewer({ bookId }: EPUBViewerProps) {
         renditionRef.current.destroy?.();
       }
     };
-  }, [bookId]);
+  }, [bookId, onTextSelected]);
 
   const handlePrevious = useCallback(() => {
     if (renditionRef.current && !isAnimating) {
@@ -106,12 +119,12 @@ export default function EPUBViewer({ bookId }: EPUBViewerProps) {
   }, [isAnimating]);
 
   // Touch event handlers for swipe gestures
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+  const handleTouchStart = useCallback((e: TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
   }, []);
 
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+  const handleTouchEnd = useCallback((e: TouchEvent) => {
     if (!touchStartX.current || isAnimating) return;
 
     const touchEndX = e.changedTouches[0].clientX;
@@ -178,7 +191,7 @@ export default function EPUBViewer({ bookId }: EPUBViewerProps) {
           maxWidth: '900px',
           minHeight: '600px',
           touchAction: 'pan-y', // Allow vertical scrolling but prevent horizontal scroll
-          userSelect: 'none', // Prevent text selection during swipe
+          userSelect: 'text',
         }}
       />
     </div>

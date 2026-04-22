@@ -21,6 +21,16 @@ class Settings(BaseSettings):
     ALIYUN_SECRET_ACCESS_KEY: str = os.getenv("ALIYUN_SECRET_ACCESS_KEY", "")
     ALIYUN_OSS_ENDPOINT: str = os.getenv("ALIYUN_OSS_ENDPOINT", "")
     ALIYUN_OSS_BUCKET_NAME: str = os.getenv("ALIYUN_OSS_BUCKET_NAME", "your-bucket-name")
+    # AI / Embedding
+    EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+    EMBEDDING_TOP_K: int = int(os.getenv("EMBEDDING_TOP_K", "5"))
+    # LLM
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "mock")       # mock | openai | ollama
+    LLM_BASE_URL: str = os.getenv("LLM_BASE_URL", "http://localhost:11434")  # ollama default
+    LLM_API_KEY: str = os.getenv("LLM_API_KEY", "")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "llama3")
+    LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "512"))
+    LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.3"))
 
     class Config:
         env_file = ".env"

@@ -39,7 +39,7 @@ const Login: React.FC = () => {
       } else {
         setError(t('login.error'));
       }
-    } catch (err) {
+    } catch {
       setError(t('login.error'));
     }
   };

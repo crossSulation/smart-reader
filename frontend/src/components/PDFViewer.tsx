@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, type TouchEvent } from "react";
 import { Document, Page } from "react-pdf";
 import { useTranslation } from 'react-i18next';
 import * as pdfjs from "pdf-dist";
@@ -10,9 +10,16 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 type PDFViewerProps = {
   bookId: string;
   initPage?: number;
+  jumpToPage?: number;
+  onTextSelected?: (text: string) => void;
 };
 
-export default function PDFViewer({ bookId, initPage = 1 }: PDFViewerProps) {
+export default function PDFViewer({
+  bookId,
+  initPage = 1,
+  jumpToPage,
+  onTextSelected,
+}: PDFViewerProps) {
   const { t } = useTranslation();
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState(1);
@@ -29,9 +36,13 @@ export default function PDFViewer({ bookId, initPage = 1 }: PDFViewerProps) {
       const res = await fetch(`/api/books/${bookId}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       });
+      if (!res.ok) {
+        return;
+      }
       const data = await res.json();
-      const url = data.file_url;
-      setFileUrl(url);
+      if (data.file_url) {
+        setFileUrl(data.file_url);
+      }
     };
     fetchFile();
   }, [bookId]);
@@ -44,7 +55,7 @@ export default function PDFViewer({ bookId, initPage = 1 }: PDFViewerProps) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
-        body: JSON.stringify({ page }),
+        body: JSON.stringify({ current_page: page, total_pages: numPages || undefined }),
       });
       lastSavedPageRef.current = page;
     } catch (err) {
@@ -61,12 +72,12 @@ export default function PDFViewer({ bookId, initPage = 1 }: PDFViewerProps) {
   }, [numPages, isAnimating]);
 
   // Touch event handlers for swipe gestures
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+  const handleTouchStart = useCallback((e: TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
   }, []);
 
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+  const handleTouchEnd = useCallback((e: TouchEvent) => {
     if (!touchStartX.current || isAnimating) return;
 
     const touchEndX = e.changedTouches[0].clientX;
@@ -88,6 +99,13 @@ export default function PDFViewer({ bookId, initPage = 1 }: PDFViewerProps) {
     touchStartX.current = 0;
     touchStartY.current = 0;
   }, [pageNumber, handlePageChange, isAnimating]);
+
+  // Jump to a specific page when triggered from search results
+  useEffect(() => {
+    if (jumpToPage && jumpToPage >= 1 && numPages > 0 && jumpToPage <= numPages) {
+      handlePageChange(jumpToPage);
+    }
+  }, [jumpToPage, numPages, handlePageChange]);
 
   useEffect(() => {
     currentPageRef.current = pageNumber;
@@ -111,6 +129,13 @@ export default function PDFViewer({ bookId, initPage = 1 }: PDFViewerProps) {
     setPageNumber(initial);
   }
 
+  const handleMouseUpSelection = useCallback(() => {
+    const text = window.getSelection()?.toString().trim() || "";
+    if (text) {
+      onTextSelected?.(text);
+    }
+  }, [onTextSelected]);
+
   return (
     <div className="flex flex-col items-center">
       <div className="mb-4 flex gap-4">
@@ -122,7 +147,7 @@ export default function PDFViewer({ bookId, initPage = 1 }: PDFViewerProps) {
           {t('pdfViewer.previous')}
         </button>
         <span className="px-4 py-2">
-           {t('pdfViewer.page')} {pageNumber} {t('pdfViewer.of')} {numPages || "?"}
+          {t('pdfViewer.page')} {pageNumber} {t('pdfViewer.of')} {numPages || "?"}
         </span>
         <button
           onClick={() => handlePageChange(pageNumber + 1)}
@@ -141,10 +166,11 @@ export default function PDFViewer({ bookId, initPage = 1 }: PDFViewerProps) {
         ref={viewerRef}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
+        onMouseUp={handleMouseUpSelection}
         className="border shadow-lg rounded-lg overflow-hidden"
         style={{
           touchAction: 'pan-y', // Allow vertical scrolling but prevent horizontal scroll
-          userSelect: 'none', // Prevent text selection during swipe
+          userSelect: 'text',
         }}
       >
         <Document

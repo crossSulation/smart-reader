@@ -1,5 +1,5 @@
 // frontend/components/FileUpload.tsx
-import { useState } from "react";
+import { useState, type ChangeEvent } from "react";
 
 type FileUploadProps = {
   onUploadComplete: () => void;
@@ -9,7 +9,7 @@ export default function FileUpload({ onUploadComplete, onClose }:FileUploadProps
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -35,7 +35,7 @@ export default function FileUpload({ onUploadComplete, onClose }:FileUploadProps
       };
       
       xhr.send(formData);
-    } catch (err) {
+    } catch {
       alert("上传失败");
     } finally {
       setUploading(false);
