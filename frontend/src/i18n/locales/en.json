@@ -86,5 +86,18 @@
     "page": "Page",
     "of": "of",
     "swipeHint": "Swipe left/right to navigate pages"
+  },
+  "search": {
+    "title": "Search in Book",
+    "placeholder": "Search passages…",
+    "searchButton": "Search",
+    "indexTooltip": "Build search index for this book",
+    "indexButton": "Index",
+    "notIndexed": "Book is not indexed yet. Click 'Index Book' first.",
+    "indexing": "Indexing…",
+    "noResults": "No results found.",
+    "page": "Page",
+    "chunk": "Chunk",
+    "goToPage": "Go to page"
   }
 }

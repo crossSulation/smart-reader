@@ -74,7 +74,7 @@ function Reader() {
   ).toLowerCase();
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-6 lg:p-8 h-full overflow-hidden">
       <div className="mb-4">
         <button onClick={() => navigate("/")} className="text-blue-600 hover:underline">
           ← 返回书架
@@ -82,44 +82,51 @@ function Reader() {
       </div>
       <h1 className="text-2xl font-bold mb-4">{book.title}</h1>
 
-      {/* AI panel — tabbed: Search | AI Assistant */}
-      <div className="flex gap-1 mb-0 border-b border-gray-200">
-        {(["search", "ai"] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setAiTab(tab)}
-            className={`px-4 py-2 text-sm font-medium rounded-t transition ${
-              aiTab === tab
-                ? "bg-white border border-b-white border-gray-200 -mb-px text-blue-700"
-                : "text-gray-500 hover:text-gray-800"
-            }`}
-          >
-            {tab === "search" ? "🔍 Search" : "✨ AI Assistant"}
-          </button>
-        ))}
-      </div>
-      <div className="mb-4 border border-gray-200 rounded-b rounded-tr p-4 bg-white">
-        {aiTab === "search" ? (
-          <BookSearch bookId={id!} onJumpToPage={(page) => setJumpToPage(page)} />
-        ) : (
-          <BookQA
-            bookId={id!}
-            onJumpToPage={(page) => setJumpToPage(page)}
-            prefillReferenceTerm={prefillReferenceTerm}
-          />
-        )}
-      </div>
+      <div className="flex flex-col lg:flex-row gap-6 h-[calc(100%-5.5rem)]">
+        <div className="flex-1 min-w-0 overflow-y-auto pr-0 lg:pr-2">
+          {normalizedFileType === "pdf" ? (
+            <PDFViewer
+              bookId={id!}
+              initPage={jumpToPage ?? book.current_page}
+              jumpToPage={jumpToPage}
+              onTextSelected={handleTextSelected}
+            />
+          ) : (
+            <EPUBViewer bookId={id!} onTextSelected={handleTextSelected} />
+          )}
+        </div>
 
-      {normalizedFileType === "pdf" ? (
-        <PDFViewer
-          bookId={id!}
-          initPage={jumpToPage ?? book.current_page}
-          jumpToPage={jumpToPage}
-          onTextSelected={handleTextSelected}
-        />
-      ) : (
-        <EPUBViewer bookId={id!} onTextSelected={handleTextSelected} />
-      )}
+        {/* AI panel as right sidebar */}
+        <aside className="w-full lg:w-[400px] lg:min-w-[360px] lg:max-w-[420px] border border-gray-200 rounded-xl bg-white overflow-hidden lg:self-start">
+          <div className="flex gap-1 border-b border-gray-200 px-3 pt-3 bg-gray-50">
+            {(["search", "ai"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setAiTab(tab)}
+                className={`px-4 py-2 text-sm font-medium rounded-t transition ${
+                  aiTab === tab
+                    ? "bg-white border border-b-white border-gray-200 -mb-px text-blue-700"
+                    : "text-gray-500 hover:text-gray-800"
+                }`}
+              >
+                {tab === "search" ? "🔍 Search" : "✨ AI Assistant"}
+              </button>
+            ))}
+          </div>
+
+          <div className="p-4 max-h-[70vh] lg:max-h-[calc(100vh-15rem)] overflow-y-auto">
+            {aiTab === "search" ? (
+              <BookSearch bookId={id!} onJumpToPage={(page) => setJumpToPage(page)} />
+            ) : (
+              <BookQA
+                bookId={id!}
+                onJumpToPage={(page) => setJumpToPage(page)}
+                prefillReferenceTerm={prefillReferenceTerm}
+              />
+            )}
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }

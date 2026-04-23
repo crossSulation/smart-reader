@@ -31,7 +31,7 @@ class Book(BookBase):
     id: int
     owner_id: int
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
     current_page: Optional[int] = 0
     total_pages: Optional[int] = None
     progress_percentage: Optional[int] = 0

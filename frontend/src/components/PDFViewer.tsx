@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState, useCallback, type TouchEvent } from "react";
 import { Document, Page } from "react-pdf";
 import { useTranslation } from 'react-i18next';
-import * as pdfjs from "pdf-dist";
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url
-).toString();
+import * as pdfjs from "pdfjs-dist";
+
+pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.mjs";
 
 type PDFViewerProps = {
   bookId: string;

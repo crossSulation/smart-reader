@@ -87,3 +87,4 @@ htmlcov/
 .Trashes
 ehthumbs.db
 Thumbs.db
+backend/uploads/

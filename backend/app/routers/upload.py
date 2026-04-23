@@ -107,6 +107,8 @@ async def upload_file(
                 book = Book(
                     title=file.filename,
                     owner_id=user['id'],
+                    created_at=datetime.utcnow(),
+                    updated_at=datetime.utcnow(),
                     current_page=0,
                     total_pages=pages,
                     progress_percentage=0,

@@ -15,7 +15,7 @@ const Layout: React.FC = () => {
   };
 
   return (
-    <>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       <AppBar position="static">
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
@@ -23,7 +23,7 @@ const Layout: React.FC = () => {
               {t('common.appName')}
             </Link>
           </Typography>
-          
+
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <Button color="inherit" component={Link} to="/profile">
               {t('common.profile')}
@@ -35,11 +35,11 @@ const Layout: React.FC = () => {
           </Box>
         </Toolbar>
       </AppBar>
-      
-      <Box component="main" sx={{ p: 3 }}>
+
+      <Box component="main" sx={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
         <Outlet />
       </Box>
-    </>
+    </Box>
   );
 };
 

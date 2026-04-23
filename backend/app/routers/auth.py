@@ -20,7 +20,7 @@ security = HTTPBearer()
 # JWT配置
 SECRET_KEY = get_settings().SECRET_KEY
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 10080  # 7 days
 
 class Token(BaseModel):
     access_token: str
@@ -70,7 +70,7 @@ class AuthService:
     @staticmethod
     def create_access_token(data: dict, expires_delta: timedelta = None):
         to_encode = data.copy()
-        expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
+        expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
         to_encode.update({"exp": expire})
         encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
         return encoded_jwt
@@ -128,7 +128,10 @@ def register(user_create: UserCreate, db: Session = Depends(get_db)):
     db.refresh(db_user)
     
     # 创建访问令牌
-    access_token = AuthService.create_access_token(data={"sub": user_create.username})
+    access_token = AuthService.create_access_token(
+        data={"sub": user_create.username},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/login", response_model=Token)
@@ -141,7 +144,10 @@ def login(login_request: LoginRequest, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    access_token = AuthService.create_access_token(data={"sub": user.username})
+    access_token = AuthService.create_access_token(
+        data={"sub": user.username},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/logout")
@@ -162,6 +168,26 @@ def get_current_user_info(current_user: dict = Depends(get_current_user), db: Se
             detail="User not found"
         )
     
+    return UserResponse(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        created_at=user.created_at,
+        updated_at=user.updated_at,
+        books=user.books
+    )
+
+
+@router.get("/me", response_model=UserResponse)
+def get_me(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Alias endpoint for frontend compatibility."""
+    user = db.query(User).filter(User.id == current_user["id"]).first()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
     return UserResponse(
         id=user.id,
         username=user.username,

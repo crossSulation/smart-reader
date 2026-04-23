@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from pydantic import BaseModel, model_validator
+import logging
 
 from app.database import get_db
 from app.schemas import Book, BookCreate
@@ -9,6 +10,7 @@ from app.services.file_service import FileService
 from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/books", tags=["books"])
+logger = logging.getLogger(__name__)
 
 
 class UpdateProgressRequest(BaseModel):
@@ -53,6 +55,7 @@ async def list_books(user: dict = Depends(get_current_user), db: Session = Depen
     # 实现书籍列表功能
     file_service = FileService(db)
     books = file_service.get_user_books(user['id'])
+    logger.info("list_books called | user_id=%s | count=%s", user["id"], len(books))
     return [_attach_file_fields(file_service, user['id'], book) for book in books]
 
 

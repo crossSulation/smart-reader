@@ -6,27 +6,31 @@ interface User {
   email: string;
 }
 
+const readStoredUser = (): User | null => {
+  const raw = localStorage.getItem('user');
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as User;
+  } catch (e) {
+    console.error('Failed to parse user data:', e);
+    return null;
+  }
+};
+
 const useAuth = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [user, setUser] = useState<User | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!localStorage.getItem('token'));
+  const [user, setUser] = useState<User | null>(() => readStoredUser());
 
   useEffect(() => {
-    // 检查本地存储中的token
-    const token = localStorage.getItem('token');
-    setIsAuthenticated(!!token);
-    
-    // 如果有token，可以考虑解码或获取用户信息
-    if (token) {
-      // 这里可以根据需要从后端获取用户信息
-      const storedUser = localStorage.getItem('user');
-      if (storedUser) {
-        try {
-          setUser(JSON.parse(storedUser));
-        } catch (e) {
-          console.error('Failed to parse user data:', e);
-        }
-      }
-    }
+    const syncFromStorage = () => {
+      const token = localStorage.getItem('token');
+      setIsAuthenticated(!!token);
+      setUser(readStoredUser());
+    };
+
+    syncFromStorage();
+    window.addEventListener('storage', syncFromStorage);
+    return () => window.removeEventListener('storage', syncFromStorage);
   }, []);
 
   const login = (token: string, userData: User) => {

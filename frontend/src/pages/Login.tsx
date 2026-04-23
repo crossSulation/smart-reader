@@ -14,13 +14,12 @@ const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const formData = new FormData();
-      formData.append('username', username);
-      formData.append('password', password);
-
       const response = await fetch('/api/auth/login', {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password }),
       });
 
       if (response.ok) {
@@ -37,7 +36,8 @@ const Login: React.FC = () => {
         
         navigate('/library', { replace: true });
       } else {
-        setError(t('login.error'));
+                const data = await response.json().catch(() => ({}));
+                setError(data.detail || t('login.error'));
       }
     } catch {
       setError(t('login.error'));

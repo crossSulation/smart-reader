@@ -86,5 +86,18 @@
     "page": "页",
     "of": "/",
     "swipeHint": "左右滑动切换页面"
+  },
+  "search": {
+    "title": "书中搜索",
+    "placeholder": "搜索段落…",
+    "searchButton": "搜索",
+    "indexTooltip": "为此书构建搜索索引",
+    "indexButton": "建立索引",
+    "notIndexed": "该书尚未建立索引，请先点击“建立索引”。",
+    "indexing": "索引中…",
+    "noResults": "未找到结果。",
+    "page": "页",
+    "chunk": "片段",
+    "goToPage": "跳转到页面"
   }
 }
