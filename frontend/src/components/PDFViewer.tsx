@@ -183,57 +183,31 @@ export default function PDFViewer({
   useEffect(() => { pageNumberRef.current = pageNumber; }, [pageNumber]);
 
   const handleMouseUpSelection = useCallback(() => {
-    const pageContainer = pageContainerRef.current;
-    if (!pageContainer) {
-      return;
-    }
-
     const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) {
-      return;
+    const text = selection?.toString().trim() || "";
+    if (text) onTextSelected?.(text);
+
+    if (activeToolRef.current !== 'none' && text && selection && selection.rangeCount > 0 && pageContainerRef.current) {
+      const range = selection.getRangeAt(0);
+      const pageRect = pageContainerRef.current.getBoundingClientRect();
+      const clientRects = Array.from(range.getClientRects()).filter(r => r.width > 1 && r.height > 1);
+      const rects: AnnotationRect[] = clientRects.map(rect => ({
+        x: (rect.left - pageRect.left) / pageRect.width,
+        y: (rect.top - pageRect.top) / pageRect.height,
+        width: rect.width / pageRect.width,
+        height: rect.height / pageRect.height,
+      }));
+      if (rects.length > 0) {
+        setAnnotations(prev => [...prev, {
+          id: crypto.randomUUID(),
+          page: pageNumberRef.current,
+          type: activeToolRef.current as AnnotationType,
+          color: activeColorRef.current,
+          rects,
+        }]);
+        selection.removeAllRanges();
+      }
     }
-
-    const text = selection.toString().trim();
-    if (!text) {
-      return;
-    }
-
-    const range = selection.getRangeAt(0);
-    // Ignore selections made outside the current PDF page container.
-    if (!pageContainer.contains(range.commonAncestorContainer)) {
-      return;
-    }
-
-    onTextSelected?.(text);
-
-    if (activeToolRef.current === 'none') {
-      return;
-    }
-
-    const pageRect = pageContainer.getBoundingClientRect();
-    const clientRects = Array.from(range.getClientRects()).filter((rect) => rect.width > 1 && rect.height > 1);
-    if (clientRects.length === 0) {
-      return;
-    }
-
-    const rects: AnnotationRect[] = clientRects.map((rect) => ({
-      x: (rect.left - pageRect.left) / pageRect.width,
-      y: (rect.top - pageRect.top) / pageRect.height,
-      width: rect.width / pageRect.width,
-      height: rect.height / pageRect.height,
-    }));
-
-    setAnnotations((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        page: pageNumberRef.current,
-        type: activeToolRef.current as AnnotationType,
-        color: activeColorRef.current,
-        rects,
-      },
-    ]);
-    selection.removeAllRanges();
   }, [onTextSelected]);
 
   useEffect(() => {
@@ -252,10 +226,11 @@ export default function PDFViewer({
                 key={page}
                 ref={(el) => { thumbnailRefs.current[page - 1] = el; }}
                 onClick={() => handlePageChange(page)}
-                className={`m-1 cursor-pointer rounded border-2 transition-colors ${pageNumber === page
+                className={`m-1 cursor-pointer rounded border-2 transition-colors ${
+                  pageNumber === page
                     ? 'border-blue-500 bg-blue-50'
                     : 'border-transparent hover:border-blue-300'
-                  }`}
+                }`}
               >
                 <Page
                   pageNumber={page}
