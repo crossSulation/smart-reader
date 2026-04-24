@@ -15,7 +15,7 @@ function RouterContainer() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         
-        {/* Protected routes with Layout */}
+        {/* Protected routes with Layout (header shown) */}
         <Route element={
           <ProtectedRoute>
             <Layout/>
@@ -23,9 +23,15 @@ function RouterContainer() {
         }>
           <Route path="/" element={<Library />} />
           <Route path="/library" element={<Library />} />
-          <Route path="/reader/:id" element={<Reader />} />
           <Route path="/profile" element={<Profile />} />
         </Route>
+
+        {/* Protected routes without Layout (no header) */}
+        <Route path="/reader/:id" element={
+          <ProtectedRoute>
+            <Reader />
+          </ProtectedRoute>
+        } />
       </Routes>
     </Router>
   )

@@ -39,8 +39,7 @@ class UserResponse(BaseModel):
     username: str
     email: str
     created_at: datetime
-    updated_at: datetime
-    books: Optional[list] = []
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

@@ -11,23 +11,28 @@ from app.services.oss_service import OSSManager
 
 router = APIRouter(prefix="/files", tags=["files"])
 
-@router.get("/download/{file_name}")
+@router.get("/download/{file_path:path}")
 async def download_file(
-    file_name: str,
+    file_path: str,
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """下载文件 - 重定向到OSS URL"""
+    """下载文件 - 本地直接返回文件，云存储重定向到OSS URL"""
     # 查找文件记录
     file_record = db.query(FileMetadata).filter(
-        FileMetadata.stored_name == file_name,
+        FileMetadata.stored_name == file_path,
         FileMetadata.uploaded_by == user['id']
     ).first()
-    
+
     if not file_record:
         raise HTTPException(status_code=404, detail="File not found")
-    
-    # 直接重定向到OSS URL
+
+    # 本地存储：直接返回文件
+    local_path = os.path.join("uploads", file_path)
+    if os.path.exists(local_path):
+        return FileResponse(local_path, filename=file_record.original_name)
+
+    # 云存储：重定向到OSS URL
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url=file_record.file_url)
 
