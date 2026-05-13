@@ -35,6 +35,8 @@ type PDFViewerProps = {
   initPage?: number;
   jumpToPage?: number;
   onTextSelected?: (text: string) => void;
+  onPageChange?: (page: number) => void;
+  onTotalPagesChange?: (totalPages: number) => void;
 };
 
 export default function PDFViewer({
@@ -42,18 +44,21 @@ export default function PDFViewer({
   initPage = 1,
   jumpToPage,
   onTextSelected,
+  onPageChange,
+  onTotalPagesChange,
 }: PDFViewerProps) {
   const { t } = useTranslation();
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState(1);
   const [fileUrl, setFileUrl] = useState("");
   const [isAnimating, setIsAnimating] = useState(false);
+  const [animationDirection, setAnimationDirection] = useState<"next" | "previous">("next");
+  const [pageWidth, setPageWidth] = useState(0);
   const currentPageRef = useRef<number>(1);
   const lastSavedPageRef = useRef<number | null>(null);
   const touchStartX = useRef<number>(0);
   const touchStartY = useRef<number>(0);
   const viewerRef = useRef<HTMLDivElement>(null);
-  const thumbnailRefs = useRef<(HTMLDivElement | null)[]>([]);
   const pageContainerRef = useRef<HTMLDivElement>(null);
   const [activeTool, setActiveTool] = useState<'none' | AnnotationType>('none');
   const [activeColor, setActiveColor] = useState(HIGHLIGHT_COLORS[0]);
@@ -98,11 +103,12 @@ export default function PDFViewer({
 
   const handlePageChange = useCallback((newPage: number) => {
     if (newPage >= 1 && newPage <= numPages && !isAnimating) {
+      setAnimationDirection(newPage > pageNumber ? "next" : "previous");
       setIsAnimating(true);
       setPageNumber(newPage);
       setTimeout(() => setIsAnimating(false), 300); // Animation duration
     }
-  }, [numPages, isAnimating]);
+  }, [numPages, isAnimating, pageNumber]);
 
   // Touch event handlers for swipe gestures
   const handleTouchStart = useCallback((e: TouchEvent) => {
@@ -142,14 +148,11 @@ export default function PDFViewer({
 
   useEffect(() => {
     currentPageRef.current = pageNumber;
+    onPageChange?.(pageNumber);
     if (numPages > 0) {
       saveProgress(pageNumber);
     }
-  }, [pageNumber, numPages]);
-
-  useEffect(() => {
-    thumbnailRefs.current[pageNumber - 1]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }, [pageNumber]);
+  }, [pageNumber, numPages, onPageChange]);
 
   useEffect(() => {
     return () => {
@@ -171,6 +174,7 @@ export default function PDFViewer({
 
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
+    onTotalPagesChange?.(numPages);
     const initial = Math.min(Math.max(initPage, 1), numPages);
     setPageNumber(initial);
   }
@@ -215,38 +219,29 @@ export default function PDFViewer({
     return () => document.removeEventListener('mouseup', handleMouseUpSelection);
   }, [handleMouseUpSelection]);
 
-  return (
-    <div className="flex h-full">
-      {/* Left page thumbnail sidebar */}
-      <div className="w-[108px] flex-shrink-0 overflow-y-auto border-r border-gray-200 bg-gray-50">
-        {numPages > 0 && fileObject && (
-          <Document file={fileObject} loading="">
-            {Array.from({ length: numPages }, (_, i) => i + 1).map((page) => (
-              <div
-                key={page}
-                ref={(el) => { thumbnailRefs.current[page - 1] = el; }}
-                onClick={() => handlePageChange(page)}
-                className={`m-1 cursor-pointer rounded border-2 transition-colors ${
-                  pageNumber === page
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-transparent hover:border-blue-300'
-                }`}
-              >
-                <Page
-                  pageNumber={page}
-                  width={88}
-                  renderTextLayer={false}
-                  renderAnnotationLayer={false}
-                />
-                <div className="py-0.5 text-center text-xs text-gray-500">{page}</div>
-              </div>
-            ))}
-          </Document>
-        )}
-      </div>
+  useEffect(() => {
+    const updateWidth = () => {
+      if (!viewerRef.current) return;
+      // Keep page within the available middle column width.
+      setPageWidth(Math.max(320, Math.floor(viewerRef.current.clientWidth - 2)));
+    };
 
-      {/* Main viewer */}
-      <div className="flex flex-1 flex-col items-center overflow-y-auto pt-4">
+    updateWidth();
+
+    const observer = new ResizeObserver(updateWidth);
+    if (viewerRef.current) {
+      observer.observe(viewerRef.current);
+    }
+
+    window.addEventListener('resize', updateWidth);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateWidth);
+    };
+  }, []);
+
+  return (
+    <div className="flex h-full w-full flex-col items-stretch overflow-y-auto px-4 md:px-6 pt-4">
         {/* Annotation toolbar */}
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm shadow-sm">
           <button
@@ -323,7 +318,7 @@ export default function PDFViewer({
           ref={viewerRef}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
-          className="border shadow-lg rounded-lg overflow-hidden"
+          className="w-full border shadow-lg rounded-lg overflow-hidden"
           style={{
             touchAction: 'pan-y',
             userSelect: 'text',
@@ -338,10 +333,10 @@ export default function PDFViewer({
             <div ref={pageContainerRef} className="relative">
               <Page
                 pageNumber={pageNumber}
-                width={window.innerWidth * 0.8}
+                width={pageWidth || Math.floor(window.innerWidth * 0.8)}
                 renderTextLayer={true}
                 renderAnnotationLayer={false}
-                className={`pdf-page ${isAnimating ? 'animating' : ''}`}
+                className={`pdf-page ${isAnimating ? `animating animating-${animationDirection}` : ''}`}
               />
               {/* Annotation overlay — percentages are relative to pageContainerRef */}
               <div className="pointer-events-none absolute inset-0" style={{ zIndex: 4 }}>
@@ -381,7 +376,6 @@ export default function PDFViewer({
             </div>
           </Document>
         </div>
-      </div>
     </div>
   );
 }

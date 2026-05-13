@@ -49,6 +49,14 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
+class ResetPasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+class ForgotPasswordRequest(BaseModel):
+    username: str
+    new_password: str
+
 # 认证服务
 class AuthService:
     @staticmethod
@@ -175,6 +183,39 @@ def get_current_user_info(current_user: dict = Depends(get_current_user), db: Se
         updated_at=user.updated_at,
         books=user.books
     )
+
+
+@router.post("/forgot-password")
+def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """Reset password by username without requiring authentication."""
+    user = db.query(User).filter(User.username == body.username).first()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    user.hashed_password = AuthService.get_password_hash(body.new_password)
+    user.updated_at = datetime.utcnow()
+    db.commit()
+    return {"message": "Password reset successfully"}
+
+
+@router.post("/reset")
+def reset_password(
+    body: ResetPasswordRequest,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Reset the current user's password after verifying the current password."""
+    user = db.query(User).filter(User.id == current_user["id"]).first()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if not AuthService.verify_password(body.current_password, user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
+
+    user.hashed_password = AuthService.get_password_hash(body.new_password)
+    user.updated_at = datetime.utcnow()
+    db.commit()
+    return {"message": "Password updated successfully"}
 
 
 @router.get("/me", response_model=UserResponse)

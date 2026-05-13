@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { LockOutlined } from '@mui/icons-material';
-import { Avatar, Box, Button, Container, TextField, Typography, Alert } from '@mui/material';
+import {
+  Avatar, Box, Button, Container, TextField, Typography, Alert,
+  Dialog, DialogTitle, DialogContent, DialogActions,
+} from '@mui/material';
 
 const Login: React.FC = () => {
   const { t } = useTranslation();
@@ -10,6 +13,13 @@ const Login: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotUsername, setForgotUsername] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotConfirm, setForgotConfirm] = useState('');
+  const [forgotError, setForgotError] = useState('');
+  const [forgotSuccess, setForgotSuccess] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +52,46 @@ const Login: React.FC = () => {
     } catch {
       setError(t('login.error'));
     }
+  };
+
+  const handleForgotSubmit = async () => {
+    setForgotError('');
+    setForgotSuccess('');
+    if (!forgotUsername.trim() || !forgotNewPassword) {
+      setForgotError('Please fill in all fields.');
+      return;
+    }
+    if (forgotNewPassword !== forgotConfirm) {
+      setForgotError('Passwords do not match.');
+      return;
+    }
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: forgotUsername, new_password: forgotNewPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setForgotSuccess('Password reset successfully. You can now log in.');
+        setForgotUsername('');
+        setForgotNewPassword('');
+        setForgotConfirm('');
+      } else {
+        setForgotError(data.detail || 'Reset failed. Please check your username.');
+      }
+    } catch {
+      setForgotError('Network error. Please try again.');
+    }
+  };
+
+  const handleForgotClose = () => {
+    setForgotOpen(false);
+    setForgotUsername('');
+    setForgotNewPassword('');
+    setForgotConfirm('');
+    setForgotError('');
+    setForgotSuccess('');
   };
 
   return (
@@ -90,11 +140,21 @@ const Login: React.FC = () => {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
+          <Box sx={{ textAlign: 'right', mt: 0.5 }}>
+            <Button
+              size="small"
+              variant="text"
+              onClick={() => setForgotOpen(true)}
+              sx={{ textTransform: 'none', p: 0, minWidth: 0 }}
+            >
+              Forgot password?
+            </Button>
+          </Box>
           <Button
             type="submit"
             fullWidth
             variant="contained"
-            sx={{ mt: 3, mb: 2 }}
+            sx={{ mt: 2, mb: 2 }}
           >
             {t('login.loginButton')}
           </Button>
@@ -107,6 +167,48 @@ const Login: React.FC = () => {
           </Button>
         </Box>
       </Box>
+
+      {/* Forgot password dialog */}
+      <Dialog open={forgotOpen} onClose={handleForgotClose} maxWidth="xs" fullWidth>
+        <DialogTitle>Reset Password</DialogTitle>
+        <DialogContent>
+          {forgotError && <Alert severity="error" sx={{ mb: 2 }}>{forgotError}</Alert>}
+          {forgotSuccess && <Alert severity="success" sx={{ mb: 2 }}>{forgotSuccess}</Alert>}
+          <TextField
+            margin="normal"
+            required
+            fullWidth
+            label="Username"
+            value={forgotUsername}
+            onChange={(e) => setForgotUsername(e.target.value)}
+            autoFocus
+          />
+          <TextField
+            margin="normal"
+            required
+            fullWidth
+            label="New Password"
+            type="password"
+            value={forgotNewPassword}
+            onChange={(e) => setForgotNewPassword(e.target.value)}
+          />
+          <TextField
+            margin="normal"
+            required
+            fullWidth
+            label="Confirm New Password"
+            type="password"
+            value={forgotConfirm}
+            onChange={(e) => setForgotConfirm(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleForgotClose}>Cancel</Button>
+          <Button variant="contained" onClick={handleForgotSubmit} disabled={!!forgotSuccess}>
+            Reset Password
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

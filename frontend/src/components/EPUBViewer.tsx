@@ -13,6 +13,7 @@ export default function EPUBViewer({ bookId, onTextSelected }: EPUBViewerProps) 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [animationDirection, setAnimationDirection] = useState<'next' | 'previous'>('next');
   const bookRef = useRef<any>(null);
   const renditionRef = useRef<any>(null);
   const touchStartX = useRef<number>(0);
@@ -104,6 +105,7 @@ export default function EPUBViewer({ bookId, onTextSelected }: EPUBViewerProps) 
 
   const handlePrevious = useCallback(() => {
     if (renditionRef.current && !isAnimating) {
+      setAnimationDirection('previous');
       setIsAnimating(true);
       renditionRef.current.prev();
       setTimeout(() => setIsAnimating(false), 300);
@@ -112,6 +114,7 @@ export default function EPUBViewer({ bookId, onTextSelected }: EPUBViewerProps) 
 
   const handleNext = useCallback(() => {
     if (renditionRef.current && !isAnimating) {
+      setAnimationDirection('next');
       setIsAnimating(true);
       renditionRef.current.next();
       setTimeout(() => setIsAnimating(false), 300);
@@ -185,7 +188,7 @@ export default function EPUBViewer({ bookId, onTextSelected }: EPUBViewerProps) 
         ref={viewerRef}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
-        className={`border shadow-lg rounded-lg overflow-auto bg-white epub-viewer ${isAnimating ? 'animating' : ''}`}
+        className={`border shadow-lg rounded-lg overflow-auto bg-white epub-viewer ${isAnimating ? `animating animating-${animationDirection}` : ''}`}
         style={{
           width: '100%',
           maxWidth: '900px',
