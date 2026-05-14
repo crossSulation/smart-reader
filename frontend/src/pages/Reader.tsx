@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowBack, AutoAwesomeOutlined, LocalOfferOutlined, SettingsOutlined, ViewSidebarOutlined } from "@mui/icons-material";
+import { ArrowBack, AutoAwesomeOutlined, LocalOfferOutlined, SettingsOutlined, UploadFileOutlined, ViewSidebarOutlined } from "@mui/icons-material";
 import { Document, Page, pdfjs } from "react-pdf";
+import MarkdownViewer from "../components/MarkdownViewer";
 import PDFViewer from "../components/PDFViewer";
 import EPUBViewer from "../components/EPUBViewer";
 import BookSearch from "../components/BookSearch";
@@ -25,7 +26,14 @@ function Reader() {
   const [prefillReferenceTerm, setPrefillReferenceTerm] = useState("");
   const [currentPdfPage, setCurrentPdfPage] = useState(1);
   const [pdfTotalPages, setPdfTotalPages] = useState(0);
+  const [markdownJumpSection, setMarkdownJumpSection] = useState<number | undefined>(undefined);
+  const [localFile, setLocalFile] = useState<{ name: string; type: "pdf" | "epub" | "markdown"; url: string } | null>(null);
+  const [localUploadStatus, setLocalUploadStatus] = useState<"idle" | "uploading" | "uploaded" | "failed">("idle");
+  const [localUploadMessage, setLocalUploadMessage] = useState("");
+  const [uploadedBookId, setUploadedBookId] = useState<number | null>(null);
   const thumbnailRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const localFileInputRef = useRef<HTMLInputElement>(null);
+  const previousLocalUrlRef = useRef<string | null>(null);
 
   const handleTextSelected = (text: string) => {
     const clean = text.trim().replace(/\s+/g, " ");
@@ -64,33 +72,138 @@ function Reader() {
     fetchBook();
   }, [id]);
 
-  const normalizedFileType = (
-    book?.file_type ||
-    (book?.title?.toLowerCase().endsWith(".epub") ? "epub" : "pdf")
-  ).toLowerCase();
-
-  const thumbnailFile = book?.file_url
-    ? {
-        url: book.file_url,
-        httpHeaders: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      }
-    : null;
+  useEffect(() => {
+    const previous = previousLocalUrlRef.current;
+    if (previous && previous !== localFile?.url) {
+      URL.revokeObjectURL(previous);
+    }
+    previousLocalUrlRef.current = localFile?.url ?? null;
+  }, [localFile?.url]);
 
   useEffect(() => {
-    if (!book || normalizedFileType !== "pdf") {
+    return () => {
+      if (previousLocalUrlRef.current) {
+        URL.revokeObjectURL(previousLocalUrlRef.current);
+      }
+    };
+  }, []);
+
+  const detectLocalFileType = (fileName: string): "pdf" | "epub" | "markdown" | null => {
+    const lowered = fileName.toLowerCase();
+    if (lowered.endsWith(".pdf")) return "pdf";
+    if (lowered.endsWith(".epub")) return "epub";
+    if (lowered.endsWith(".md") || lowered.endsWith(".markdown")) return "markdown";
+    return null;
+  };
+
+  const handlePickLocalFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const picked = e.target.files?.[0];
+    if (!picked) return;
+
+    const detectedType = detectLocalFileType(picked.name);
+    if (!detectedType) {
+      setLocalUploadStatus("failed");
+      setLocalUploadMessage("Unsupported file type. Please select PDF, EPUB, or Markdown.");
+      e.target.value = "";
+      return;
+    }
+
+    const localUrl = URL.createObjectURL(picked);
+    setLocalFile({
+      name: picked.name,
+      type: detectedType,
+      url: localUrl,
+    });
+    setUploadedBookId(null);
+    setJumpToPage(undefined);
+    setMarkdownJumpSection(undefined);
+    setCurrentPdfPage(1);
+    setPdfTotalPages(0);
+    setLocalUploadStatus("uploading");
+    setLocalUploadMessage("Uploading in background...");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", picked);
+
+      const res = await fetch("/api/upload/", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || `Upload failed (${res.status})`);
+      }
+
+      const data = await res.json();
+      setUploadedBookId(typeof data.book_id === "number" ? data.book_id : null);
+      setLocalUploadStatus("uploaded");
+      setLocalUploadMessage("Background upload completed.");
+    } catch (err) {
+      setLocalUploadStatus("failed");
+      setLocalUploadMessage(err instanceof Error ? err.message : "Background upload failed.");
+    } finally {
+      e.target.value = "";
+    }
+  };
+
+  const resolveBookFileType = (currentBook: Book | null): "pdf" | "epub" | "markdown" => {
+    const rawFileType = (currentBook?.file_type || "").toLowerCase();
+    const title = (currentBook?.title || "").toLowerCase();
+
+    if (rawFileType.includes("markdown") || rawFileType === "md") return "markdown";
+    if (rawFileType.includes("epub")) return "epub";
+    if (rawFileType.includes("pdf")) return "pdf";
+
+    if (title.endsWith(".md") || title.endsWith(".markdown")) return "markdown";
+    if (title.endsWith(".epub")) return "epub";
+    return "pdf";
+  };
+
+  const normalizedFileType = resolveBookFileType(book);
+  const activeFileType = localFile?.type ?? normalizedFileType;
+  const activeTitle = localFile?.name ?? book?.title ?? "Untitled";
+
+  const activeBookIdForAi = localFile
+    ? (uploadedBookId ? String(uploadedBookId) : null)
+    : (id ?? null);
+
+  const thumbnailFile = localFile && activeFileType === "pdf"
+    ? localFile.url
+    : book?.file_url
+      ? {
+          url: book.file_url,
+          httpHeaders: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        }
+      : null;
+
+  useEffect(() => {
+    if (activeFileType !== "pdf") {
       setCurrentPdfPage(1);
       setPdfTotalPages(0);
       return;
     }
 
-    const initialPage = Math.max(1, book.current_page ?? 1);
+    const initialPage = localFile ? 1 : Math.max(1, book?.current_page ?? 1);
     setCurrentPdfPage(initialPage);
-  }, [book, normalizedFileType]);
+  }, [book, activeFileType, localFile]);
 
   useEffect(() => {
-    if (normalizedFileType !== "pdf") return;
+    if (activeFileType !== "pdf") return;
     thumbnailRefs.current[currentPdfPage - 1]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [currentPdfPage, normalizedFileType]);
+  }, [currentPdfPage, activeFileType]);
+
+  const handleJumpTarget = (target: number) => {
+    if (activeFileType === "markdown") {
+      setMarkdownJumpSection(target);
+      return;
+    }
+    setJumpToPage(target);
+  };
 
   if (loading) return <div className="p-8 text-center">Loading...</div>;
 
@@ -108,17 +221,30 @@ function Reader() {
   if (!book) return <div className="p-8 text-center">Book not found</div>;
 
   const renderReaderContent = () =>
-    normalizedFileType === "pdf" ? (
+    activeFileType === "pdf" ? (
       <PDFViewer
-        bookId={id!}
-        initPage={jumpToPage ?? book.current_page}
+        bookId={localFile ? undefined : id!}
+        fileUrlOverride={localFile?.type === "pdf" ? localFile.url : undefined}
+        initPage={jumpToPage ?? book.current_page ?? 1}
         jumpToPage={jumpToPage}
         onTextSelected={handleTextSelected}
         onPageChange={setCurrentPdfPage}
         onTotalPagesChange={setPdfTotalPages}
       />
+    ) : activeFileType === "markdown" ? (
+      (localFile?.type === "markdown" ? localFile.url : book.file_url) ? (
+        <MarkdownViewer
+          fileUrl={localFile?.type === "markdown" ? localFile.url : book.file_url!}
+          onTextSelected={handleTextSelected}
+          jumpToSection={markdownJumpSection}
+        />
+      ) : null
     ) : (
-      <EPUBViewer bookId={id!} onTextSelected={handleTextSelected} />
+      <EPUBViewer
+        bookId={localFile ? undefined : id!}
+        fileUrlOverride={localFile?.type === "epub" ? localFile.url : undefined}
+        onTextSelected={handleTextSelected}
+      />
     );
 
   const renderAiPanel = () => (
@@ -147,12 +273,16 @@ function Reader() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
-        {aiTab === "search" ? (
-          <BookSearch bookId={id!} onJumpToPage={(page) => setJumpToPage(page)} />
+        {!activeBookIdForAi ? (
+          <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            Local file is open. AI search/QA will be available after background upload finishes.
+          </div>
+        ) : aiTab === "search" ? (
+          <BookSearch bookId={activeBookIdForAi} onJumpToPage={(page) => handleJumpTarget(page)} />
         ) : (
           <BookQA
-            bookId={id!}
-            onJumpToPage={(page) => setJumpToPage(page)}
+            bookId={activeBookIdForAi}
+            onJumpToPage={(page) => handleJumpTarget(page)}
             prefillReferenceTerm={prefillReferenceTerm}
           />
         )}
@@ -160,12 +290,12 @@ function Reader() {
     </>
   );
 
-  const currentPageDisplay = normalizedFileType === "pdf"
+  const currentPageDisplay = activeFileType === "pdf"
     ? currentPdfPage
     : Math.max(1, book.current_page ?? 1);
-  const totalPageDisplay = normalizedFileType === "pdf"
-    ? (pdfTotalPages || book.total_pages || "?")
-    : (book.total_pages || "?");
+  const totalPageDisplay = activeFileType === "pdf"
+    ? (pdfTotalPages || (!localFile ? book.total_pages : undefined) || "?")
+    : ((!localFile ? book.total_pages : undefined) || "?");
   const totalPagesNumber = typeof totalPageDisplay === "number" ? totalPageDisplay : null;
   const progressPercent = totalPagesNumber
     ? Math.min(100, Math.max(0, (currentPageDisplay / totalPagesNumber) * 100))
@@ -181,18 +311,50 @@ function Reader() {
             </button>
           </div>
 
-          <h1 className="max-w-[55vw] truncate text-xl font-bold text-gray-900 md:text-2xl text-center">{book.title}</h1>
+          <h1 className="max-w-[55vw] truncate text-xl font-bold text-gray-900 md:text-2xl text-center">{activeTitle}</h1>
 
           <div className="justify-self-end">
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-100"
-              title="Reader settings"
-            >
-              <SettingsOutlined fontSize="small" />
-            </button>
+            <div className="flex items-center gap-2">
+              {localUploadStatus !== "idle" && (
+                <span className={`rounded px-2 py-1 text-xs font-medium ${
+                  localUploadStatus === "uploading"
+                    ? "bg-blue-50 text-blue-700"
+                    : localUploadStatus === "uploaded"
+                      ? "bg-green-50 text-green-700"
+                      : "bg-red-50 text-red-700"
+                }`}>
+                  {localUploadStatus === "uploading" ? "Uploading" : localUploadStatus === "uploaded" ? "Uploaded" : "Upload failed"}
+                </span>
+              )}
+              <input
+                ref={localFileInputRef}
+                type="file"
+                accept=".pdf,.epub,.md,.markdown"
+                onChange={handlePickLocalFile}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => localFileInputRef.current?.click()}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-100"
+                title="Open local file"
+              >
+                <UploadFileOutlined fontSize="small" />
+                Open local
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-100"
+                title="Reader settings"
+              >
+                <SettingsOutlined fontSize="small" />
+              </button>
+            </div>
           </div>
         </div>
+        {localUploadMessage && (
+          <div className="mt-2 text-xs text-gray-500">{localUploadMessage}</div>
+        )}
       </header>
 
       <div className="flex-1 min-h-0">
@@ -204,7 +366,7 @@ function Reader() {
       </div>
 
       <div className="hidden lg:flex h-full">
-        {normalizedFileType === "pdf" && (
+        {activeFileType === "pdf" && (
           <>
             <aside className="h-full w-20 shrink-0 border-r border-gray-200 bg-white">
               <div className="flex h-full flex-col items-center py-3">
@@ -287,20 +449,22 @@ function Reader() {
       </div>
       </div>
 
-      <footer className="border-t border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700">
-        <div className="mb-1 flex items-center justify-between">
-          <span>Progress</span>
-          <span>{currentPageDisplay} / {totalPageDisplay}</span>
-        </div>
-        <div className="px-6">
-          <div className="h-2 w-full overflow-hidden rounded bg-gray-200">
-            <div
-              className="h-full bg-blue-500 transition-all duration-300"
-              style={{ width: `${progressPercent}%` }}
-            />
+      {activeFileType !== "markdown" && (
+        <footer className="border-t border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700">
+          <div className="mb-1 flex items-center justify-between">
+            <span>Progress</span>
+            <span>{currentPageDisplay} / {totalPageDisplay}</span>
           </div>
-        </div>
-      </footer>
+          <div className="px-6">
+            <div className="h-2 w-full overflow-hidden rounded bg-gray-200">
+              <div
+                className="h-full bg-blue-500 transition-all duration-300"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+        </footer>
+      )}
     </div>
   );
 }

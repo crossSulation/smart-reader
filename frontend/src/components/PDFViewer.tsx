@@ -31,7 +31,8 @@ const HIGHLIGHT_COLORS = [
 const UNDERLINE_COLORS = ['#2563eb', '#dc2626', '#16a34a', '#d97706'];
 
 type PDFViewerProps = {
-  bookId: string;
+  bookId?: string;
+  fileUrlOverride?: string;
   initPage?: number;
   jumpToPage?: number;
   onTextSelected?: (text: string) => void;
@@ -41,6 +42,7 @@ type PDFViewerProps = {
 
 export default function PDFViewer({
   bookId,
+  fileUrlOverride,
   initPage = 1,
   jumpToPage,
   onTextSelected,
@@ -63,13 +65,28 @@ export default function PDFViewer({
   const [activeTool, setActiveTool] = useState<'none' | AnnotationType>('none');
   const [activeColor, setActiveColor] = useState(HIGHLIGHT_COLORS[0]);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const annotationStorageKey = bookId ? `annotations_${bookId}` : "annotations_local";
 
   const fileObject = useMemo(
-    () => fileUrl ? { url: fileUrl, httpHeaders: { Authorization: `Bearer ${localStorage.getItem("token")}` } } : null,
+    () => {
+      if (!fileUrl) return null;
+      if (fileUrl.startsWith("blob:") || fileUrl.startsWith("data:")) {
+        return fileUrl;
+      }
+      return { url: fileUrl, httpHeaders: { Authorization: `Bearer ${localStorage.getItem("token")}` } };
+    },
     [fileUrl]
   );
 
   useEffect(() => {
+    if (fileUrlOverride) {
+      setFileUrl(fileUrlOverride);
+      return;
+    }
+    if (!bookId) {
+      return;
+    }
+
     const fetchFile = async () => {
       const res = await fetch(`/api/books/${bookId}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
@@ -83,9 +100,11 @@ export default function PDFViewer({
       }
     };
     fetchFile();
-  }, [bookId]);
+  }, [bookId, fileUrlOverride]);
 
   const saveProgress = async (page: number) => {
+    if (!bookId) return;
+
     try {
       await fetch(`/api/books/${bookId}/progress`, {
         method: "PUT",
@@ -149,28 +168,30 @@ export default function PDFViewer({
   useEffect(() => {
     currentPageRef.current = pageNumber;
     onPageChange?.(pageNumber);
-    if (numPages > 0) {
+    if (numPages > 0 && bookId) {
       saveProgress(pageNumber);
     }
-  }, [pageNumber, numPages, onPageChange]);
+  }, [pageNumber, numPages, onPageChange, bookId]);
 
   useEffect(() => {
     return () => {
+      if (!bookId) return;
+
       const pageToSave = currentPageRef.current;
       if (pageToSave && pageToSave !== lastSavedPageRef.current) {
         saveProgress(pageToSave);
       }
     };
-  }, []);
-
-  useEffect(() => {
-    const saved = localStorage.getItem(`annotations_${bookId}`);
-    if (saved) { try { setAnnotations(JSON.parse(saved)); } catch { /* ignore */ } }
   }, [bookId]);
 
   useEffect(() => {
-    localStorage.setItem(`annotations_${bookId}`, JSON.stringify(annotations));
-  }, [annotations, bookId]);
+    const saved = localStorage.getItem(annotationStorageKey);
+    if (saved) { try { setAnnotations(JSON.parse(saved)); } catch { /* ignore */ } }
+  }, [annotationStorageKey]);
+
+  useEffect(() => {
+    localStorage.setItem(annotationStorageKey, JSON.stringify(annotations));
+  }, [annotations, annotationStorageKey]);
 
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);

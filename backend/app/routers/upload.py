@@ -17,10 +17,23 @@ from app.services.oss_service import OSSManager
 router = APIRouter(prefix="/upload", tags=["upload"])
 
 
+def _normalize_upload_file_type(file_name: str, content_type: str | None) -> str:
+    ext = os.path.splitext(file_name)[1].lower()
+    if ext in {".md", ".markdown"}:
+        return "markdown"
+    if ext == ".epub":
+        return "epub"
+    if ext == ".pdf":
+        return "pdf"
+    return content_type or "application/octet-stream"
+
+
 def _is_allowed_file(file_name: str, content_type: str | None) -> bool:
     allowed_types = {
         "application/pdf",
         "application/epub+zip",
+        "text/markdown",
+        "text/x-markdown",
         "application/octet-stream",
         "image/jpeg",
         "image/png",
@@ -31,14 +44,14 @@ def _is_allowed_file(file_name: str, content_type: str | None) -> bool:
         "application/msword",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     }
-    allowed_extensions = {".pdf", ".epub", ".txt", ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".doc", ".docx"}
+    allowed_extensions = {".pdf", ".epub", ".md", ".markdown", ".txt", ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".doc", ".docx"}
 
     ext = os.path.splitext(file_name)[1].lower()
     if content_type in allowed_types and ext in allowed_extensions:
         return True
 
     # Some clients upload EPUB with generic content type.
-    if ext == ".epub":
+    if ext in {".epub", ".md", ".markdown"}:
         return True
 
     return False
@@ -56,6 +69,7 @@ async def upload_file(
         
         # 生成唯一文件名
         unique_filename = f"{user['id']}/{uuid.uuid4()}_{file.filename}"
+        normalized_file_type = _normalize_upload_file_type(file.filename, file.content_type)
         
         # 创建临时文件
         temp_file_path = None
@@ -67,7 +81,7 @@ async def upload_file(
             
             # 如果是PDF文件，提取额外信息
             pages = None
-            if file.content_type == "application/pdf":
+            if normalized_file_type == "pdf":
                 try:
                     pages = get_pdf_page_count(temp_file_path)
                 except Exception as e:
@@ -86,7 +100,7 @@ async def upload_file(
             file_metadata = FileMetadata(
                 original_name=file.filename,
                 stored_name=unique_filename,  # 存储OSS中的对象名称
-                file_type=file.content_type,
+                file_type=normalized_file_type,
                 file_size=file_size,
                 upload_date=datetime.utcnow(),
                 uploaded_by=user['id'],
@@ -103,6 +117,7 @@ async def upload_file(
                 Book.owner_id == user['id'],
                 Book.title == file.filename
             ).first()
+            book_id = None
             if not existing_book:
                 book = Book(
                     title=file.filename,
@@ -116,14 +131,19 @@ async def upload_file(
                 )
                 db.add(book)
                 db.commit()
+                db.refresh(book)
+                book_id = book.id
+            else:
+                book_id = existing_book.id
             
             return {
                 "filename": file.filename,
                 "stored_name": unique_filename,
-                "file_type": file.content_type,
+                "file_type": normalized_file_type,
                 "file_size": file_size,
                 "pages": pages,
                 "id": file_metadata.id,
+                "book_id": book_id,
                 "file_url": file_url  # 返回文件URL
             }
             

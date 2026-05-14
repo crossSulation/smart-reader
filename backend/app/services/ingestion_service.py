@@ -4,10 +4,11 @@ chunks, and store them in the document_chunks table.
 
 Chunking strategy
 -----------------
-- PDF  : one chunk per page (already a natural unit; merge short pages)
-- EPUB : one chunk per chapter spine item
-- Both : chunks longer than CHUNK_MAX_CHARS are split at sentence boundaries;
-         chunks shorter than CHUNK_MIN_CHARS are merged with the next chunk.
+- PDF      : one chunk per page (already a natural unit; merge short pages)
+- EPUB     : one chunk per chapter spine item
+- Markdown : one chunk per heading section
+- All      : chunks longer than CHUNK_MAX_CHARS are split at sentence boundaries;
+             chunks shorter than CHUNK_MIN_CHARS are merged with the next chunk.
 
 The service is synchronous so it can be called inline or from a background worker
 without any async framework changes.
@@ -55,6 +56,8 @@ def ingest_book(book_id: int, file_url: str, file_type: str, db) -> int:
             raw_chunks = _extract_pdf_chunks(tmp_path)
         elif "epub" in normalised or tmp_path.endswith(".epub"):
             raw_chunks = _extract_epub_chunks(tmp_path)
+        elif "markdown" in normalised or tmp_path.endswith(".md") or tmp_path.endswith(".markdown"):
+            raw_chunks = _extract_markdown_chunks(tmp_path)
         else:
             raise ValueError(f"Unsupported file type for ingestion: {file_type!r}")
 
@@ -188,6 +191,43 @@ def _extract_epub_chunks(path: str) -> List[Tuple[str, int, int]]:
         for sub_text, _, _ in _split_long_chunk(raw_text, chapter_idx, chapter_idx):
             chunks.append((sub_text, chapter_idx, chapter_idx))
         chapter_idx += 1
+
+    return chunks
+
+
+# ---------------------------------------------------------------------------
+# Markdown extraction
+# ---------------------------------------------------------------------------
+
+def _extract_markdown_chunks(path: str) -> List[Tuple[str, int, int]]:
+    """Return list of (text, section_index, section_index) tuples."""
+    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+        content = f.read()
+
+    lines = content.splitlines()
+    chunks: List[Tuple[str, int, int]] = []
+    current_lines: List[str] = []
+    section_idx = 0
+
+    def flush_current() -> None:
+        nonlocal current_lines, section_idx
+        text = "\n".join(current_lines).strip()
+        if text:
+            for sub_text, _, _ in _split_long_chunk(text, section_idx, section_idx):
+                chunks.append((sub_text, section_idx, section_idx))
+            section_idx += 1
+        current_lines = []
+
+    for line in lines:
+        if re.match(r"^#{1,6}\s+", line.strip()) and current_lines:
+            flush_current()
+        current_lines.append(line)
+
+    flush_current()
+
+    if not chunks and content.strip():
+        for sub_text, _, _ in _split_long_chunk(content.strip(), 0, 0):
+            chunks.append((sub_text, 0, 0))
 
     return chunks
 

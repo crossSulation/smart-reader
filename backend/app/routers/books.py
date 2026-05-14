@@ -35,6 +35,8 @@ def _normalize_file_type(file_type: str | None) -> str | None:
     if not file_type:
         return None
     lowered = file_type.lower()
+    if "markdown" in lowered or lowered in {"text/markdown", "text/x-markdown"}:
+        return "markdown"
     if "epub" in lowered:
         return "epub"
     if "pdf" in lowered:

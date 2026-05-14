@@ -18,9 +18,21 @@ export default function FileUpload({ onUploadComplete, onClose }: FileUploadProp
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const allowedExtensions = [".pdf", ".epub", ".md", ".markdown"];
+
+  const isAllowedFile = (file: File) => {
+    const loweredName = file.name.toLowerCase();
+    return allowedExtensions.some((ext) => loweredName.endsWith(ext));
+  };
 
   const uploadFile = (file: File) => {
     if (!file) return;
+
+    if (!isAllowedFile(file)) {
+      setError(t("fileUpload.unsupportedFile", "Unsupported file type. Please upload PDF, EPUB, or Markdown."));
+      return;
+    }
+
     setSelectedFile(file);
     setError(null);
 
@@ -128,7 +140,7 @@ export default function FileUpload({ onUploadComplete, onClose }: FileUploadProp
                 {t("fileUpload.dropHint", "Drag & drop a file here, or click to browse")}
               </p>
               <p className="text-xs text-gray-400 mt-1">
-                {t("fileUpload.supportedFormats", "PDF, EPUB supported")}
+                {t("fileUpload.supportedFormats", "PDF, EPUB, Markdown supported")}
               </p>
             </div>
           </div>
@@ -136,7 +148,7 @@ export default function FileUpload({ onUploadComplete, onClose }: FileUploadProp
           <input
             ref={inputRef}
             type="file"
-            accept=".pdf,.epub"
+            accept=".pdf,.epub,.md,.markdown"
             onChange={handleInputChange}
             className="hidden"
           />

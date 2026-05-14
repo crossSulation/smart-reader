@@ -2,12 +2,13 @@ import { useEffect, useRef, useState, useCallback, type TouchEvent } from 'react
 import { useTranslation } from 'react-i18next';
 
 type EPUBViewerProps = {
-  bookId: string;
+  bookId?: string;
+  fileUrlOverride?: string;
   initPage?: number;
   onTextSelected?: (text: string) => void;
 };
 
-export default function EPUBViewer({ bookId, onTextSelected }: EPUBViewerProps) {
+export default function EPUBViewer({ bookId, fileUrlOverride, onTextSelected }: EPUBViewerProps) {
   const { t } = useTranslation();
   const viewerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
@@ -30,20 +31,31 @@ export default function EPUBViewer({ bookId, onTextSelected }: EPUBViewerProps) 
         const EPUBJSModule = await import('epubjs');
         const EPUBJS = EPUBJSModule.default;
 
-        // Fetch the EPUB file URL
-        const res = await fetch(`/api/books/${bookId}`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        });
+        let resolvedFileUrl = fileUrlOverride;
+        if (!resolvedFileUrl) {
+          if (!bookId) {
+            throw new Error('Missing book id and local file URL');
+          }
 
-        if (!res.ok) {
-          throw new Error('Failed to fetch book');
+          // Fetch the EPUB file URL
+          const res = await fetch(`/api/books/${bookId}`, {
+            headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+          });
+
+          if (!res.ok) {
+            throw new Error('Failed to fetch book');
+          }
+
+          const data = await res.json();
+          resolvedFileUrl = data.file_url;
         }
 
-        const data = await res.json();
-        const fileUrl = data.file_url;
+        if (!resolvedFileUrl) {
+          throw new Error('Failed to resolve EPUB file URL');
+        }
 
         // Create the book - use the default export directly
-        const book = EPUBJS(fileUrl);
+        const book = EPUBJS(resolvedFileUrl);
         bookRef.current = book;
 
         // Create rendition
@@ -60,6 +72,8 @@ export default function EPUBViewer({ bookId, onTextSelected }: EPUBViewerProps) 
 
         // Save progress on page change
         rendition.on('relocated', async (location: any) => {
+          if (!bookId) return;
+
           try {
             await fetch(`/api/books/${bookId}/progress`, {
               method: 'PUT',
@@ -101,7 +115,7 @@ export default function EPUBViewer({ bookId, onTextSelected }: EPUBViewerProps) 
         renditionRef.current.destroy?.();
       }
     };
-  }, [bookId, onTextSelected]);
+  }, [bookId, fileUrlOverride, onTextSelected]);
 
   const handlePrevious = useCallback(() => {
     if (renditionRef.current && !isAnimating) {
