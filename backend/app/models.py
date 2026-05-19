@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -65,10 +65,12 @@ class DocumentChunk(Base):
     text = Column(Text, nullable=False)
     page_start = Column(Integer, nullable=True)     # first page this chunk covers
     page_end = Column(Integer, nullable=True)       # last page this chunk covers
+    section_path = Column(String, nullable=True)    # structural path (e.g. Chapter > Section)
     token_count = Column(Integer, nullable=True)    # approximate word/token count
     embedding = Column(Text, nullable=True)          # JSON-serialised float list
     embedding_model = Column(String, nullable=True)  # model name used
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    indexed_at = Column(DateTime(timezone=True), nullable=True)  # timestamp when chunk was indexed
 
     book = relationship("Book", back_populates="chunks")
 
@@ -85,3 +87,19 @@ class AIInteraction(Base):
     provider = Column(String, nullable=True)            # llm provider used
     chunks_used = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    citations = relationship("AICitation", back_populates="interaction", cascade="all, delete-orphan")
+
+
+class AICitation(Base):
+    __tablename__ = "ai_citations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    interaction_id = Column(Integer, ForeignKey("ai_interactions.id", ondelete="CASCADE"), nullable=False, index=True)
+    book_id = Column(Integer, ForeignKey("books.id", ondelete="CASCADE"), nullable=False, index=True)
+    chunk_id = Column(Integer, ForeignKey("document_chunks.id", ondelete="CASCADE"), nullable=False, index=True)
+    page = Column(Integer, nullable=True)
+    quote = Column(Text, nullable=False)
+    score = Column(Float, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    interaction = relationship("AIInteraction", back_populates="citations")

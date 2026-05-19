@@ -1,6 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { AutoAwesomeOutlined } from "@mui/icons-material";
+import { AutoAwesomeOutlined, ErrorOutline, CheckCircleOutline, WarningAmberOutlined } from "@mui/icons-material";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeSanitize from "rehype-sanitize";
 
 type Source = {
   chunk_id: number;
@@ -11,9 +14,21 @@ type Source = {
   score: number;
 };
 
+type Citation = {
+  book_id: number;
+  chunk_id: number;
+  page: number | null;
+  section_path: string | null;
+  quote: string;
+  score: number;
+};
+
 type QAResponse = {
   question: string;
   answer: string;
+  citations: Citation[];
+  confidence: number;
+  insufficient_evidence: boolean;
   sources: Source[];
   provider: string;
 };
@@ -186,45 +201,108 @@ export default function BookQA({ bookId, onJumpToPage, prefillReferenceTerm }: B
 
         {qaResult && (
           <div className="space-y-3">
-            <div className="bg-white border rounded p-3">
-              <p className="text-sm font-medium text-gray-500 mb-1">
-                {t("ai.answer", "Answer")}
-                <span className="ml-2 text-xs text-gray-400">({qaResult.provider})</span>
-              </p>
-              <p className="text-sm text-gray-800 whitespace-pre-wrap">{qaResult.answer}</p>
+            {/* Confidence indicator and insufficient evidence warning */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {qaResult.insufficient_evidence ? (
+                  <>
+                    <WarningAmberOutlined className="text-amber-600" fontSize="small" />
+                    <span className="text-xs text-amber-600">
+                      {t("ai.insufficientEvidence", "Low confidence - limited evidence")}
+                    </span>
+                  </>
+                ) : qaResult.confidence >= 0.7 ? (
+                  <>
+                    <CheckCircleOutline className="text-green-600" fontSize="small" />
+                    <span className="text-xs text-green-600">
+                      {t("ai.highConfidence", "High confidence")}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <ErrorOutline className="text-amber-600" fontSize="small" />
+                    <span className="text-xs text-amber-600">
+                      {t("ai.mediumConfidence", "Medium confidence")}
+                    </span>
+                  </>
+                )}
+              </div>
+              <span className="text-xs text-gray-500">
+                ({qaResult.provider}) · {(qaResult.confidence * 100).toFixed(0)}% confidence
+              </span>
             </div>
 
-            {qaResult.sources.length > 0 && (
+            {/* Answer with markdown rendering */}
+            <div className="bg-white border rounded p-3">
+              <p className="text-sm font-medium text-gray-500 mb-2">
+                {t("ai.answer", "Answer")}
+              </p>
+              <div className="text-sm text-gray-800 prose prose-sm max-w-none">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeSanitize]}
+                  components={{
+                    p: (props) => <p className="mb-2" {...props} />,
+                    li: (props) => <li className="ml-4" {...props} />,
+                    ul: (props) => <ul className="list-disc" {...props} />,
+                    ol: (props) => <ol className="list-decimal ml-4" {...props} />,
+                    code: (props) => <code className="bg-gray-100 px-1 py-0.5 rounded text-xs" {...props} />,
+                    pre: (props) => <pre className="bg-gray-100 p-2 rounded my-1 overflow-x-auto" {...props} />,
+                    blockquote: (props) =>
+                      <blockquote className="border-l-4 border-gray-300 pl-3 italic my-2 text-gray-600" {...props} />,
+                  }}
+                >
+                  {qaResult.answer}
+                </ReactMarkdown>
+              </div>
+            </div>
+
+            {/* Citations section */}
+            {qaResult.citations.length > 0 && (
               <div>
-                <p className="text-xs text-gray-500 mb-2">
-                  {t("ai.sources", "Sources used")}
+                <p className="text-xs font-medium text-gray-600 mb-2">
+                  {t("ai.citations", "Sources")} ({qaResult.citations.length})
                 </p>
-                <ul className="space-y-1 max-h-48 overflow-y-auto">
-                  {qaResult.sources.map((s) => (
-                    <li key={s.chunk_id} className="bg-gray-100 rounded p-2 text-xs">
+                <ul className="space-y-2 max-h-48 overflow-y-auto">
+                  {qaResult.citations.map((citation, idx) => (
+                    <li 
+                      key={`${citation.chunk_id}-${idx}`} 
+                      className="bg-blue-50 border border-blue-200 rounded p-2 text-xs"
+                    >
                       <div className="flex justify-between mb-1">
-                        <span className="text-gray-500">
-                          {s.page_start !== null
-                            ? `${t("search.page", "Page")} ${s.page_start}`
-                            : `${t("search.chunk", "Chunk")} ${s.chunk_index + 1}`}
+                        <span className="text-gray-600">
+                          {citation.page !== null
+                            ? `${t("search.page", "Page")} ${citation.page}`
+                            : `${t("search.chunk", "Chunk")} ${citation.chunk_id}`}
+                          {citation.section_path ? ` · ${citation.section_path}` : ""}
                           {" · "}
-                          <span className="text-green-600">
-                            {(s.score * 100).toFixed(1)}%
+                          <span className="text-blue-600 font-medium">
+                            {(citation.score * 100).toFixed(1)}% match
                           </span>
                         </span>
-                        {s.page_start !== null && onJumpToPage && (
+                        {citation.page !== null && onJumpToPage && (
                           <button
-                            onClick={() => onJumpToPage(s.page_start!)}
-                            className="text-blue-600 hover:underline"
+                            onClick={() => onJumpToPage(citation.page!)}
+                            className="text-blue-600 hover:underline font-medium"
                           >
-                            {t("search.goToPage", "Go to page")}
+                            {t("search.goToPage", "Go")}
                           </button>
                         )}
                       </div>
-                      <p className="text-gray-700 line-clamp-2">{s.text}</p>
+                      <p className="text-gray-700 line-clamp-2 bg-white rounded p-1">
+                        "{citation.quote}"
+                      </p>
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {qaResult.insufficient_evidence && (
+              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs text-amber-800">
+                <p className="font-medium mb-1">
+                  {t("ai.tryRefining", "Try refining your question or select a different section of the book.")}
+                </p>
               </div>
             )}
           </div>

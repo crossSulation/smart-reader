@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     # AI / Embedding
     EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
     EMBEDDING_TOP_K: int = int(os.getenv("EMBEDDING_TOP_K", "5"))
+    QA_EVIDENCE_THRESHOLD: float = float(os.getenv("QA_EVIDENCE_THRESHOLD", "0.5"))
     # LLM
     LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "mock")       # mock | openai | ollama
     LLM_BASE_URL: str = os.getenv("LLM_BASE_URL", "http://localhost:11434")  # ollama default

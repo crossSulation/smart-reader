@@ -1,0 +1,170 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "description": "Week 1 QA evaluation dataset for retrieval and citation quality testing",
+    "created": "2026-05-15",
+    "instructions": "Use these questions to test hybrid retrieval, reranking, and citation accuracy. For each question, the system should return citations with >90% relevance and confidence scores."
+  },
+  "test_cases": [
+    {
+      "id": "W1-QA-001",
+      "question": "What is the main topic of this book?",
+      "category": "overview",
+      "difficulty": "easy",
+      "expected_citation_count": 1,
+      "min_confidence": 0.7,
+      "notes": "Tests book-level understanding; should return citations from intro/summary sections"
+    },
+    {
+      "id": "W1-QA-002",
+      "question": "How is [key concept] defined?",
+      "category": "definition",
+      "difficulty": "medium",
+      "expected_citation_count": 1,
+      "min_confidence": 0.6,
+      "notes": "Tests exact definition retrieval; BM25 should help here"
+    },
+    {
+      "id": "W1-QA-003",
+      "question": "What are the main steps involved in [process]?",
+      "category": "procedure",
+      "difficulty": "medium",
+      "expected_citation_count": 3,
+      "min_confidence": 0.65,
+      "notes": "Tests multi-step retrieval and synthesis"
+    },
+    {
+      "id": "W1-QA-004",
+      "question": "Explain the difference between [concept A] and [concept B]?",
+      "category": "comparison",
+      "difficulty": "hard",
+      "expected_citation_count": 2,
+      "min_confidence": 0.6,
+      "notes": "Tests nuanced semantic understanding; vector search should help"
+    },
+    {
+      "id": "W1-QA-005",
+      "question": "What is an example of [concept] mentioned in the book?",
+      "category": "example",
+      "difficulty": "medium",
+      "expected_citation_count": 1,
+      "min_confidence": 0.65,
+      "notes": "Tests concrete example retrieval"
+    },
+    {
+      "id": "W1-QA-006",
+      "question": "Who discovered/created [important thing]?",
+      "category": "attribution",
+      "difficulty": "easy",
+      "expected_citation_count": 1,
+      "min_confidence": 0.75,
+      "notes": "Tests factual retrieval; BM25 should excel here"
+    },
+    {
+      "id": "W1-QA-007",
+      "question": "When did [event] occur?",
+      "category": "temporal",
+      "difficulty": "easy",
+      "expected_citation_count": 1,
+      "min_confidence": 0.8,
+      "notes": "Tests date/timeline retrieval"
+    },
+    {
+      "id": "W1-QA-008",
+      "question": "What are the advantages of [approach]?",
+      "category": "analysis",
+      "difficulty": "medium",
+      "expected_citation_count": 2,
+      "min_confidence": 0.6,
+      "notes": "Tests analytical synthesis from multiple sources"
+    },
+    {
+      "id": "W1-QA-009",
+      "question": "What are the limitations or challenges mentioned regarding [topic]?",
+      "category": "critical_analysis",
+      "difficulty": "hard",
+      "expected_citation_count": 2,
+      "min_confidence": 0.55,
+      "notes": "Tests critical thinking retrieval; may return lower confidence on nuanced topics"
+    },
+    {
+      "id": "W1-QA-010",
+      "question": "How does [component] relate to [other component]?",
+      "category": "relationship",
+      "difficulty": "medium",
+      "expected_citation_count": 2,
+      "min_confidence": 0.6,
+      "notes": "Tests relationship understanding; hybrid approach should help"
+    },
+    {
+      "id": "W1-QA-011",
+      "question": "What should I do if [problem] occurs?",
+      "category": "troubleshooting",
+      "difficulty": "medium",
+      "expected_citation_count": 1,
+      "min_confidence": 0.65,
+      "notes": "Tests solution-oriented retrieval"
+    },
+    {
+      "id": "W1-QA-012",
+      "question": "Which section of the book covers [topic]?",
+      "category": "navigation",
+      "difficulty": "easy",
+      "expected_citation_count": 1,
+      "min_confidence": 0.7,
+      "notes": "Tests section/structure awareness"
+    },
+    {
+      "id": "W1-QA-013",
+      "question": "What is the formula or equation for [calculation]?",
+      "category": "technical",
+      "difficulty": "medium",
+      "expected_citation_count": 1,
+      "min_confidence": 0.7,
+      "notes": "Tests technical retrieval; should handle code/formulas"
+    },
+    {
+      "id": "W1-QA-014",
+      "question": "Summarize the key findings in [chapter/section]",
+      "category": "summarization",
+      "difficulty": "hard",
+      "expected_citation_count": 3,
+      "min_confidence": 0.6,
+      "notes": "Tests multi-chunk synthesis and understanding"
+    },
+    {
+      "id": "W1-QA-015",
+      "question": "What is the author's opinion on [controversial topic]?",
+      "category": "interpretation",
+      "difficulty": "hard",
+      "expected_citation_count": 2,
+      "min_confidence": 0.5,
+      "notes": "Tests nuanced opinion retrieval; may have lower confidence"
+    }
+  ],
+  "evaluation_metrics": {
+    "citation_coverage": "Percentage of answers with >= expected_citation_count citations",
+    "confidence_calibration": "Percentage of answers meeting min_confidence threshold",
+    "hallucination_rate": "Percentage of answers with insufficient_evidence=false but confidence < 0.3",
+    "citation_precision": "Percentage of citations that are relevant to the question",
+    "reranking_lift": "Improvement in citation relevance after reranking vs before"
+  },
+  "regression_checklist": {
+    "setup": [
+      "Upload or use existing test book",
+      "Ensure book is indexed (POST /api/books/{id}/index)",
+      "Verify embeddings are generated"
+    ],
+    "execution": [
+      "For each question, call POST /api/books/{id}/qa",
+      "Record: question, answer, citations, confidence, insufficient_evidence",
+      "Check citation relevance manually or with scorer"
+    ],
+    "validation": [
+      ">= 90% of answers include citations",
+      "Citation click-to-page works in Reader",
+      "No answers with high confidence but low evidence",
+      "Insufficient_evidence flag correctly reflects weak evidence"
+    ]
+  }
+}

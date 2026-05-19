@@ -1,13 +1,18 @@
 """
 Ingestion endpoints:
-  POST /api/books/{book_id}/index   – extract full text and store as chunks
-  GET  /api/books/{book_id}/chunks  – list stored chunks (paginated)
-  GET  /api/books/{book_id}/search  – semantic similarity search within a book
-  POST /api/books/{book_id}/qa      – RAG Q&A using indexed chunks
-  GET  /api/books/{book_id}/summary – LLM summary over indexed chunks
-    POST /api/books/{book_id}/web-reference – fetch web references for unfamiliar terms
+  POST /api/books/{book_id}/index           – extract full text and store as chunks
+  GET  /api/books/{book_id}/chunks          – list stored chunks (paginated)
+  GET  /api/books/{book_id}/search          – semantic similarity search within a book
+  POST /api/books/{book_id}/qa-legacy       – legacy semantic QA (kept for compatibility)
+  GET  /api/books/{book_id}/summary-legacy  – legacy summary endpoint
+  POST /api/books/{book_id}/web-reference   – fetch web references for unfamiliar terms
+
+Primary QA/summary endpoints are implemented in the AI router:
+  POST /api/books/{book_id}/qa
+  GET  /api/books/{book_id}/summary
 """
 from typing import List
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -16,6 +21,8 @@ from app.database import get_db
 from app.models import AIInteraction, DocumentChunk
 from app.schemas import (
     DocumentChunk as DocumentChunkSchema,
+    TocItem,
+    IngestionMetricsResponse,
     IndexStatus,
     QARequest,
     QAResponse,
@@ -115,6 +122,7 @@ def index_book(
         book_id=book_id,
         chunks_stored=chunks_stored,
         status="completed",
+        indexed=chunks_stored > 0,  # Mark as indexed if chunks were successfully stored
     )
 
 
@@ -144,6 +152,90 @@ def list_book_chunks(
         .all()
     )
     return chunks
+
+
+@router.get("/{book_id}/toc", response_model=List[TocItem])
+def get_book_toc(
+    book_id: int,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return a lightweight table of contents derived from chunk section_path metadata."""
+    _get_book_or_404(book_id, user["id"], db)
+
+    rows = (
+        db.query(DocumentChunk)
+        .filter(DocumentChunk.book_id == book_id)
+        .order_by(DocumentChunk.chunk_index)
+        .all()
+    )
+
+    def _slugify(value: str) -> str:
+        slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+        return slug or "section"
+
+    toc: list[TocItem] = []
+    seen: set[str] = set()
+    for row in rows:
+        if not row.section_path:
+            continue
+        if row.section_path in seen:
+            continue
+        seen.add(row.section_path)
+
+        parts = [p.strip() for p in row.section_path.split(">") if p.strip()]
+        title = parts[-1] if parts else row.section_path
+        level = len(parts) if parts else 1
+        toc.append(
+            TocItem(
+                id=f"toc-{row.chunk_index}",
+                title=title,
+                level=level,
+                anchor=_slugify(row.section_path),
+                order_index=row.chunk_index,
+            )
+        )
+
+    return toc
+
+
+@router.get("/{book_id}/indexed-status")
+def get_indexed_status(
+    book_id: int,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Check if a book has been indexed (has chunks with indexed_at timestamp).
+    Returns { "indexed": bool, "chunk_count": int }
+    """
+    _get_book_or_404(book_id, user["id"], db)
+
+    chunk_count = (
+        db.query(DocumentChunk)
+        .filter(DocumentChunk.book_id == book_id, DocumentChunk.indexed_at.isnot(None))
+        .count()
+    )
+    indexed = chunk_count > 0
+
+    return {
+        "indexed": indexed,
+        "chunk_count": chunk_count,
+    }
+
+
+@router.get("/{book_id}/ingestion-metrics", response_model=IngestionMetricsResponse)
+def get_book_ingestion_metrics(
+    book_id: int,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return per-book ingestion quality metrics used for Week 2 observability."""
+    _get_book_or_404(book_id, user["id"], db)
+
+    from app.services.ingestion_service import get_ingestion_metrics
+
+    return IngestionMetricsResponse(**get_ingestion_metrics(book_id, db))
 
 
 @router.get("/{book_id}/search", response_model=List[SearchResult])
@@ -201,6 +293,7 @@ def search_book(
             text=result_chunks[cid].text,
             page_start=result_chunks[cid].page_start,
             page_end=result_chunks[cid].page_end,
+            section_path=result_chunks[cid].section_path,
             score=round(score, 4),
         )
         for cid, score in top
@@ -209,7 +302,7 @@ def search_book(
     return results
 
 
-@router.post("/{book_id}/qa", response_model=QAResponse)
+@router.post("/{book_id}/qa-legacy", response_model=QAResponse)
 def ask_book(
     book_id: int,
     body: QARequest,
@@ -255,6 +348,7 @@ def ask_book(
             text=row_map[chunk_id].text,
             page_start=row_map[chunk_id].page_start,
             page_end=row_map[chunk_id].page_end,
+            section_path=row_map[chunk_id].section_path,
             score=round(score, 4),
         )
         for chunk_id, score in top
@@ -287,7 +381,7 @@ def ask_book(
     )
 
 
-@router.get("/{book_id}/summary", response_model=SummaryResponse)
+@router.get("/{book_id}/summary-legacy", response_model=SummaryResponse)
 def get_book_summary(
     book_id: int,
     max_chunks: int = Query(20, ge=1, le=100, description="Number of chunks to summarise"),

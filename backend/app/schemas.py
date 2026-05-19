@@ -72,6 +72,7 @@ class DocumentChunk(BaseModel):
     text: str
     page_start: Optional[int] = None
     page_end: Optional[int] = None
+    section_path: Optional[str] = None
     token_count: Optional[int] = None
     embedding_model: Optional[str] = None
     created_at: datetime
@@ -86,6 +87,17 @@ class SearchResult(BaseModel):
     text: str
     page_start: Optional[int] = None
     page_end: Optional[int] = None
+    section_path: Optional[str] = None
+    score: float
+
+
+class Citation(BaseModel):
+    """A grounded source citation for a QA response."""
+    book_id: int
+    chunk_id: int
+    page: Optional[int] = None
+    section_path: Optional[str] = None
+    quote: str
     score: float
 
 
@@ -95,9 +107,13 @@ class QARequest(BaseModel):
 
 
 class QAResponse(BaseModel):
+    """Enhanced Q&A response with grounding and confidence."""
     question: str
     answer: str
-    sources: List[SearchResult]
+    citations: List[Citation] = []
+    confidence: float = 0.0  # 0.0-1.0 score of answer reliability
+    insufficient_evidence: bool = False  # True if confidence below threshold
+    sources: List[SearchResult] = []  # (deprecated, kept for backwards compatibility)
     provider: str
 
 
@@ -126,10 +142,29 @@ class WebReferenceResponse(BaseModel):
     references: List[WebReferenceItem]
 
 
+class TocItem(BaseModel):
+    id: str
+    title: str
+    level: int
+    anchor: str
+    order_index: int
+
+
+class IngestionMetricsResponse(BaseModel):
+    book_id: int
+    chunk_count: int
+    avg_chunk_chars: float
+    avg_token_count: float
+    sections_count: int
+    failed_units: int
+    status: str
+
+
 class IndexStatus(BaseModel):
     book_id: int
     chunks_stored: int
     status: str
+    indexed: bool = True  # True if indexing completed successfully
 
 
 class Token(BaseModel):

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import auth, books, files, upload, ingestion
+from app.routers import ai, auth, books, files, upload, ingestion
 import os
 
 app = FastAPI(title="Smart Reader API")
@@ -20,6 +20,7 @@ app.include_router(books.router, prefix="/api")
 app.include_router(upload.router, prefix="/api")
 app.include_router(files.router, prefix="/api")
 app.include_router(ingestion.router, prefix="/api")
+app.include_router(ai.router, prefix="/api")
 
 @app.get("/")
 def read_root():

@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
@@ -9,8 +9,17 @@ type HeadingItem = {
   level: number;
 };
 
+type TocItem = {
+  id: string;
+  title: string;
+  level: number;
+  anchor: string;
+  order_index: number;
+};
+
 type MarkdownViewerProps = {
   fileUrl: string;
+  bookId?: string;
   onTextSelected?: (text: string) => void;
   jumpToSection?: number;
 };
@@ -37,10 +46,12 @@ function textFromNode(node: ReactNode): string {
   return "";
 }
 
-export default function MarkdownViewer({ fileUrl, onTextSelected, jumpToSection }: MarkdownViewerProps) {
+export default function MarkdownViewer({ fileUrl, bookId, onTextSelected, jumpToSection }: MarkdownViewerProps) {
+  const viewerInstanceId = useId();
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tocItems, setTocItems] = useState<TocItem[]>([]);
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -49,14 +60,25 @@ export default function MarkdownViewer({ fileUrl, onTextSelected, jumpToSection 
         setLoading(true);
         setError(null);
 
+        const isBlobLikeUrl = fileUrl.startsWith("blob:") || fileUrl.startsWith("data:");
+        const token = localStorage.getItem("token");
+        const requestHeaders: Record<string, string> = !isBlobLikeUrl && token
+          ? { Authorization: `Bearer ${token}` }
+          : {};
+
         const res = await fetch(fileUrl, {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+          headers: requestHeaders,
         });
         if (!res.ok) {
           throw new Error(`Failed to load markdown: ${res.status}`);
         }
 
-        const text = await res.text();
+        const resForBuffer = res.clone();
+        let text = await res.text();
+        if (!text) {
+          const buffer = await resForBuffer.arrayBuffer();
+          text = new TextDecoder("utf-8", { fatal: false }).decode(buffer);
+        }
         setContent(text);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load markdown");
@@ -67,6 +89,33 @@ export default function MarkdownViewer({ fileUrl, onTextSelected, jumpToSection 
 
     void fetchMarkdown();
   }, [fileUrl]);
+
+  useEffect(() => {
+    const fetchToc = async () => {
+      if (!bookId) {
+        setTocItems([]);
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/books/${bookId}/toc`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        });
+
+        if (!res.ok) {
+          setTocItems([]);
+          return;
+        }
+
+        const data = (await res.json()) as TocItem[];
+        setTocItems(Array.isArray(data) ? data : []);
+      } catch {
+        setTocItems([]);
+      }
+    };
+
+    void fetchToc();
+  }, [bookId]);
 
   useEffect(() => {
     if (!contentRef.current || !onTextSelected) return;
@@ -105,6 +154,24 @@ export default function MarkdownViewer({ fileUrl, onTextSelected, jumpToSection 
     });
   }, [content]);
 
+  const sidebarEntries = useMemo(() => {
+    if (tocItems.length > 0) {
+      return tocItems.map((item, index) => ({
+        id: item.id,
+        text: item.title,
+        level: Math.max(1, item.level),
+        index,
+      }));
+    }
+
+    return headings.map((heading, index) => ({
+      id: heading.id,
+      text: heading.text,
+      level: heading.level,
+      index,
+    }));
+  }, [tocItems, headings]);
+
   const headingBuckets = useMemo(() => {
     return headings.reduce<Record<number, HeadingItem[]>>((acc, heading) => {
       const next = acc[heading.level] ?? [];
@@ -122,12 +189,14 @@ export default function MarkdownViewer({ fileUrl, onTextSelected, jumpToSection 
       return;
     }
 
-    const safeIndex = Math.max(0, Math.min(jumpToSection, headings.length - 1));
+    const sectionCount = sidebarEntries.length || headings.length;
+    const safeIndex = Math.max(0, Math.min(jumpToSection, sectionCount - 1));
     const targetHeading = headings[safeIndex];
     if (!targetHeading) return;
 
-    document.getElementById(targetHeading.id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [jumpToSection, headings]);
+    const domId = `${viewerInstanceId}-${targetHeading.id}`;
+    document.getElementById(domId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [jumpToSection, headings, sidebarEntries.length, viewerInstanceId]);
 
   const headingRenderCounts = {
     1: new Map<string, number>(),
@@ -146,9 +215,10 @@ export default function MarkdownViewer({ fileUrl, onTextSelected, jumpToSection 
 
       const matchingHeadings = (headingBuckets[level] ?? []).filter((item) => item.text === text);
       const id = matchingHeadings[rendered]?.id ?? slugify(text);
+      const domId = `${viewerInstanceId}-${id}`;
       const Tag = `h${level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
 
-      return <Tag id={id} className={className}>{children}</Tag>;
+      return <Tag id={domId} className={className}>{children}</Tag>;
     };
   };
 
@@ -162,23 +232,26 @@ export default function MarkdownViewer({ fileUrl, onTextSelected, jumpToSection 
 
   return (
     <div className="flex h-full w-full">
-      {headings.length > 0 && (
+      {sidebarEntries.length > 0 && (
         <aside className="hidden h-full w-64 shrink-0 overflow-y-auto border-r border-gray-200 bg-gray-50 lg:block">
           <div className="p-3">
             <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Contents</div>
             <nav className="space-y-1">
-              {headings.map((heading) => (
+              {sidebarEntries.map((entry) => (
                 <button
-                  key={heading.id}
+                  key={entry.id}
                   type="button"
                   onClick={() => {
-                    document.getElementById(heading.id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    const targetHeading = headings[entry.index];
+                    if (!targetHeading) return;
+                    const domId = `${viewerInstanceId}-${targetHeading.id}`;
+                    document.getElementById(domId)?.scrollIntoView({ behavior: "smooth", block: "start" });
                   }}
                   className="block w-full truncate rounded px-2 py-1 text-left text-sm text-gray-700 hover:bg-white"
-                  style={{ paddingLeft: `${heading.level * 10}px` }}
-                  title={heading.text}
+                  style={{ paddingLeft: `${entry.level * 10}px` }}
+                  title={entry.text}
                 >
-                  {heading.text}
+                  {entry.text}
                 </button>
               ))}
             </nav>

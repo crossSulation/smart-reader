@@ -31,6 +31,11 @@ function Reader() {
   const [localUploadStatus, setLocalUploadStatus] = useState<"idle" | "uploading" | "uploaded" | "failed">("idle");
   const [localUploadMessage, setLocalUploadMessage] = useState("");
   const [uploadedBookId, setUploadedBookId] = useState<number | null>(null);
+  const [indexing, setIndexing] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.matchMedia("(min-width: 1024px)").matches;
+  });
   const thumbnailRefs = useRef<(HTMLDivElement | null)[]>([]);
   const localFileInputRef = useRef<HTMLInputElement>(null);
   const previousLocalUrlRef = useRef<string | null>(null);
@@ -87,6 +92,47 @@ function Reader() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const mediaQuery = window.matchMedia("(min-width: 1024px)");
+    const handleChange = (event: MediaQueryListEvent) => {
+      setIsDesktop(event.matches);
+    };
+
+    setIsDesktop(mediaQuery.matches);
+    mediaQuery.addEventListener("change", handleChange);
+
+    return () => {
+      mediaQuery.removeEventListener("change", handleChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!uploadedBookId) return;
+
+    const triggerAutoIndex = async () => {
+      setIndexing(true);
+      try {
+        const res = await fetch(`/api/books/${uploadedBookId}/index`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.detail || `Indexing failed (${res.status})`);
+        }
+        setLocalUploadMessage("Book indexed and ready for search/AI.");
+      } catch {
+        setLocalUploadMessage("Indexing failed. You can retry manually.");
+      } finally {
+        setIndexing(false);
+      }
+    };
+
+    triggerAutoIndex();
+  }, [uploadedBookId]);
 
   const detectLocalFileType = (fileName: string): "pdf" | "epub" | "markdown" | null => {
     const lowered = fileName.toLowerCase();
@@ -235,6 +281,7 @@ function Reader() {
       (localFile?.type === "markdown" ? localFile.url : book.file_url) ? (
         <MarkdownViewer
           fileUrl={localFile?.type === "markdown" ? localFile.url : book.file_url!}
+          bookId={localFile ? (uploadedBookId ? String(uploadedBookId) : undefined) : id}
           onTextSelected={handleTextSelected}
           jumpToSection={markdownJumpSection}
         />
@@ -278,7 +325,7 @@ function Reader() {
             Local file is open. AI search/QA will be available after background upload finishes.
           </div>
         ) : aiTab === "search" ? (
-          <BookSearch bookId={activeBookIdForAi} onJumpToPage={(page) => handleJumpTarget(page)} />
+          <BookSearch bookId={activeBookIdForAi} onJumpToPage={(page) => handleJumpTarget(page)} isIndexing={localFile ? indexing : undefined} />
         ) : (
           <BookQA
             bookId={activeBookIdForAi}
@@ -315,15 +362,23 @@ function Reader() {
 
           <div className="justify-self-end">
             <div className="flex items-center gap-2">
-              {localUploadStatus !== "idle" && (
+              {(localUploadStatus !== "idle" || indexing) && (
                 <span className={`rounded px-2 py-1 text-xs font-medium ${
                   localUploadStatus === "uploading"
                     ? "bg-blue-50 text-blue-700"
-                    : localUploadStatus === "uploaded"
-                      ? "bg-green-50 text-green-700"
-                      : "bg-red-50 text-red-700"
+                    : indexing
+                      ? "bg-purple-50 text-purple-700"
+                      : localUploadStatus === "uploaded"
+                        ? "bg-green-50 text-green-700"
+                        : "bg-red-50 text-red-700"
                 }`}>
-                  {localUploadStatus === "uploading" ? "Uploading" : localUploadStatus === "uploaded" ? "Uploaded" : "Upload failed"}
+                  {localUploadStatus === "uploading"
+                    ? "Uploading"
+                    : indexing
+                      ? "Indexing…"
+                      : localUploadStatus === "uploaded"
+                        ? "Indexed"
+                        : "Upload failed"}
                 </span>
               )}
               <input
@@ -358,95 +413,97 @@ function Reader() {
       </header>
 
       <div className="flex-1 min-h-0">
-      <div className="flex h-full flex-col lg:hidden overflow-y-auto">
-        <div className="min-w-0">{renderReaderContent()}</div>
-        <aside className="border-t border-gray-200 bg-white overflow-hidden flex flex-col min-h-[28rem]">
-          {renderAiPanel()}
-        </aside>
-      </div>
-
-      <div className="hidden lg:flex h-full">
-        {activeFileType === "pdf" && (
-          <>
-            <aside className="h-full w-20 shrink-0 border-r border-gray-200 bg-white">
-              <div className="flex h-full flex-col items-center py-3">
-                <button
-                  type="button"
-                  onClick={() => setLeftPanelTab("thumbnails")}
-                  className={`rounded-xl p-3 transition ${
-                    leftPanelTab === "thumbnails"
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-gray-600 hover:bg-gray-50"
-                  }`}
-                  title="Thumbnails"
-                  aria-label="Thumbnails"
-                >
-                  <ViewSidebarOutlined fontSize="small" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLeftPanelTab("tags")}
-                  className={`mt-2 rounded-xl p-3 transition ${
-                    leftPanelTab === "tags"
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-gray-600 hover:bg-gray-50"
-                  }`}
-                  title="Tags"
-                  aria-label="Tags"
-                >
-                  <LocalOfferOutlined fontSize="small" />
-                </button>
-              </div>
-            </aside>
-
-            <aside className="h-full w-40 shrink-0 overflow-y-auto border-r border-gray-200 bg-gray-50">
-              {leftPanelTab === "thumbnails" ? (
-                thumbnailFile && pdfTotalPages > 0 && (
-                  <Document file={thumbnailFile} loading="">
-                    {Array.from({ length: pdfTotalPages }, (_, i) => i + 1).map((page) => (
-                      <div
-                        key={page}
-                        ref={(el) => {
-                          thumbnailRefs.current[page - 1] = el;
-                        }}
-                        onClick={() => setJumpToPage(page)}
-                        className={`m-1 cursor-pointer rounded border-2 transition-colors ${
-                          currentPdfPage === page
-                            ? "border-blue-500 bg-blue-50"
-                            : "border-transparent hover:border-blue-300"
-                        }`}
-                      >
-                        <Page
-                          pageNumber={page}
-                          width={88}
-                          renderTextLayer={false}
-                          renderAnnotationLayer={false}
-                        />
-                        <div className="py-0.5 text-center text-xs text-gray-500">{page}</div>
-                      </div>
-                    ))}
-                  </Document>
-                )
-              ) : (
-                <div className="p-2 text-xs text-gray-600">
-                  <div className="mb-2 font-semibold text-gray-700">Tags</div>
-                  <div className="rounded border border-dashed border-gray-300 bg-white p-2 text-gray-500">
-                    No tags yet.
-                  </div>
+      {!isDesktop ? (
+        <div className="flex h-full flex-col overflow-y-auto">
+          <div className="min-w-0">{renderReaderContent()}</div>
+          <aside className="border-t border-gray-200 bg-white overflow-hidden flex flex-col min-h-[28rem]">
+            {renderAiPanel()}
+          </aside>
+        </div>
+      ) : (
+        <div className="flex h-full">
+          {activeFileType === "pdf" && (
+            <>
+              <aside className="h-full w-20 shrink-0 border-r border-gray-200 bg-white">
+                <div className="flex h-full flex-col items-center py-3">
+                  <button
+                    type="button"
+                    onClick={() => setLeftPanelTab("thumbnails")}
+                    className={`rounded-xl p-3 transition ${
+                      leftPanelTab === "thumbnails"
+                        ? "bg-blue-50 text-blue-700"
+                        : "text-gray-600 hover:bg-gray-50"
+                    }`}
+                    title="Thumbnails"
+                    aria-label="Thumbnails"
+                  >
+                    <ViewSidebarOutlined fontSize="small" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLeftPanelTab("tags")}
+                    className={`mt-2 rounded-xl p-3 transition ${
+                      leftPanelTab === "tags"
+                        ? "bg-blue-50 text-blue-700"
+                        : "text-gray-600 hover:bg-gray-50"
+                    }`}
+                    title="Tags"
+                    aria-label="Tags"
+                  >
+                    <LocalOfferOutlined fontSize="small" />
+                  </button>
                 </div>
-              )}
-            </aside>
-          </>
-        )}
+              </aside>
 
-        <div className="min-w-0 flex-1 overflow-y-auto">{renderReaderContent()}</div>
+              <aside className="h-full w-40 shrink-0 overflow-y-auto border-r border-gray-200 bg-gray-50">
+                {leftPanelTab === "thumbnails" ? (
+                  thumbnailFile && pdfTotalPages > 0 && (
+                    <Document file={thumbnailFile} loading="">
+                      {Array.from({ length: pdfTotalPages }, (_, i) => i + 1).map((page) => (
+                        <div
+                          key={page}
+                          ref={(el) => {
+                            thumbnailRefs.current[page - 1] = el;
+                          }}
+                          onClick={() => setJumpToPage(page)}
+                          className={`m-1 cursor-pointer rounded border-2 transition-colors ${
+                            currentPdfPage === page
+                              ? "border-blue-500 bg-blue-50"
+                              : "border-transparent hover:border-blue-300"
+                          }`}
+                        >
+                          <Page
+                            pageNumber={page}
+                            width={88}
+                            renderTextLayer={false}
+                            renderAnnotationLayer={false}
+                          />
+                          <div className="py-0.5 text-center text-xs text-gray-500">{page}</div>
+                        </div>
+                      ))}
+                    </Document>
+                  )
+                ) : (
+                  <div className="p-2 text-xs text-gray-600">
+                    <div className="mb-2 font-semibold text-gray-700">Tags</div>
+                    <div className="rounded border border-dashed border-gray-300 bg-white p-2 text-gray-500">
+                      No tags yet.
+                    </div>
+                  </div>
+                )}
+              </aside>
+            </>
+          )}
 
-        <aside className="h-full w-[480px] max-w-[42vw] min-w-[420px] shrink-0 border-l border-gray-200">
-          <div className="flex h-full overflow-hidden bg-white">
-            <div className="flex min-w-0 flex-1 flex-col">{renderAiPanel()}</div>
-          </div>
-        </aside>
-      </div>
+          <div className="min-w-0 flex-1 overflow-y-auto">{renderReaderContent()}</div>
+
+          <aside className="h-full w-[480px] max-w-[42vw] min-w-[420px] shrink-0 border-l border-gray-200">
+            <div className="flex h-full overflow-hidden bg-white">
+              <div className="flex min-w-0 flex-1 flex-col">{renderAiPanel()}</div>
+            </div>
+          </aside>
+        </div>
+      )}
       </div>
 
       {activeFileType !== "markdown" && (

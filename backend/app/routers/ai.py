@@ -11,9 +11,9 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.models import AIInteraction, DocumentChunk
+from app.models import AIInteraction, AICitation, DocumentChunk
 from app.routers.auth import get_current_user
-from app.schemas import QARequest, QAResponse, SearchResult, SummaryResponse
+from app.schemas import QARequest, QAResponse, SearchResult, Citation, SummaryResponse
 from app.services.embedding_service import embed_single, search_chunks
 from app.services.file_service import FileService
 from app.services.llm_service import (
@@ -21,6 +21,8 @@ from app.services.llm_service import (
     build_summary_prompt,
     complete,
 )
+from app.services.retrieval_service import retrieve_hybrid, clear_retriever
+from app.services.reranker_service import rerank_candidates
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/books", tags=["ai"])
@@ -66,6 +68,7 @@ def _log_interaction(
     provider: str,
     query: str | None = None,
     chunks_used: int = 0,
+    citation_payload: list[dict] | None = None,
 ):
     record = AIInteraction(
         user_id=user_id,
@@ -77,6 +80,21 @@ def _log_interaction(
         chunks_used=chunks_used,
     )
     db.add(record)
+    db.flush()
+
+    if citation_payload:
+        db.add_all([
+            AICitation(
+                interaction_id=record.id,
+                book_id=item["book_id"],
+                chunk_id=item["chunk_id"],
+                page=item.get("page"),
+                quote=item["quote"],
+                score=item["score"],
+            )
+            for item in citation_payload
+        ])
+
     db.commit()
 
 
@@ -89,6 +107,22 @@ def _truncate_context(chunks: list[str], max_chars: int = _MAX_CONTEXT_CHARS) ->
         result.append(c)
         total += len(c)
     return result or chunks[:1]
+
+
+def _normalize_rank_scores(hits: list[tuple[int, float]]) -> list[tuple[int, float]]:
+    """Normalize per-query ranking scores into [0, 1] for confidence/citation display."""
+    if not hits:
+        return []
+
+    scores = [score for _, score in hits]
+    min_score = min(scores)
+    max_score = max(scores)
+    score_range = max_score - min_score
+
+    if score_range <= 0:
+        return [(cid, 0.5) for cid, _ in hits]
+
+    return [(cid, (score - min_score) / score_range) for cid, score in hits]
 
 
 # ---------------------------------------------------------------------------
@@ -110,6 +144,7 @@ def ask_book(
     4. Returns the answer and source passages.
     """
     settings = get_settings()
+    evidence_threshold = max(0.0, min(1.0, settings.QA_EVIDENCE_THRESHOLD))
     book = _get_book_or_404(book_id, user["id"], db)
     chunks = _require_chunks(book_id, db)
 
@@ -119,12 +154,47 @@ def ask_book(
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Embedding error: {exc}") from exc
 
-    # Retrieve
+    # Retrieve using hybrid (BM25 + vector) search
     top_k = min(body.top_k, 10)
-    candidates = [(c.id, c.embedding) for c in chunks]
-    top_hits = search_chunks(query_vec, candidates, top_k=top_k)
+    
+    # Prepare chunk data for retriever
+    chunk_data = [
+        (c.id, c.text, c.embedding)
+        for c in chunks
+    ]
+    
+    # Use hybrid retrieval: combines keyword matching and semantic similarity
+    top_hits = retrieve_hybrid(
+        book_id=book_id,
+        query=body.question,
+        query_vector=query_vec,
+        top_k=top_k * 2,  # Get more candidates for reranking
+        chunks=chunk_data,
+    )
+    
+    # Rerank candidates for improved quality
     chunk_map = {c.id: c for c in chunks}
+    candidates_for_rerank = [
+        (cid, chunk_map[cid].text, score)
+        for cid, score in top_hits
+        if cid in chunk_map
+    ]
+    
+    try:
+        reranked = rerank_candidates(
+            query=body.question,
+            candidates=candidates_for_rerank,
+            top_k=top_k,
+        )
+        top_hits_final = reranked
+    except Exception as e:
+        logger.warning(f"Reranking failed, using hybrid results: {e}")
+        top_hits_final = [(cid, score) for cid, _, score in candidates_for_rerank[:top_k]]
 
+    # Cross-encoder scores can be unbounded; normalize to [0, 1] for confidence logic.
+    top_hits_final = _normalize_rank_scores(top_hits_final)
+    
+    # Map final results to SearchResult objects
     sources: List[SearchResult] = [
         SearchResult(
             chunk_id=cid,
@@ -132,28 +202,72 @@ def ask_book(
             text=chunk_map[cid].text,
             page_start=chunk_map[cid].page_start,
             page_end=chunk_map[cid].page_end,
+            section_path=chunk_map[cid].section_path,
             score=round(score, 4),
         )
-        for cid, score in top_hits
+        for cid, score in top_hits_final
         if cid in chunk_map
     ]
 
     # Build prompt and call LLM
     context_texts = _truncate_context([s.text for s in sources])
-    system, user_prompt = build_qa_prompt(body.question, context_texts)
-    try:
-        answer = complete(user_prompt, system, settings)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    
+    # Calculate confidence based on top source scores
+    top_scores = [s.score for s in sources[:3]] if sources else [0.0]
+    confidence = sum(top_scores) / len(top_scores) if top_scores else 0.0
+    
+    # Determine if evidence is insufficient (conservative threshold)
+    insufficient_evidence = confidence < evidence_threshold or len(sources) == 0
+    
+    # If evidence is weak, return safe message instead of potentially hallucinated answer
+    if insufficient_evidence:
+        answer = (
+            "I don't have enough relevant information in the current book to answer this question. "
+            "Try rephrasing your question or selecting a different section from the book."
+        )
+    else:
+        system, user_prompt = build_qa_prompt(body.question, context_texts)
+        try:
+            answer = complete(user_prompt, system, settings)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+    
+    # Build citation list from sources
+    citations = [
+        Citation(
+            book_id=book.id,
+            chunk_id=s.chunk_id,
+            page=s.page_start,
+            section_path=s.section_path,
+            quote=s.text[:200],  # First 200 chars as quote
+            score=s.score,
+        )
+        for s in sources[:5]  # Top 5 citations
+    ]
 
     _log_interaction(
         db, user["id"], book_id, "qa", answer,
-        settings.LLM_PROVIDER, query=body.question, chunks_used=len(sources),
+        settings.LLM_PROVIDER,
+        query=body.question,
+        chunks_used=len(sources),
+        citation_payload=[
+            {
+                "book_id": c.book_id,
+                "chunk_id": c.chunk_id,
+                "page": c.page,
+                "quote": c.quote,
+                "score": c.score,
+            }
+            for c in citations
+        ],
     )
     return QAResponse(
         question=body.question,
         answer=answer,
-        sources=sources,
+        citations=citations,
+        confidence=round(confidence, 3),
+        insufficient_evidence=insufficient_evidence,
+        sources=sources,  # Keep for backwards compatibility
         provider=settings.LLM_PROVIDER,
     )
 

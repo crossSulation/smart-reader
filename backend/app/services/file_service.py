@@ -108,6 +108,9 @@ class FileService:
         return self.db.query(FileMetadata).filter(
             FileMetadata.original_name == original_name,
             FileMetadata.uploaded_by == user_id
+        ).order_by(
+            FileMetadata.upload_date.desc(),
+            FileMetadata.id.desc()
         ).first()
 
     def get_files_by_type(self, file_type: str, user_id: int) -> List[FileMetadata]:

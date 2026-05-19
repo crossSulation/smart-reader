@@ -1,4 +1,4 @@
-import { useState, useCallback, type KeyboardEvent } from "react";
+import { useState, useCallback, useEffect, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { SearchOutlined } from "@mui/icons-material";
 
@@ -8,21 +8,64 @@ type SearchResultItem = {
   text: string;
   page_start: number | null;
   page_end: number | null;
+  section_path: string | null;
   score: number;
 };
 
 type BookSearchProps = {
   bookId: string;
   onJumpToPage?: (page: number) => void;
+  isIndexing?: boolean;
+  indexed?: boolean | null;
 };
 
-export default function BookSearch({ bookId, onJumpToPage }: BookSearchProps) {
+export default function BookSearch({ bookId, onJumpToPage, isIndexing = false, indexed: indexedProp = null }: BookSearchProps) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResultItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [indexed, setIndexed] = useState<boolean | null>(null);
+  const [indexed, setIndexed] = useState<boolean | null>(indexedProp);
+
+  // Fetch indexed status from backend on mount or when bookId changes
+  useEffect(() => {
+    const fetchIndexedStatus = async () => {
+      try {
+        const res = await fetch(`/api/books/${bookId}/indexed-status`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setIndexed(data.indexed);
+        }
+      } catch (err) {
+        console.error("Failed to fetch indexed status:", err);
+      }
+    };
+
+    fetchIndexedStatus();
+  }, [bookId]);
+
+  // Update indexed state when isIndexing changes (for auto-indexing completion)
+  useEffect(() => {
+    if (isIndexing === false && indexed === null) {
+      // Auto-indexing just completed, refresh status
+      const fetchIndexedStatus = async () => {
+        try {
+          const res = await fetch(`/api/books/${bookId}/indexed-status`, {
+            headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setIndexed(data.indexed);
+          }
+        } catch (err) {
+          console.error("Failed to fetch indexed status:", err);
+        }
+      };
+      fetchIndexedStatus();
+    }
+  }, [isIndexing, bookId, indexed]);
 
   const handleIndex = useCallback(async () => {
     setLoading(true);
@@ -36,7 +79,8 @@ export default function BookSearch({ bookId, onJumpToPage }: BookSearchProps) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.detail || `Index failed (${res.status})`);
       }
-      setIndexed(true);
+      const result = await res.json();
+      setIndexed(result.indexed);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Index failed");
     } finally {
@@ -86,7 +130,13 @@ export default function BookSearch({ bookId, onJumpToPage }: BookSearchProps) {
       </h2>
 
       {/* Index trigger */}
-      {indexed === false && (
+      {isIndexing && (
+        <div className="mb-3 flex items-center gap-3 text-sm text-purple-700 bg-purple-50 border border-purple-200 rounded p-2">
+          <span className="inline-block animate-spin">⟳</span>
+          <span>{t("search.autoIndexing", "Auto-indexing in progress…")}</span>
+        </div>
+      )}
+      {indexed === false && !isIndexing && (
         <div className="mb-3 flex items-center gap-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
           <span>{t("search.notIndexed", "Book not indexed yet.")}</span>
           <button
@@ -96,6 +146,12 @@ export default function BookSearch({ bookId, onJumpToPage }: BookSearchProps) {
           >
             {loading ? t("search.indexing", "Indexing…") : t("search.indexButton", "Index Book")}
           </button>
+        </div>
+      )}
+      {indexed === true && (
+        <div className="mb-3 flex items-center gap-3 text-sm text-green-700 bg-green-50 border border-green-200 rounded p-2">
+          <span>✓</span>
+          <span>{t("search.indexed", "Book is indexed and ready to search.")}</span>
         </div>
       )}
 
@@ -116,7 +172,7 @@ export default function BookSearch({ bookId, onJumpToPage }: BookSearchProps) {
         >
           {loading ? "…" : t("search.searchButton", "Search")}
         </button>
-        {indexed === null && (
+        {indexed !== true && indexed === null && !isIndexing && (
           <button
             onClick={handleIndex}
             disabled={loading}
@@ -145,6 +201,7 @@ export default function BookSearch({ bookId, onJumpToPage }: BookSearchProps) {
                   {r.page_start !== null
                     ? `${t("search.page", "Page")} ${r.page_start}`
                     : `${t("search.chunk", "Chunk")} ${r.chunk_index + 1}`}
+                  {r.section_path ? ` · ${r.section_path}` : ""}
                   {" · "}
                   <span className="text-green-600 font-medium">
                     {(r.score * 100).toFixed(1)}%

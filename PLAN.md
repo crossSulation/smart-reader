@@ -1,5 +1,24 @@
 # Smart Reader Execution Plan (4 Weeks)
 
+## Overall Progress Summary
+**Start Date:** Week 1 (May 15, 2026)
+**Current Phase:** Week 2 In Progress - Ingestion Metadata
+
+| Milestone | Status | Progress |
+|-----------|--------|----------|
+| **Week 1: Retrieval Reliability** | 🟢 Complete | 8/8 tasks done - Hybrid retrieval, reranking, citations, guardrails implemented |
+| **Week 2: Ingestion & Markdown** | 🟡 In Progress | 4/5 tasks done (BE-06, FE-04, FE-05 + section_path metadata plumbing) |
+| **Week 3: Learning Workflow** | ⚫ Not Started | 0/6 tasks |
+| **Week 4: Personalization** | ⚫ Not Started | 0/5 tasks |
+
+### Additional Features Completed (Not in Original Plan)
+- [x] Local file upload with background sync to backend (Reader.tsx)
+- [x] File type detection and routing (markdown/pdf/epub)
+- [x] FileUpload component markdown file support
+- [x] Reader layout optimization (single-branch rendering)
+
+---
+
 ## Goal
 Ship a reliable "real smart reader" by improving:
 1. Retrieval quality and trust (grounded answers + citations)
@@ -55,7 +74,10 @@ Ship a reliable "real smart reader" by improving:
 
 ### Week 1 Implementation Tickets
 
+**Status: In Progress** - Markdown foundation complete, QA enhancement pending
+
 #### W1-BE-01: Define QA Response Contract With Citations
+- [ ] Implement
 - Scope:
   - Finalize response shape for answer grounding.
   - Include `citations[]`, `confidence`, `insufficient_evidence`.
@@ -68,6 +90,7 @@ Ship a reliable "real smart reader" by improving:
   - Frontend receives stable typed fields for every QA response.
 
 #### W1-BE-02: Build Hybrid Retrieval Service (BM25 + Vector)
+- [ ] Implement
 - Scope:
   - Implement keyword retrieval + vector retrieval in one service.
   - Merge results with weighted scoring.
@@ -80,6 +103,7 @@ Ship a reliable "real smart reader" by improving:
   - For test queries, returned candidates include both lexical and semantic hits.
 
 #### W1-BE-03: Add Reranker Stage
+- [ ] Implement
 - Scope:
   - Add second-stage reranking for top-N candidates.
   - Keep model configurable (env flag + fallback path).
@@ -92,6 +116,7 @@ Ship a reliable "real smart reader" by improving:
   - Top results show improved relevance on curated query set.
 
 #### W1-BE-04: Evidence Guardrail
+- [ ] Implement
 - Scope:
   - Add threshold checks for weak evidence.
   - If below threshold, return `insufficient_evidence=true` and safe message.
@@ -103,6 +128,7 @@ Ship a reliable "real smart reader" by improving:
   - Hallucination-prone prompts no longer return confident fabricated answers.
 
 #### W1-BE-05: Citation Span Mapping
+- [ ] Implement
 - Scope:
   - Ensure each citation carries `book_id`, `page`, `chunk_id`, `quote`, `score`.
   - Preserve page/chunk anchors through retrieval -> generation.
@@ -115,6 +141,7 @@ Ship a reliable "real smart reader" by improving:
   - Every non-fallback answer contains at least one clickable citation.
 
 #### W1-FE-01: Render Citation Blocks in AI Panel
+- [ ] Implement
 - Scope:
   - Display citation chips/cards under each AI answer.
   - Render AI answers and summaries with markdown support.
@@ -132,6 +159,7 @@ Ship a reliable "real smart reader" by improving:
   - Markdown answers render correctly without exposing unsafe HTML.
 
 #### W1-FE-01A: Introduce Markdown Rendering Stack
+- [x] DONE - react-markdown + remark-gfm + rehype-sanitize added to frontend/package.json
 - Scope:
   - Add a markdown renderer for AI answers and summaries.
   - Recommended stack: `react-markdown` + `remark-gfm` + `rehype-sanitize`.
@@ -146,6 +174,7 @@ Ship a reliable "real smart reader" by improving:
   - Lists, headings, tables, inline code, and fenced code blocks render correctly in the Reader AI panel.
 
 #### W1-FE-02: Citation Click -> Jump to Page
+- [ ] Implement
 - Scope:
   - On citation click, set reader jump page and focus relevant panel.
   - Preserve current behavior for PDF; graceful fallback for EPUB.
@@ -159,6 +188,7 @@ Ship a reliable "real smart reader" by improving:
   - Clicking a citation moves reader to the cited location.
 
 #### W1-FE-03: Weak-Evidence UX State
+- [ ] Implement
 - Scope:
   - Distinct UI state for `insufficient_evidence=true`.
   - Prompt user to refine question or quote selection.
@@ -170,6 +200,7 @@ Ship a reliable "real smart reader" by improving:
   - No normal “confident answer” style shown for weak evidence results.
 
 #### W1-QA-01: Curated Regression Dataset (20-30 Questions)
+- [ ] Implement
 - Scope:
   - Create fixed prompt set from 2-3 representative books.
   - Label expected citation pages/chunks for spot checks.
@@ -182,6 +213,7 @@ Ship a reliable "real smart reader" by improving:
   - Team can compare retrieval and citation quality before/after changes.
 
 #### W1-QA-02: Definition of Done Checklist
+- [ ] Validate
 - Checks:
   - >=90% non-fallback answers include citations.
   - Citation jump works in Reader for PDF flow.
@@ -239,7 +271,10 @@ Ship a reliable "real smart reader" by improving:
 
 ### Week 2 Additional Tickets For Markdown Support
 
+**Status: In Progress** - Markdown reading support done; section metadata now in DB/API/UI, deeper chunk-quality tuning pending
+
 #### W2-BE-06: Markdown Ingestion Pipeline
+- [x] DONE - markdown extraction added to backend/app/services/ingestion_service.py with heading-aware chunking
 - Scope:
   - Add Markdown detection and parsing during upload/ingestion.
   - Extract heading tree and preserve raw section text.
@@ -253,6 +288,10 @@ Ship a reliable "real smart reader" by improving:
   - Uploaded `.md` files produce chunk records with heading metadata.
 
 #### W2-FE-04: MarkdownViewer Component
+- [x] DONE - MarkdownViewer created and routed in Reader for markdown files
+  - Safe rendering with react-markdown + remark-gfm + rehype-sanitize
+  - Supports headings, lists, code blocks, tables, blockquotes
+  - TOC sidebar with navigation
 - Scope:
   - Add a dedicated `MarkdownViewer` component for Reader.
   - Render headings, paragraphs, lists, code blocks, tables, and blockquotes.
@@ -267,6 +306,10 @@ Ship a reliable "real smart reader" by improving:
   - Reader routes Markdown books to `MarkdownViewer` instead of PDF/EPUB viewers.
 
 #### W2-FE-05: Markdown Navigation Model
+- [x] DONE - heading-based TOC navigation in MarkdownViewer with instance-scoped anchors
+  - Left sidebar Contents menu
+  - Click to scroll to section
+  - jumpToSection support from search/QA
 - Scope:
   - Build left sidebar navigation from heading structure for Markdown documents.
   - Clicking a heading scrolls to the relevant section.
@@ -369,83 +412,87 @@ Ship a reliable "real smart reader" by improving:
 
 ## Week 3: Learning Workflow (Highlights -> Knowledge)
 
+**Status: Not Started**
+
 ### Objectives
 - Turn reading actions into durable learning artifacts
 
 ### Backend Tasks
-- Add models and APIs for:
+- [ ] Add models and APIs for:
   - notes
   - flashcards
   - review_items (for spaced repetition)
-- Add endpoint to convert highlight to note/flashcard
-- Add daily review endpoint returning due cards
+- [ ] Add endpoint to convert highlight to note/flashcard
+- [ ] Add daily review endpoint returning due cards
 
 ### Frontend Tasks
-- In Reader:
+- [ ] In Reader:
   - "Save as note"
   - "Create flashcard"
-- Add simple Review page:
+- [ ] Add simple Review page:
   - due cards
   - self-rating (again/hard/good/easy)
-- Persist tags for notes/highlights (topic/question/todo)
+- [ ] Persist tags for notes/highlights (topic/question/todo)
 
 ### Acceptance Criteria
-- User can create flashcard from selected text in <= 3 clicks
-- Daily review list appears with due items
-- Review updates scheduling state correctly
+- [ ] User can create flashcard from selected text in <= 3 clicks
+- [ ] Daily review list appears with due items
+- [ ] Review updates scheduling state correctly
 
 ---
 
 ## Week 4: Personalization + Evaluation + Hardening
+
+**Status: Not Started**
 
 ### Objectives
 - Make assistant adaptive and measurable
 - Prepare for stable iteration
 
 ### Backend Tasks
-- User profile signals:
+- [ ] User profile signals:
   - weak topics
   - frequently reviewed tags
   - preferred explanation depth
-- Adaptive response mode:
+- [ ] Adaptive response mode:
   - beginner/intermediate/expert explanation options
-- Add evaluation scripts:
+- [ ] Add evaluation scripts:
   - retrieval recall@k sample set
   - citation correctness checks
   - answer faithfulness rubric scoring
 
 ### Frontend Tasks
-- Settings for explanation level and study goals
-- Weekly learning summary UI:
+- [ ] Settings for explanation level and study goals
+- [ ] Weekly learning summary UI:
   - pages read
   - notes created
   - review accuracy
   - top weak topics
 
 ### Acceptance Criteria
-- Explanation level changes response style
-- Weekly summary visible and data-backed
-- Baseline evaluation report generated for each release
+- [ ] Explanation level changes response style
+- [ ] Weekly summary visible and data-backed
+- [ ] Baseline evaluation report generated for each release
 
 ---
 
 ## API Contracts to Add (Draft)
-- POST /api/qa/ask
+- [ ] POST /api/qa/ask
   - req: {book_id, question, mode?}
   - res: {answer, confidence, citations[], insufficient_evidence}
-- POST /api/highlights/:id/note
-- POST /api/highlights/:id/flashcard
-- GET /api/review/due
-- POST /api/review/:item_id/rate
-- GET /api/analytics/weekly-summary
+- [ ] POST /api/highlights/:id/note
+- [ ] POST /api/highlights/:id/flashcard
+- [ ] GET /api/review/due
+- [ ] POST /api/review/:item_id/rate
+- [ ] GET /api/analytics/weekly-summary
 
 ---
 
 ## Data Model Additions (Draft)
-- notes(id, user_id, book_id, page, content, tags, created_at)
-- flashcards(id, user_id, book_id, front, back, source_chunk_id, tags)
-- review_items(id, flashcard_id, due_at, interval, ease, reps, last_rating)
-- chunk_index(id, book_id, chunk_id, text, page_start, page_end, section_path, vector_ref)
+- [ ] notes(id, user_id, book_id, page, content, tags, created_at)
+- [ ] flashcards(id, user_id, book_id, front, back, source_chunk_id, tags)
+- [ ] review_items(id, flashcard_id, due_at, interval, ease, reps, last_rating)
+- [ ] chunk_index(id, book_id, chunk_id, text, page_start, page_end, section_path, vector_ref)
 
 ---
 
