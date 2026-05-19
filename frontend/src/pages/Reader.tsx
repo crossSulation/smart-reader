@@ -24,6 +24,11 @@ function Reader() {
   const [aiTab, setAiTab] = useState<"search" | "ai">("search");
   const [leftPanelTab, setLeftPanelTab] = useState<"thumbnails" | "tags">("thumbnails");
   const [prefillReferenceTerm, setPrefillReferenceTerm] = useState("");
+  const [selectedExcerpt, setSelectedExcerpt] = useState("");
+  const [learningTagsInput, setLearningTagsInput] = useState("highlight");
+  const [learningStatus, setLearningStatus] = useState<string | null>(null);
+  const [savingNote, setSavingNote] = useState(false);
+  const [savingFlashcard, setSavingFlashcard] = useState(false);
   const [currentPdfPage, setCurrentPdfPage] = useState(1);
   const [pdfTotalPages, setPdfTotalPages] = useState(0);
   const [markdownJumpSection, setMarkdownJumpSection] = useState<number | undefined>(undefined);
@@ -43,8 +48,87 @@ function Reader() {
   const handleTextSelected = (text: string) => {
     const clean = text.trim().replace(/\s+/g, " ");
     if (!clean) return;
+    setSelectedExcerpt(clean.slice(0, 400));
     setPrefillReferenceTerm(clean.slice(0, 200));
     setAiTab("ai");
+  };
+
+  const createNoteFromSelection = async () => {
+    if (!selectedExcerpt.trim() || !activeBookIdForAi) return;
+
+    setSavingNote(true);
+    setLearningStatus(null);
+    try {
+      const tags = learningTagsInput
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean);
+
+      const res = await fetch("/api/learning/notes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+          book_id: Number(activeBookIdForAi),
+          content: selectedExcerpt,
+          source_text: selectedExcerpt,
+          page: activeFileType === "pdf" ? currentPdfPage : null,
+          tags,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || `Create note failed (${res.status})`);
+      }
+
+      setLearningStatus("Saved as note.");
+    } catch (err) {
+      setLearningStatus(err instanceof Error ? err.message : "Failed to save note.");
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const createFlashcardFromSelection = async () => {
+    if (!selectedExcerpt.trim() || !activeBookIdForAi) return;
+
+    setSavingFlashcard(true);
+    setLearningStatus(null);
+    try {
+      const tags = learningTagsInput
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean);
+
+      const res = await fetch("/api/learning/flashcards", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+          book_id: Number(activeBookIdForAi),
+          front: selectedExcerpt,
+          back: "",
+          source_text: selectedExcerpt,
+          tags,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || `Create flashcard failed (${res.status})`);
+      }
+
+      setLearningStatus("Created flashcard. Review it on the Review page.");
+    } catch (err) {
+      setLearningStatus(err instanceof Error ? err.message : "Failed to create flashcard.");
+    } finally {
+      setSavingFlashcard(false);
+    }
   };
 
   useEffect(() => {
@@ -320,6 +404,54 @@ function Reader() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
+        {selectedExcerpt && (
+          <div className="mb-4 rounded border border-blue-200 bg-blue-50 p-3">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-blue-700">Selected Text</div>
+            <p className="mb-3 line-clamp-3 text-sm text-blue-900">{selectedExcerpt}</p>
+            <div className="mb-3">
+              <label className="mb-1 block text-xs font-medium text-blue-800">Tags (comma-separated)</label>
+              <input
+                type="text"
+                value={learningTagsInput}
+                onChange={(e) => setLearningTagsInput(e.target.value)}
+                placeholder="topic,question,todo"
+                className="w-full rounded border border-blue-200 bg-white px-2 py-1.5 text-xs text-blue-900 placeholder:text-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-300"
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={createNoteFromSelection}
+                disabled={!activeBookIdForAi || savingNote || savingFlashcard}
+                className="rounded border border-blue-300 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingNote ? "Saving..." : "Save as note"}
+              </button>
+              <button
+                type="button"
+                onClick={createFlashcardFromSelection}
+                disabled={!activeBookIdForAi || savingNote || savingFlashcard}
+                className="rounded border border-blue-600 bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingFlashcard ? "Creating..." : "Create flashcard"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedExcerpt("")}
+                className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-white"
+              >
+                Clear
+              </button>
+            </div>
+            {learningStatus && (
+              <div className="mt-2 text-xs text-gray-700">{learningStatus}</div>
+            )}
+            {!activeBookIdForAi && (
+              <div className="mt-2 text-xs text-amber-700">Upload/index must complete before saving learning items.</div>
+            )}
+          </div>
+        )}
+
         {!activeBookIdForAi ? (
           <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
             Local file is open. AI search/QA will be available after background upload finishes.

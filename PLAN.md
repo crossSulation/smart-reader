@@ -2,20 +2,35 @@
 
 ## Overall Progress Summary
 **Start Date:** Week 1 (May 15, 2026)
-**Current Phase:** Week 2 In Progress - Ingestion Metadata
+**Current Phase:** Week 4 In Progress - Personalization + Analytics
 
 | Milestone | Status | Progress |
 |-----------|--------|----------|
 | **Week 1: Retrieval Reliability** | 🟢 Complete | 8/8 tasks done - Hybrid retrieval, reranking, citations, guardrails implemented |
-| **Week 2: Ingestion & Markdown** | 🟡 In Progress | 4/5 tasks done (BE-06, FE-04, FE-05 + section_path metadata plumbing) |
-| **Week 3: Learning Workflow** | ⚫ Not Started | 0/6 tasks |
-| **Week 4: Personalization** | ⚫ Not Started | 0/5 tasks |
+| **Week 2: Ingestion & Markdown** | 🟢 Complete | 5/5 tasks done + TOC API, ingestion metrics, auto-indexing, indexed-status flag |
+| **Week 3: Learning Workflow** | 🟢 Complete | 6/6 tasks done (notes/flashcards/review flow + tags + validation) |
+| **Week 4: Personalization** | 🟡 In Progress | 2/5 tasks (profile settings + weekly summary shipped) |
 
 ### Additional Features Completed (Not in Original Plan)
 - [x] Local file upload with background sync to backend (Reader.tsx)
 - [x] File type detection and routing (markdown/pdf/epub)
 - [x] FileUpload component markdown file support
 - [x] Reader layout optimization (single-branch rendering)
+- [x] Section metadata (`section_path`) stored and returned in search/QA citations
+- [x] Markdown TOC endpoint (`GET /api/books/{book_id}/toc`) and MarkdownViewer integration
+- [x] Ingestion quality metrics endpoint (`GET /api/books/{book_id}/ingestion-metrics`)
+- [x] Auto-index after upload in Reader (background indexing status shown in UI)
+- [x] Indexed-state API (`GET /api/books/{book_id}/indexed-status`) and Search UI hides redundant Index action
+
+### Current Status Snapshot (May 19, 2026)
+- [x] Backend ingestion pipeline supports PDF/EPUB/Markdown with structure-aware chunking
+- [x] Chunk metadata includes page anchors and section path for grounding
+- [x] Search and QA citation UI shows section context
+- [x] Reader supports Markdown as first-class format with heading navigation
+- [x] Indexing UX now has explicit state: not indexed, indexing, indexed
+- [x] Week 3 data model and API foundation (notes/flashcards/review)
+- [x] Week 4 personalization profile API + settings UI (explanation level, goals, weak topics, review tags)
+- [x] Week 4 weekly summary API + profile dashboard card
 
 ---
 
@@ -74,7 +89,7 @@ Ship a reliable "real smart reader" by improving:
 
 ### Week 1 Implementation Tickets
 
-**Status: In Progress** - Markdown foundation complete, QA enhancement pending
+**Status: Complete** - Implemented and validated in regression runs (historical checklist retained below)
 
 #### W1-BE-01: Define QA Response Contract With Citations
 - [ ] Implement
@@ -271,7 +286,7 @@ Ship a reliable "real smart reader" by improving:
 
 ### Week 2 Additional Tickets For Markdown Support
 
-**Status: In Progress** - Markdown reading support done; section metadata now in DB/API/UI, deeper chunk-quality tuning pending
+**Status: Complete** - Markdown reading + ingestion metadata + indexing observability shipped
 
 #### W2-BE-06: Markdown Ingestion Pipeline
 - [x] DONE - markdown extraction added to backend/app/services/ingestion_service.py with heading-aware chunking
@@ -412,45 +427,53 @@ Ship a reliable "real smart reader" by improving:
 
 ## Week 3: Learning Workflow (Highlights -> Knowledge)
 
-**Status: Not Started**
+**Status: Complete**
 
 ### Objectives
 - Turn reading actions into durable learning artifacts
 
 ### Backend Tasks
-- [ ] Add models and APIs for:
+- [x] Add models and APIs for:
   - notes
   - flashcards
   - review_items (for spaced repetition)
-- [ ] Add endpoint to convert highlight to note/flashcard
-- [ ] Add daily review endpoint returning due cards
+- [x] Add endpoint to convert highlight to note/flashcard
+- [x] Add daily review endpoint returning due cards
 
 ### Frontend Tasks
-- [ ] In Reader:
+- [x] In Reader:
   - "Save as note"
   - "Create flashcard"
-- [ ] Add simple Review page:
+- [x] Add simple Review page:
   - due cards
   - self-rating (again/hard/good/easy)
-- [ ] Persist tags for notes/highlights (topic/question/todo)
+- [x] Persist tags for notes/highlights (topic/question/todo)
 
 ### Acceptance Criteria
-- [ ] User can create flashcard from selected text in <= 3 clicks
-- [ ] Daily review list appears with due items
-- [ ] Review updates scheduling state correctly
+- [x] User can create flashcard from selected text in <= 3 clicks
+- [x] Daily review list appears with due items
+- [x] Review updates scheduling state correctly
+
+### Week 3 Validation Notes
+1. Frontend build and type-check passed after learning UX integration.
+2. Backend smoke validation passed for this flow:
+  - create note with tags
+  - create flashcard with tags
+  - list due review items
+  - rate review item and verify scheduling fields update
 
 ---
 
 ## Week 4: Personalization + Evaluation + Hardening
 
-**Status: Not Started**
+**Status: In Progress**
 
 ### Objectives
 - Make assistant adaptive and measurable
 - Prepare for stable iteration
 
 ### Backend Tasks
-- [ ] User profile signals:
+- [x] User profile signals:
   - weak topics
   - frequently reviewed tags
   - preferred explanation depth
@@ -462,8 +485,8 @@ Ship a reliable "real smart reader" by improving:
   - answer faithfulness rubric scoring
 
 ### Frontend Tasks
-- [ ] Settings for explanation level and study goals
-- [ ] Weekly learning summary UI:
+- [x] Settings for explanation level and study goals
+- [x] Weekly learning summary UI:
   - pages read
   - notes created
   - review accuracy
@@ -471,8 +494,15 @@ Ship a reliable "real smart reader" by improving:
 
 ### Acceptance Criteria
 - [ ] Explanation level changes response style
-- [ ] Weekly summary visible and data-backed
+- [x] Weekly summary visible and data-backed
 - [ ] Baseline evaluation report generated for each release
+
+### Week 4 Validation Notes (Current)
+1. Backend migration applied for user personalization fields.
+2. New APIs available:
+  - `GET/PUT /api/personalization/profile`
+  - `GET /api/analytics/weekly-summary`
+3. Profile page now includes personalization settings and weekly summary widgets.
 
 ---
 
@@ -521,7 +551,7 @@ Ship a reliable "real smart reader" by improving:
 ---
 
 ## Immediate Next Steps (This Week)
-1. Finalize citation response schema and update QA endpoint
-2. Implement hybrid retrieval service skeleton in backend services
-3. Wire Reader AI panel to render citation chips and jump to page
-4. Add a small evaluation dataset (20-30 curated Q/A prompts) for regression checks
+1. Wire explanation-level preference into QA generation prompts (beginner/intermediate/expert style output).
+2. Add evaluation scripts for retrieval/citation/faithfulness baseline reporting.
+3. Add weekly summary chart polish and link weak topics to review filters.
+4. Add release-check command that runs Week 1-4 key validation checks.

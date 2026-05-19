@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import datetime
 
 
@@ -174,3 +174,92 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     username: Optional[str] = None
+
+
+class NoteCreate(BaseModel):
+    book_id: int
+    content: str
+    source_text: Optional[str] = None
+    page: Optional[int] = None
+    tags: List[str] = []
+
+
+class NoteResponse(BaseModel):
+    id: int
+    user_id: int
+    book_id: int
+    content: str
+    source_text: Optional[str] = None
+    page: Optional[int] = None
+    tags: List[str] = []
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class FlashcardCreate(BaseModel):
+    book_id: int
+    front: str
+    back: str
+    source_text: Optional[str] = None
+    source_chunk_id: Optional[int] = None
+    tags: List[str] = []
+
+
+class FlashcardResponse(BaseModel):
+    id: int
+    user_id: int
+    book_id: int
+    front: str
+    back: str
+    source_text: Optional[str] = None
+    source_chunk_id: Optional[int] = None
+    tags: List[str] = []
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ReviewItemResponse(BaseModel):
+    id: int
+    flashcard_id: int
+    due_at: datetime
+    interval_days: int
+    ease_factor: float
+    reps: int
+    last_rating: Optional[str] = None
+    flashcard_front: str
+    flashcard_back: str
+    book_id: int
+
+
+class ReviewRateRequest(BaseModel):
+    rating: Literal["again", "hard", "good", "easy"]
+
+
+class PersonalizationProfileResponse(BaseModel):
+    user_id: int
+    explanation_level: Literal["beginner", "intermediate", "expert"]
+    study_goal: Optional[str] = None
+    weak_topics: List[str] = []
+    frequently_reviewed_tags: List[str] = []
+
+
+class PersonalizationProfileUpdate(BaseModel):
+    explanation_level: Optional[Literal["beginner", "intermediate", "expert"]] = None
+    study_goal: Optional[str] = None
+    weak_topics: Optional[List[str]] = None
+    frequently_reviewed_tags: Optional[List[str]] = None
+
+
+class WeeklySummaryResponse(BaseModel):
+    user_id: int
+    period_days: int
+    pages_read: int
+    notes_created: int
+    flashcards_created: int
+    reviews_completed: int
+    review_accuracy: float
+    top_weak_topics: List[str] = []

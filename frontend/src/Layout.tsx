@@ -25,6 +25,9 @@ const Layout: React.FC = () => {
           </Typography>
 
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Button color="inherit" component={Link} to="/review">
+              {t('common.review', 'Review')}
+            </Button>
             <Button color="inherit" component={Link} to="/profile">
               {t('common.profile')}
             </Button>

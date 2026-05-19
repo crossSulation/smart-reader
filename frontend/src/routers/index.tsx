@@ -4,6 +4,7 @@ import Register from'../pages/Register'
 import Library from '../pages/Library'
 import Reader from '../pages/Reader'
 import Profile from '../pages/Profile'
+import Review from '../pages/Review'
 import Layout from '../Layout'
 import ProtectedRoute from '../components/ProtectedRouter'
 
@@ -24,6 +25,7 @@ function RouterContainer() {
           <Route path="/" element={<Library />} />
           <Route path="/library" element={<Library />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/review" element={<Review />} />
         </Route>
 
         {/* Protected routes without Layout (no header) */}
