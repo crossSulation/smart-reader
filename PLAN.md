@@ -2,14 +2,14 @@
 
 ## Overall Progress Summary
 **Start Date:** Week 1 (May 15, 2026)
-**Current Phase:** Week 4 In Progress - Personalization + Analytics
+**Current Phase:** Week 4 Complete - Personalization + Evaluation
 
 | Milestone | Status | Progress |
 |-----------|--------|----------|
 | **Week 1: Retrieval Reliability** | 🟢 Complete | 8/8 tasks done - Hybrid retrieval, reranking, citations, guardrails implemented |
 | **Week 2: Ingestion & Markdown** | 🟢 Complete | 5/5 tasks done + TOC API, ingestion metrics, auto-indexing, indexed-status flag |
 | **Week 3: Learning Workflow** | 🟢 Complete | 6/6 tasks done (notes/flashcards/review flow + tags + validation) |
-| **Week 4: Personalization** | 🟡 In Progress | 2/5 tasks (profile settings + weekly summary shipped) |
+| **Week 4: Personalization** | 🟢 Complete | 5/5 tasks done (profile + adaptive QA + eval/release checks) |
 
 ### Additional Features Completed (Not in Original Plan)
 - [x] Local file upload with background sync to backend (Reader.tsx)
@@ -18,11 +18,15 @@
 - [x] Reader layout optimization (single-branch rendering)
 - [x] Section metadata (`section_path`) stored and returned in search/QA citations
 - [x] Markdown TOC endpoint (`GET /api/books/{book_id}/toc`) and MarkdownViewer integration
+- [x] Markdown renderer supports LaTeX math and SMILES chemical structure diagrams (both AI panel and document viewer)
 - [x] Ingestion quality metrics endpoint (`GET /api/books/{book_id}/ingestion-metrics`)
 - [x] Auto-index after upload in Reader (background indexing status shown in UI)
 - [x] Indexed-state API (`GET /api/books/{book_id}/indexed-status`) and Search UI hides redundant Index action
+- [x] AI summary templating options in panel (Cornell, Bullet Points, SQ3R)
+- [x] Summary response moved to JSON schema contract (`summary_json`) for frontend-driven rendering
+- [x] Strict summary schema validation: backend now rejects invalid/mismatched LLM JSON (HTTP 502) instead of auto-normalizing
 
-### Current Status Snapshot (May 19, 2026)
+### Current Status Snapshot (May 20, 2026)
 - [x] Backend ingestion pipeline supports PDF/EPUB/Markdown with structure-aware chunking
 - [x] Chunk metadata includes page anchors and section path for grounding
 - [x] Search and QA citation UI shows section context
@@ -31,6 +35,84 @@
 - [x] Week 3 data model and API foundation (notes/flashcards/review)
 - [x] Week 4 personalization profile API + settings UI (explanation level, goals, weak topics, review tags)
 - [x] Week 4 weekly summary API + profile dashboard card
+- [x] Week 4 evaluation tooling (`week4_eval.py`) and release orchestration (`release_check.py`)
+- [x] AI summary path is schema-first end-to-end (LLM JSON -> backend validation -> frontend template renderer)
+- [x] Frontend summary renderer now consumes structured schema blocks per template (Cornell/Bullet Points/SQ3R)
+- [x] Markdown renderer supports LaTeX math (`$inline$` / `$$block$$`) via `remark-math` + `rehype-katex` in both AI panel (`BookQA.tsx`) and document viewer (`MarkdownViewer.tsx`)
+- [x] Markdown renderer supports SMILES chemical structure diagrams via `smiles-drawer` in both `BookQA.tsx` and `MarkdownViewer.tsx` (fenced code block tagged `smiles` or `smi`)
+
+### API Contract: Summary JSON Schema
+- Endpoint: `GET /api/books/{book_id}/summary?template=cornell|bullet_points|sq3r`
+- Response envelope fields:
+  - `book_id: number`
+  - `title: string`
+  - `template: "cornell" | "bullet_points" | "sq3r"`
+  - `summary_json: object` (shape depends on `template`)
+  - `raw_output: string` (raw LLM output for debugging/audit)
+  - `provider: string`
+  - `chunks_used: number`
+- Validation behavior:
+  - Backend enforces strict schema matching by template.
+  - Invalid JSON or mismatched schema returns HTTP `502`.
+
+Template-specific `summary_json` shapes:
+
+1. Cornell (`template=cornell`)
+```json
+{
+  "template": "cornell",
+  "cue_questions": ["string"],
+  "notes": ["string"],
+  "summary": ["string"]
+}
+```
+
+2. Bullet Points (`template=bullet_points`)
+```json
+{
+  "template": "bullet_points",
+  "sections": [
+    {
+      "heading": "string",
+      "bullets": ["string"]
+    }
+  ]
+}
+```
+
+3. SQ3R (`template=sq3r`)
+```json
+{
+  "template": "sq3r",
+  "survey": ["string"],
+  "question": ["string"],
+  "read": ["string"],
+  "recite": ["string"],
+  "review": ["string"]
+}
+```
+
+### Frontend Rendering Mapping (AI Panel)
+
+`Frontend component:` `frontend/src/components/BookQA.tsx`
+
+| Template | Schema Field | UI Block Rendered |
+|----------|--------------|-------------------|
+| `cornell` | `cue_questions[]` | **Cue / Questions** bullet list |
+| `cornell` | `notes[]` | **Notes** bullet list |
+| `cornell` | `summary[]` | **Summary** bullet list |
+| `bullet_points` | `sections[].heading` | Section heading text |
+| `bullet_points` | `sections[].bullets[]` | Bullet list under each section |
+| `sq3r` | `survey[]` | **Survey** bullet list |
+| `sq3r` | `question[]` | **Question** bullet list |
+| `sq3r` | `read[]` | **Read** bullet list |
+| `sq3r` | `recite[]` | **Recite** bullet list |
+| `sq3r` | `review[]` | **Review** bullet list |
+
+Notes:
+- The frontend should treat schema fields as display-ready strings.
+- Ordering in arrays is preserved during rendering.
+- Missing required fields should be treated as API contract violation (backend returns `502`).
 
 ---
 
@@ -466,7 +548,7 @@ Ship a reliable "real smart reader" by improving:
 
 ## Week 4: Personalization + Evaluation + Hardening
 
-**Status: In Progress**
+**Status: Complete**
 
 ### Objectives
 - Make assistant adaptive and measurable
@@ -477,9 +559,9 @@ Ship a reliable "real smart reader" by improving:
   - weak topics
   - frequently reviewed tags
   - preferred explanation depth
-- [ ] Adaptive response mode:
+- [x] Adaptive response mode:
   - beginner/intermediate/expert explanation options
-- [ ] Add evaluation scripts:
+- [x] Add evaluation scripts:
   - retrieval recall@k sample set
   - citation correctness checks
   - answer faithfulness rubric scoring
@@ -493,9 +575,9 @@ Ship a reliable "real smart reader" by improving:
   - top weak topics
 
 ### Acceptance Criteria
-- [ ] Explanation level changes response style
+- [x] Explanation level changes response style
 - [x] Weekly summary visible and data-backed
-- [ ] Baseline evaluation report generated for each release
+- [x] Baseline evaluation report generated for each release
 
 ### Week 4 Validation Notes (Current)
 1. Backend migration applied for user personalization fields.
@@ -503,6 +585,15 @@ Ship a reliable "real smart reader" by improving:
   - `GET/PUT /api/personalization/profile`
   - `GET /api/analytics/weekly-summary`
 3. Profile page now includes personalization settings and weekly summary widgets.
+4. QA prompt now adapts explanation style using saved user preference (`beginner`/`intermediate`/`expert`) in both main and legacy QA endpoints.
+5. Evaluation scripts added:
+  - `backend/scripts/week4_eval.py`
+  - `backend/scripts/release_check.py`
+6. Release-check smoke tested in local and strict modes.
+7. API-backed strict release check passed with real book/token:
+  - `python scripts/release_check.py --api-url http://127.0.0.1:8003 --book-id 2 --token <from .week1_token.txt> --strict`
+8. Baseline report artifact generated:
+  - `backend/tests/data/week4_eval_report.json`
 
 ---
 
@@ -551,7 +642,7 @@ Ship a reliable "real smart reader" by improving:
 ---
 
 ## Immediate Next Steps (This Week)
-1. Wire explanation-level preference into QA generation prompts (beginner/intermediate/expert style output).
-2. Add evaluation scripts for retrieval/citation/faithfulness baseline reporting.
-3. Add weekly summary chart polish and link weak topics to review filters.
-4. Add release-check command that runs Week 1-4 key validation checks.
+1. Start next roadmap cycle planning (post-Week 4 backlog prioritization).
+2. Add weekly summary chart polish and weak-topic review drill-down UX.
+3. Add CI job to run `scripts/release_check.py --strict` on staging credentials.
+4. Prepare release notes using `tests/data/week4_eval_report.json`.

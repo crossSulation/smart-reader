@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List, Literal
+from typing import Optional, List, Literal, Union
 from datetime import datetime
 
 
@@ -117,10 +117,41 @@ class QAResponse(BaseModel):
     provider: str
 
 
+class SummaryBulletSection(BaseModel):
+    heading: str
+    bullets: List[str]
+
+
+class SummaryCornellSchema(BaseModel):
+    template: Literal["cornell"]
+    cue_questions: List[str]
+    notes: List[str]
+    summary: List[str]
+
+
+class SummaryBulletPointsSchema(BaseModel):
+    template: Literal["bullet_points"]
+    sections: List[SummaryBulletSection]
+
+
+class SummarySQ3RSchema(BaseModel):
+    template: Literal["sq3r"]
+    survey: List[str]
+    question: List[str]
+    read: List[str]
+    recite: List[str]
+    review: List[str]
+
+
+SummarySchema = Union[SummaryCornellSchema, SummaryBulletPointsSchema, SummarySQ3RSchema]
+
+
 class SummaryResponse(BaseModel):
     book_id: int
     title: str
-    summary: str
+    template: Literal["cornell", "bullet_points", "sq3r"] = "bullet_points"
+    summary_json: SummarySchema
+    raw_output: str
     provider: str
     chunks_used: int
 
@@ -182,6 +213,13 @@ class NoteCreate(BaseModel):
     source_text: Optional[str] = None
     page: Optional[int] = None
     tags: List[str] = []
+
+
+class NoteUpdate(BaseModel):
+    content: Optional[str] = None
+    source_text: Optional[str] = None
+    page: Optional[int] = None
+    tags: Optional[List[str]] = None
 
 
 class NoteResponse(BaseModel):

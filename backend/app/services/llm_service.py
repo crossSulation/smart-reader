@@ -40,28 +40,75 @@ def complete(prompt: str, system: Optional[str], settings) -> str:
 # Prompt builders
 # ---------------------------------------------------------------------------
 
-def build_qa_prompt(question: str, context_chunks: list[str]) -> tuple[str, str]:
+def build_qa_prompt(
+    question: str,
+    context_chunks: list[str],
+    explanation_level: str = "intermediate",
+) -> tuple[str, str]:
     """Return (system, user) prompt strings for a RAG Q&A call."""
     context = "\n\n---\n\n".join(context_chunks)
+
+    level = (explanation_level or "intermediate").lower()
+    if level == "beginner":
+        style_instruction = (
+            "Explain in simple terms, avoid jargon, and use short sentences. "
+            "If technical terms are necessary, define them briefly."
+        )
+    elif level == "expert":
+        style_instruction = (
+            "Use precise technical language, include nuanced trade-offs, "
+            "and keep explanations dense and direct."
+        )
+    else:
+        style_instruction = (
+            "Use balanced detail with clear structure suitable for an intermediate reader."
+        )
+
     system = (
         "You are a helpful reading assistant. "
         "Answer the user's question using ONLY the provided book excerpts. "
         "If the answer is not contained in the excerpts, say so clearly. "
-        "Be concise and cite the relevant passage when possible."
+        "Be concise and cite the relevant passage when possible. "
+        f"Explanation style: {style_instruction}"
     )
     user = f"Book excerpts:\n\n{context}\n\nQuestion: {question}"
     return system, user
 
 
-def build_summary_prompt(context_chunks: list[str], title: str) -> tuple[str, str]:
+def build_summary_prompt(
+    context_chunks: list[str],
+    title: str,
+    template: str = "bullet_points",
+) -> tuple[str, str]:
     """Return (system, user) prompt strings for a book summary call."""
     context = "\n\n---\n\n".join(context_chunks)
+
+    normalized_template = (template or "bullet_points").lower()
+    if normalized_template == "cornell":
+        schema_instruction = (
+            '{"template":"cornell","cue_questions":["..."],"notes":["..."],"summary":["..."]}'
+        )
+    elif normalized_template == "sq3r":
+        schema_instruction = (
+            '{"template":"sq3r","survey":["..."],"question":["..."],"read":["..."],"recite":["..."],"review":["..."]}'
+        )
+    else:
+        schema_instruction = (
+            '{"template":"bullet_points","sections":[{"heading":"...","bullets":["...","..."]}]}'
+        )
+
     system = (
         "You are a helpful reading assistant. "
-        "Summarise the provided book excerpts in a clear, structured way. "
-        "Include the main topics and key ideas. Be concise."
+        "Summarise the provided book excerpts using concise factual points from the excerpts. "
+        "Return ONLY valid JSON, no markdown, no code fences, no extra commentary. "
+        f"JSON schema for this request: {schema_instruction}"
     )
-    user = f'Book title: "{title}"\n\nExcerpts:\n\n{context}\n\nPlease provide a summary.'
+    user = (
+        f'Book title: "{title}"\n\n'
+        f'Template: {normalized_template}\n\n'
+        f'Excerpts:\n\n{context}\n\n'
+        "Return strict JSON matching the schema exactly."
+    )
     return system, user
 
 
@@ -72,11 +119,41 @@ def build_summary_prompt(context_chunks: list[str], title: str) -> tuple[str, st
 def _mock_complete(prompt: str, system: Optional[str]) -> str:
     """Offline deterministic stub — useful for dev/test without API keys."""
     logger.debug("LLM mock provider called (prompt length=%d)", len(prompt))
-    if "summarise" in (system or "").lower() or "summary" in prompt.lower():
+    system_text = (system or "").lower()
+
+    # Make mock outputs style-sensitive so personalization checks can run locally.
+    if "simple terms" in system_text:
         return (
-            "[Mock summary] This text covers several topics including the main themes "
-            "of the provided excerpts. Key ideas and arguments are presented across "
-            "the selected passages."
+            "[Mock beginner answer] This means the main idea is explained in easy words. "
+            "Think of it as a simple step-by-step concept from the book excerpts."
+        )
+    if "technical language" in system_text:
+        return (
+            "[Mock expert answer] The excerpts indicate a higher-order mechanism characterized by interacting constraints, "
+            "trade-off boundaries, and implementation implications that are best interpreted through a systems-level lens. "
+            "In practical terms, this implies a context-sensitive optimization strategy rather than a single universally optimal rule."
+        )
+
+    if "summarise" in (system or "").lower() or "summary" in prompt.lower():
+        if "cornell" in system_text:
+            return (
+                '{"template":"cornell","cue_questions":["What is the core topic?","Which ideas are emphasized?"],'
+                '"notes":["The excerpts introduce core concepts and practical steps.","Key themes are repeated across sections to build understanding."],'
+                '"summary":["The text presents foundational ideas and actionable guidance in a structured progression."]}'
+            )
+        if "sq3r" in system_text:
+            return (
+                '{"template":"sq3r","survey":["The material is organized by phases and key topics."],'
+                '"question":["What is the main focus of each phase?"],'
+                '"read":["Core ideas and tasks are introduced progressively."],'
+                '"recite":["The main takeaway is a staged learning path with practical checkpoints."],'
+                '"review":["Revisit each phase goal and verify completion against concrete outcomes."]}'
+            )
+        return (
+            '{"template":"bullet_points","sections":['
+            '{"heading":"Main ideas","bullets":["The excerpts cover key themes across the selected passages.","Core arguments are repeated to reinforce understanding."]},'
+            '{"heading":"Actionable points","bullets":["Track the progression of concepts from basic to advanced.","Review recurring terms to retain the structure."]}'
+            ']}'
         )
     return (
         "[Mock answer] Based on the provided excerpts, the answer relates to the "

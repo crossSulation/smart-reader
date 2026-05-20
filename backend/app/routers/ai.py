@@ -3,17 +3,28 @@ AI endpoints:
   POST /api/books/{book_id}/qa       – RAG question answering
   GET  /api/books/{book_id}/summary  – LLM-generated book summary
 """
+import json
 import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.models import AIInteraction, AICitation, DocumentChunk
+from app.models import AIInteraction, AICitation, DocumentChunk, User
 from app.routers.auth import get_current_user
-from app.schemas import QARequest, QAResponse, SearchResult, Citation, SummaryResponse
+from app.schemas import (
+    QARequest,
+    QAResponse,
+    SearchResult,
+    Citation,
+    SummaryResponse,
+    SummaryCornellSchema,
+    SummaryBulletPointsSchema,
+    SummarySQ3RSchema,
+)
 from app.services.embedding_service import embed_single, search_chunks
 from app.services.file_service import FileService
 from app.services.llm_service import (
@@ -125,6 +136,32 @@ def _normalize_rank_scores(hits: list[tuple[int, float]]) -> list[tuple[int, flo
     return [(cid, (score - min_score) / score_range) for cid, score in hits]
 
 
+def _extract_json_payload(raw_output: str) -> dict:
+    text = (raw_output or "").strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        text = text[start:end + 1]
+
+    return json.loads(text)
+
+
+def _validate_summary_json(template: str, payload: dict) -> dict:
+    if template == "cornell":
+        return SummaryCornellSchema.model_validate(payload).model_dump()
+    if template == "sq3r":
+        return SummarySQ3RSchema.model_validate(payload).model_dump()
+    return SummaryBulletPointsSchema.model_validate(payload).model_dump()
+
+
 # ---------------------------------------------------------------------------
 # Q&A endpoint
 # ---------------------------------------------------------------------------
@@ -146,6 +183,8 @@ def ask_book(
     settings = get_settings()
     evidence_threshold = max(0.0, min(1.0, settings.QA_EVIDENCE_THRESHOLD))
     book = _get_book_or_404(book_id, user["id"], db)
+    db_user = db.query(User).filter(User.id == user["id"]).first()
+    explanation_level = (db_user.explanation_level if db_user else "intermediate")
     chunks = _require_chunks(book_id, db)
 
     # Embed question
@@ -226,7 +265,11 @@ def ask_book(
             "Try rephrasing your question or selecting a different section from the book."
         )
     else:
-        system, user_prompt = build_qa_prompt(body.question, context_texts)
+        system, user_prompt = build_qa_prompt(
+            body.question,
+            context_texts,
+            explanation_level=explanation_level,
+        )
         try:
             answer = complete(user_prompt, system, settings)
         except RuntimeError as exc:
@@ -280,6 +323,7 @@ def ask_book(
 def get_book_summary(
     book_id: int,
     max_chunks: int = Query(20, ge=1, le=100, description="Number of chunks to summarise"),
+    template: str = Query("bullet_points", description="Summary template: cornell | bullet_points | sq3r"),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -304,21 +348,57 @@ def get_book_summary(
             detail="Book has no indexed chunks. Run POST /api/books/{id}/index first.",
         )
 
+    normalized_template = (template or "bullet_points").lower().strip()
+    allowed_templates = {"cornell", "bullet_points", "sq3r"}
+    if normalized_template not in allowed_templates:
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid template. Use one of: cornell, bullet_points, sq3r",
+        )
+
     context_texts = _truncate_context([r.text for r in rows])
-    system, user_prompt = build_summary_prompt(context_texts, book.title)
+    system, user_prompt = build_summary_prompt(
+        context_texts,
+        book.title,
+        template=normalized_template,
+    )
     try:
-        summary = complete(user_prompt, system, settings)
+        summary_raw = complete(user_prompt, system, settings)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
+    try:
+        summary_payload = _extract_json_payload(summary_raw)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="LLM returned invalid JSON for summary schema.",
+        ) from exc
+
+    if not isinstance(summary_payload, dict):
+        raise HTTPException(
+            status_code=502,
+            detail="LLM returned JSON that is not an object for summary schema.",
+        )
+
+    try:
+        summary_json = _validate_summary_json(normalized_template, summary_payload)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"LLM returned invalid summary schema: {exc.errors()}",
+        ) from exc
+
     _log_interaction(
-        db, user["id"], book_id, "summary", summary,
+        db, user["id"], book_id, "summary", summary_raw,
         settings.LLM_PROVIDER, chunks_used=len(context_texts),
     )
     return SummaryResponse(
         book_id=book_id,
         title=book.title,
-        summary=summary,
+        template=normalized_template,
+        summary_json=summary_json,
+        raw_output=summary_raw,
         provider=settings.LLM_PROVIDER,
         chunks_used=len(context_texts),
     )

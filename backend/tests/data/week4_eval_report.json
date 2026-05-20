@@ -1,0 +1,199 @@
+{
+  "summary": {
+    "total_cases": 15,
+    "successful_cases": 15,
+    "success_rate": 1.0,
+    "retrieval_recall_proxy": 1.0,
+    "citation_correctness_proxy": 0.053,
+    "faithfulness_proxy_pass_rate": 1.0
+  },
+  "adaptive_style_check": {
+    "success": true,
+    "style_probe_question": "How is [key concept] defined?",
+    "beginner_avg_sentence_len": 12.5,
+    "expert_avg_sentence_len": 20,
+    "style_shift_detected": true
+  },
+  "cases": [
+    {
+      "case_id": "W1-QA-001",
+      "question": "What is the main topic of this book?",
+      "success": true,
+      "error": null,
+      "confidence": 0.365,
+      "insufficient_evidence": true,
+      "citations_count": 5,
+      "citations_expected": 1,
+      "citation_correctness_proxy": 0.0,
+      "faithfulness_proxy_pass": true
+    },
+    {
+      "case_id": "W1-QA-002",
+      "question": "How is [key concept] defined?",
+      "success": true,
+      "error": null,
+      "confidence": 0.548,
+      "insufficient_evidence": false,
+      "citations_count": 5,
+      "citations_expected": 1,
+      "citation_correctness_proxy": 0.0,
+      "faithfulness_proxy_pass": true
+    },
+    {
+      "case_id": "W1-QA-003",
+      "question": "What are the main steps involved in [process]?",
+      "success": true,
+      "error": null,
+      "confidence": 0.885,
+      "insufficient_evidence": false,
+      "citations_count": 5,
+      "citations_expected": 3,
+      "citation_correctness_proxy": 0.0,
+      "faithfulness_proxy_pass": true
+    },
+    {
+      "case_id": "W1-QA-004",
+      "question": "Explain the difference between [concept A] and [concept B]?",
+      "success": true,
+      "error": null,
+      "confidence": 0.832,
+      "insufficient_evidence": false,
+      "citations_count": 5,
+      "citations_expected": 2,
+      "citation_correctness_proxy": 0.8,
+      "faithfulness_proxy_pass": true
+    },
+    {
+      "case_id": "W1-QA-005",
+      "question": "What is an example of [concept] mentioned in the book?",
+      "success": true,
+      "error": null,
+      "confidence": 0.519,
+      "insufficient_evidence": false,
+      "citations_count": 5,
+      "citations_expected": 1,
+      "citation_correctness_proxy": 0.0,
+      "faithfulness_proxy_pass": true
+    },
+    {
+      "case_id": "W1-QA-006",
+      "question": "Who discovered/created [important thing]?",
+      "success": true,
+      "error": null,
+      "confidence": 0.718,
+      "insufficient_evidence": false,
+      "citations_count": 5,
+      "citations_expected": 1,
+      "citation_correctness_proxy": 0.0,
+      "faithfulness_proxy_pass": true
+    },
+    {
+      "case_id": "W1-QA-007",
+      "question": "When did [event] occur?",
+      "success": true,
+      "error": null,
+      "confidence": 0.917,
+      "insufficient_evidence": false,
+      "citations_count": 5,
+      "citations_expected": 1,
+      "citation_correctness_proxy": 0.0,
+      "faithfulness_proxy_pass": true
+    },
+    {
+      "case_id": "W1-QA-008",
+      "question": "What are the advantages of [approach]?",
+      "success": true,
+      "error": null,
+      "confidence": 0.659,
+      "insufficient_evidence": false,
+      "citations_count": 5,
+      "citations_expected": 2,
+      "citation_correctness_proxy": 0.0,
+      "faithfulness_proxy_pass": true
+    },
+    {
+      "case_id": "W1-QA-009",
+      "question": "What are the limitations or challenges mentioned regarding [topic]?",
+      "success": true,
+      "error": null,
+      "confidence": 0.39,
+      "insufficient_evidence": true,
+      "citations_count": 5,
+      "citations_expected": 2,
+      "citation_correctness_proxy": 0.0,
+      "faithfulness_proxy_pass": true
+    },
+    {
+      "case_id": "W1-QA-010",
+      "question": "How does [component] relate to [other component]?",
+      "success": true,
+      "error": null,
+      "confidence": 0.623,
+      "insufficient_evidence": false,
+      "citations_count": 5,
+      "citations_expected": 2,
+      "citation_correctness_proxy": 0.0,
+      "faithfulness_proxy_pass": true
+    },
+    {
+      "case_id": "W1-QA-011",
+      "question": "What should I do if [problem] occurs?",
+      "success": true,
+      "error": null,
+      "confidence": 0.646,
+      "insufficient_evidence": false,
+      "citations_count": 5,
+      "citations_expected": 1,
+      "citation_correctness_proxy": 0.0,
+      "faithfulness_proxy_pass": true
+    },
+    {
+      "case_id": "W1-QA-012",
+      "question": "Which section of the book covers [topic]?",
+      "success": true,
+      "error": null,
+      "confidence": 0.378,
+      "insufficient_evidence": true,
+      "citations_count": 5,
+      "citations_expected": 1,
+      "citation_correctness_proxy": 0.0,
+      "faithfulness_proxy_pass": true
+    },
+    {
+      "case_id": "W1-QA-013",
+      "question": "What is the formula or equation for [calculation]?",
+      "success": true,
+      "error": null,
+      "confidence": 0.703,
+      "insufficient_evidence": false,
+      "citations_count": 5,
+      "citations_expected": 1,
+      "citation_correctness_proxy": 0.0,
+      "faithfulness_proxy_pass": true
+    },
+    {
+      "case_id": "W1-QA-014",
+      "question": "Summarize the key findings in [chapter/section]",
+      "success": true,
+      "error": null,
+      "confidence": 0.702,
+      "insufficient_evidence": false,
+      "citations_count": 5,
+      "citations_expected": 3,
+      "citation_correctness_proxy": 0.0,
+      "faithfulness_proxy_pass": true
+    },
+    {
+      "case_id": "W1-QA-015",
+      "question": "What is the author's opinion on [controversial topic]?",
+      "success": true,
+      "error": null,
+      "confidence": 0.606,
+      "insufficient_evidence": false,
+      "citations_count": 5,
+      "citations_expected": 2,
+      "citation_correctness_proxy": 0.0,
+      "faithfulness_proxy_pass": true
+    }
+  ]
+}

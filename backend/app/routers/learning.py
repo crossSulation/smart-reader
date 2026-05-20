@@ -11,6 +11,7 @@ from app.schemas import (
     FlashcardResponse,
     NoteCreate,
     NoteResponse,
+    NoteUpdate,
     ReviewItemResponse,
     ReviewRateRequest,
 )
@@ -54,6 +55,92 @@ def create_note(
         tags=_join_tags(payload.tags),
     )
     db.add(note)
+    db.commit()
+    db.refresh(note)
+
+    return NoteResponse(
+        id=note.id,
+        user_id=note.user_id,
+        book_id=note.book_id,
+        content=note.content,
+        source_text=note.source_text,
+        page=note.page,
+        tags=_split_tags(note.tags),
+        created_at=note.created_at,
+    )
+
+
+@router.get("/notes", response_model=list[NoteResponse])
+def list_notes(
+    book_id: int | None = Query(None),
+    limit: int = Query(30, ge=1, le=200),
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Note).filter(Note.user_id == user["id"])
+
+    if book_id is not None:
+        _get_book_or_404(book_id, user["id"], db)
+        query = query.filter(Note.book_id == book_id)
+
+    rows = query.order_by(Note.created_at.desc()).limit(limit).all()
+
+    return [
+        NoteResponse(
+            id=item.id,
+            user_id=item.user_id,
+            book_id=item.book_id,
+            content=item.content,
+            source_text=item.source_text,
+            page=item.page,
+            tags=_split_tags(item.tags),
+            created_at=item.created_at,
+        )
+        for item in rows
+    ]
+
+
+@router.delete("/notes/{note_id}")
+def delete_note(
+    note_id: int,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    note = db.query(Note).filter(Note.id == note_id, Note.user_id == user["id"]).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+
+    db.delete(note)
+    db.commit()
+    return {"ok": True}
+
+
+@router.patch("/notes/{note_id}", response_model=NoteResponse)
+def update_note(
+    note_id: int,
+    payload: NoteUpdate,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    note = db.query(Note).filter(Note.id == note_id, Note.user_id == user["id"]).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+
+    if payload.content is not None:
+        content = payload.content.strip()
+        if not content:
+            raise HTTPException(status_code=422, detail="content cannot be empty")
+        note.content = content
+
+    if payload.source_text is not None:
+        note.source_text = payload.source_text
+
+    if payload.page is not None:
+        note.page = payload.page
+
+    if payload.tags is not None:
+        note.tags = _join_tags(payload.tags)
+
     db.commit()
     db.refresh(note)
 

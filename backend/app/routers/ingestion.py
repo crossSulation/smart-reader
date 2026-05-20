@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import AIInteraction, DocumentChunk
+from app.models import AIInteraction, DocumentChunk, User
 from app.schemas import (
     DocumentChunk as DocumentChunkSchema,
     TocItem,
@@ -315,6 +316,8 @@ def ask_book(
     from app.services.embedding_service import embed_single, search_chunks
 
     settings = get_settings()
+    db_user = db.query(User).filter(User.id == user["id"]).first()
+    explanation_level = (db_user.explanation_level if db_user else "intermediate")
     _get_book_or_404(book_id, user["id"], db)
 
     rows = (
@@ -356,7 +359,11 @@ def ask_book(
     ]
 
     context_texts = _truncate_context([s.text for s in sources])
-    system_prompt, user_prompt = build_qa_prompt(body.question, context_texts)
+    system_prompt, user_prompt = build_qa_prompt(
+        body.question,
+        context_texts,
+        explanation_level=explanation_level,
+    )
     try:
         answer = complete(user_prompt, system_prompt, settings)
     except RuntimeError as exc:

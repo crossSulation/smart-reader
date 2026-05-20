@@ -9,6 +9,15 @@ import BookSearch from "../components/BookSearch";
 import BookQA from "../components/BookQA";
 import type { Book } from "../types/Book";
 
+type LearningNote = {
+  id: number;
+  book_id: number;
+  content: string;
+  page: number | null;
+  tags: string[];
+  created_at: string;
+};
+
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
   import.meta.url,
@@ -29,6 +38,13 @@ function Reader() {
   const [learningStatus, setLearningStatus] = useState<string | null>(null);
   const [savingNote, setSavingNote] = useState(false);
   const [savingFlashcard, setSavingFlashcard] = useState(false);
+  const [notes, setNotes] = useState<LearningNote[]>([]);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [notesError, setNotesError] = useState<string | null>(null);
+  const [deletingNoteId, setDeletingNoteId] = useState<number | null>(null);
+  const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
+  const [editingNoteContent, setEditingNoteContent] = useState("");
+  const [savingEditedNoteId, setSavingEditedNoteId] = useState<number | null>(null);
   const [currentPdfPage, setCurrentPdfPage] = useState(1);
   const [pdfTotalPages, setPdfTotalPages] = useState(0);
   const [markdownJumpSection, setMarkdownJumpSection] = useState<number | undefined>(undefined);
@@ -85,10 +101,100 @@ function Reader() {
       }
 
       setLearningStatus("Saved as note.");
+      if (activeBookIdForAi) {
+        const refreshRes = await fetch(`/api/learning/notes?book_id=${encodeURIComponent(activeBookIdForAi)}&limit=20`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        });
+        if (refreshRes.ok) {
+          const notesData: LearningNote[] = await refreshRes.json();
+          setNotes(Array.isArray(notesData) ? notesData : []);
+        }
+      }
     } catch (err) {
       setLearningStatus(err instanceof Error ? err.message : "Failed to save note.");
     } finally {
       setSavingNote(false);
+    }
+  };
+
+  const reloadNotes = async (bookIdValue: string) => {
+    const res = await fetch(`/api/learning/notes?book_id=${encodeURIComponent(bookIdValue)}&limit=20`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || `Load notes failed (${res.status})`);
+    }
+    const data: LearningNote[] = await res.json();
+    setNotes(Array.isArray(data) ? data : []);
+  };
+
+  const handleDeleteNote = async (noteId: number) => {
+    setDeletingNoteId(noteId);
+    setNotesError(null);
+    try {
+      const res = await fetch(`/api/learning/notes/${noteId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || `Delete note failed (${res.status})`);
+      }
+
+      if (activeBookIdForAi) {
+        await reloadNotes(activeBookIdForAi);
+      }
+    } catch (err) {
+      setNotesError(err instanceof Error ? err.message : "Failed to delete note.");
+    } finally {
+      setDeletingNoteId(null);
+    }
+  };
+
+  const startEditNote = (note: LearningNote) => {
+    setEditingNoteId(note.id);
+    setEditingNoteContent(note.content);
+    setNotesError(null);
+  };
+
+  const cancelEditNote = () => {
+    setEditingNoteId(null);
+    setEditingNoteContent("");
+  };
+
+  const saveEditedNote = async (noteId: number) => {
+    const content = editingNoteContent.trim();
+    if (!content) {
+      setNotesError("Note content cannot be empty.");
+      return;
+    }
+
+    setSavingEditedNoteId(noteId);
+    setNotesError(null);
+    try {
+      const res = await fetch(`/api/learning/notes/${noteId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({ content }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || `Update note failed (${res.status})`);
+      }
+
+      if (activeBookIdForAi) {
+        await reloadNotes(activeBookIdForAi);
+      }
+      cancelEditNote();
+    } catch (err) {
+      setNotesError(err instanceof Error ? err.message : "Failed to update note.");
+    } finally {
+      setSavingEditedNoteId(null);
     }
   };
 
@@ -335,6 +441,28 @@ function Reader() {
     setJumpToPage(target);
   };
 
+  useEffect(() => {
+    if (!activeBookIdForAi) {
+      setNotes([]);
+      setNotesError(null);
+      return;
+    }
+
+    const fetchNotes = async () => {
+      setNotesLoading(true);
+      setNotesError(null);
+      try {
+        await reloadNotes(activeBookIdForAi);
+      } catch (err) {
+        setNotesError(err instanceof Error ? err.message : "Failed to load notes.");
+      } finally {
+        setNotesLoading(false);
+      }
+    };
+
+    fetchNotes();
+  }, [activeBookIdForAi]);
+
   if (loading) return <div className="p-8 text-center">Loading...</div>;
 
   if (error) {
@@ -451,6 +579,92 @@ function Reader() {
             )}
           </div>
         )}
+
+        <div className="mb-4 rounded border border-gray-200 bg-white p-3">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-600">Recent Notes</div>
+          {notesLoading ? (
+            <div className="text-xs text-gray-500">Loading notes...</div>
+          ) : notesError ? (
+            <div className="text-xs text-red-600">{notesError}</div>
+          ) : notes.length === 0 ? (
+            <div className="text-xs text-gray-500">No notes yet for this book.</div>
+          ) : (
+            <ul className="max-h-44 space-y-2 overflow-y-auto">
+              {notes.map((note) => (
+                <li key={note.id} className="rounded border border-gray-100 bg-gray-50 px-2 py-1.5">
+                  {editingNoteId === note.id ? (
+                    <div className="space-y-2">
+                      <textarea
+                        value={editingNoteContent}
+                        onChange={(e) => setEditingNoteContent(e.target.value)}
+                        rows={3}
+                        className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                      />
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={cancelEditNote}
+                          disabled={savingEditedNoteId === note.id}
+                          className="rounded px-2 py-0.5 text-[10px] text-gray-600 hover:bg-gray-100 disabled:opacity-60"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => saveEditedNote(note.id)}
+                          disabled={savingEditedNoteId === note.id}
+                          className="rounded bg-blue-600 px-2 py-0.5 text-[10px] text-white hover:bg-blue-700 disabled:opacity-60"
+                        >
+                          {savingEditedNoteId === note.id ? "Saving..." : "Save"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (typeof note.page === "number") {
+                          handleJumpTarget(note.page);
+                        }
+                      }}
+                      disabled={typeof note.page !== "number"}
+                      className="w-full text-left"
+                      title={typeof note.page === "number" ? `Jump to page ${note.page}` : "No page linked"}
+                    >
+                      <p className="line-clamp-2 text-xs text-gray-800">{note.content}</p>
+                    </button>
+                  )}
+                  <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-[10px] text-gray-500">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {note.page ? <span>Page {note.page}</span> : null}
+                      {note.tags.slice(0, 3).map((tag) => (
+                        <span key={`${note.id}-${tag}`} className="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700">#{tag}</span>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => startEditNote(note)}
+                        disabled={deletingNoteId === note.id || savingEditedNoteId === note.id}
+                        className="rounded px-1.5 py-0.5 text-blue-600 hover:bg-blue-50 disabled:opacity-60"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteNote(note.id)}
+                        disabled={deletingNoteId === note.id || savingEditedNoteId === note.id}
+                        className="rounded px-1.5 py-0.5 text-red-600 hover:bg-red-50 disabled:opacity-60"
+                      >
+                        {deletingNoteId === note.id ? "Deleting..." : "Delete"}
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
         {!activeBookIdForAi ? (
           <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">

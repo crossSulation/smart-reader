@@ -1,7 +1,10 @@
-import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
+import { isValidElement, type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import rehypeSanitize from "rehype-sanitize";
+import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import SmilesDrawer from "smiles-drawer";
+import "katex/dist/katex.min.css";
 
 type HeadingItem = {
   id: string;
@@ -23,6 +26,39 @@ type MarkdownViewerProps = {
   onTextSelected?: (text: string) => void;
   jumpToSection?: number;
 };
+
+type SmilesBlockProps = { smiles: string };
+
+function SmilesBlock({ smiles }: SmilesBlockProps) {
+  const targetId = useId().replace(/:/g, "_");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const cleaned = smiles.trim();
+    if (!cleaned) return;
+    const container = document.getElementById(targetId);
+    if (!container) return;
+    container.innerHTML = "";
+    setError(null);
+    SmilesDrawer.parse(
+      cleaned,
+      (tree: unknown) => {
+        try {
+          const drawer = new SmilesDrawer.Drawer({ width: 360, height: 220, compactDrawing: true });
+          drawer.draw(tree, targetId, "light", false);
+        } catch {
+          setError("Failed to render SMILES diagram.");
+        }
+      },
+      () => { setError("Invalid SMILES syntax."); },
+    );
+  }, [smiles, targetId]);
+
+  if (error) {
+    return <div className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800">{error}</div>;
+  }
+  return <div id={targetId} className="overflow-x-auto rounded border bg-white p-2" />;
+}
 
 function slugify(value: string) {
   return value
@@ -261,8 +297,8 @@ export default function MarkdownViewer({ fileUrl, bookId, onTextSelected, jumpTo
 
       <div ref={contentRef} className="min-w-0 flex-1 overflow-y-auto px-6 py-5">
         <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          rehypePlugins={[rehypeSanitize]}
+          remarkPlugins={[remarkGfm, remarkMath]}
+          rehypePlugins={[rehypeKatex]}
           components={{
             h1: makeHeadingRenderer(1, "mb-4 mt-6 text-3xl font-bold text-gray-900 first:mt-0"),
             h2: makeHeadingRenderer(2, "mb-3 mt-6 text-2xl font-semibold text-gray-900"),
@@ -276,6 +312,8 @@ export default function MarkdownViewer({ fileUrl, bookId, onTextSelected, jumpTo
             li: ({ children }) => <li className="mb-1">{children}</li>,
             blockquote: ({ children }) => <blockquote className="mb-4 border-l-4 border-blue-200 bg-blue-50 px-4 py-2 text-gray-700">{children}</blockquote>,
             code: ({ className, children, ...props }: { className?: string; children?: ReactNode; inline?: boolean }) => {
+              const isSmiles = /language-(smiles|smi)\b/.test(className || "");
+              if (isSmiles) return <SmilesBlock smiles={String(children ?? "")} />;
               const inline = !className;
               return inline ? (
                 <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-sm text-pink-700" {...props}>{children}</code>
@@ -283,7 +321,16 @@ export default function MarkdownViewer({ fileUrl, bookId, onTextSelected, jumpTo
                 <code className="block overflow-x-auto rounded-lg bg-gray-900 p-4 font-mono text-sm text-gray-100" {...props}>{children}</code>
               );
             },
-            pre: ({ children }) => <pre className="mb-4">{children}</pre>,
+            pre: ({ children }) => {
+              const codeChild = Array.isArray(children) ? children[0] : children;
+              if (isValidElement(codeChild)) {
+                const className = (codeChild.props as { className?: string }).className || "";
+                if (/language-(smiles|smi)\b/.test(className)) {
+                  return <div className="mb-4">{children}</div>;
+                }
+              }
+              return <pre className="mb-4">{children}</pre>;
+            },
             table: ({ children }) => <div className="mb-4 overflow-x-auto"><table className="min-w-full border border-gray-200 text-sm">{children}</table></div>,
             thead: ({ children }) => <thead className="bg-gray-100">{children}</thead>,
             th: ({ children }) => <th className="border border-gray-200 px-3 py-2 text-left font-semibold text-gray-700">{children}</th>,

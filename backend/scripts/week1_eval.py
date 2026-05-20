@@ -110,6 +110,7 @@ def print_summary(results: list[EvalResult], dataset: dict) -> None:
     print("="*80)
     
     total = len(results)
+    total = len(results)
     successful = sum(1 for r in results if r.success)
     citations_met = sum(1 for r in results if r.citations_met)
     confidence_met = sum(1 for r in results if r.confidence_met)
@@ -231,18 +232,23 @@ def main():
     
     print_summary(results, dataset)
     
-    # Exit with error if any criteria not met
+    # Exit with error if any criteria not met.
+    # Use total-case denominators to match the printed Week 1 acceptance summary.
+    total = len(results)
     successful = sum(1 for r in results if r.success)
-    citations_met = sum(1 for r in results if r.citations_met and r.success)
-    confidence_met = sum(1 for r in results if r.confidence_met and r.success)
+    citations_met = sum(1 for r in results if r.citations_met)
+    confidence_met = sum(1 for r in results if r.confidence_met)
+    insufficient_evidence_count = sum(1 for r in results if r.insufficient_evidence)
     hallucinations = sum(
         1 for r in results 
         if r.success and r.confidence < 0.3 and not r.insufficient_evidence
     )
     
     failed = (
-        citations_met / successful < 0.9 if successful > 0 else False
-        or confidence_met / successful < 0.7 if successful > 0 else False
+        (successful / total) < 0.9 if total > 0 else True
+        or (citations_met / total) < 0.9 if total > 0 else True
+        or (confidence_met / total) < 0.7 if total > 0 else True
+        or insufficient_evidence_count == 0
         or hallucinations > 0
     )
     
