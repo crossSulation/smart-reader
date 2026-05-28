@@ -18,6 +18,12 @@ type LearningNote = {
   created_at: string;
 };
 
+const parseTagsInput = (raw: string): string[] =>
+  raw
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
   import.meta.url,
@@ -44,6 +50,7 @@ function Reader() {
   const [deletingNoteId, setDeletingNoteId] = useState<number | null>(null);
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [editingNoteContent, setEditingNoteContent] = useState("");
+  const [editingNoteTagsInput, setEditingNoteTagsInput] = useState("");
   const [savingEditedNoteId, setSavingEditedNoteId] = useState<number | null>(null);
   const [currentPdfPage, setCurrentPdfPage] = useState(1);
   const [pdfTotalPages, setPdfTotalPages] = useState(0);
@@ -155,16 +162,19 @@ function Reader() {
   const startEditNote = (note: LearningNote) => {
     setEditingNoteId(note.id);
     setEditingNoteContent(note.content);
+    setEditingNoteTagsInput(note.tags.join(","));
     setNotesError(null);
   };
 
   const cancelEditNote = () => {
     setEditingNoteId(null);
     setEditingNoteContent("");
+    setEditingNoteTagsInput("");
   };
 
   const saveEditedNote = async (noteId: number) => {
     const content = editingNoteContent.trim();
+    const tags = parseTagsInput(editingNoteTagsInput);
     if (!content) {
       setNotesError("Note content cannot be empty.");
       return;
@@ -179,7 +189,7 @@ function Reader() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, tags }),
       });
 
       if (!res.ok) {
@@ -600,6 +610,25 @@ function Reader() {
                         rows={3}
                         className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
                       />
+                      <input
+                        type="text"
+                        value={editingNoteTagsInput}
+                        onChange={(e) => setEditingNoteTagsInput(e.target.value)}
+                        placeholder="tags: topic,important"
+                        className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                      />
+                      {parseTagsInput(editingNoteTagsInput).length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1">
+                          {parseTagsInput(editingNoteTagsInput).map((tag) => (
+                            <span
+                              key={`edit-${note.id}-${tag}`}
+                              className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700"
+                            >
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       <div className="flex items-center justify-end gap-2">
                         <button
                           type="button"
