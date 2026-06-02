@@ -2,7 +2,7 @@
 
 ## Overall Progress Summary
 **Start Date:** Week 1 (May 15, 2026)
-**Current Phase:** Week 4 Complete - Personalization + Evaluation
+**Current Phase:** Post-Week 4 Hardening - Reader Learning UX Improvements
 
 | Milestone | Status | Progress |
 |-----------|--------|----------|
@@ -19,14 +19,18 @@
 - [x] Section metadata (`section_path`) stored and returned in search/QA citations
 - [x] Markdown TOC endpoint (`GET /api/books/{book_id}/toc`) and MarkdownViewer integration
 - [x] Markdown renderer supports LaTeX math and SMILES chemical structure diagrams (both AI panel and document viewer)
+- [x] Markdown document viewer now renders Mermaid diagrams from fenced `mermaid` code blocks
 - [x] Ingestion quality metrics endpoint (`GET /api/books/{book_id}/ingestion-metrics`)
 - [x] Auto-index after upload in Reader (background indexing status shown in UI)
 - [x] Indexed-state API (`GET /api/books/{book_id}/indexed-status`) and Search UI hides redundant Index action
 - [x] AI summary templating options in panel (Cornell, Bullet Points, SQ3R)
 - [x] Summary response moved to JSON schema contract (`summary_json`) for frontend-driven rendering
 - [x] Strict summary schema validation: backend now rejects invalid/mismatched LLM JSON (HTTP 502) instead of auto-normalizing
+- [x] Reader notes panel for current book (`Recent Notes`) with live refresh after note creation
+- [x] Reader note actions: click-to-jump (when page exists), inline edit, inline tag edit preview, and delete
+- [x] Learning notes management APIs extended: list (`GET /api/learning/notes`), update (`PATCH /api/learning/notes/{note_id}`), delete (`DELETE /api/learning/notes/{note_id}`)
 
-### Current Status Snapshot (May 20, 2026)
+### Current Status Snapshot (June 2, 2026)
 - [x] Backend ingestion pipeline supports PDF/EPUB/Markdown with structure-aware chunking
 - [x] Chunk metadata includes page anchors and section path for grounding
 - [x] Search and QA citation UI shows section context
@@ -40,6 +44,10 @@
 - [x] Frontend summary renderer now consumes structured schema blocks per template (Cornell/Bullet Points/SQ3R)
 - [x] Markdown renderer supports LaTeX math (`$inline$` / `$$block$$`) via `remark-math` + `rehype-katex` in both AI panel (`BookQA.tsx`) and document viewer (`MarkdownViewer.tsx`)
 - [x] Markdown renderer supports SMILES chemical structure diagrams via `smiles-drawer` in both `BookQA.tsx` and `MarkdownViewer.tsx` (fenced code block tagged `smiles` or `smi`)
+- [x] MarkdownViewer renders Mermaid diagrams for fenced `mermaid` blocks with inline fallback on render failure
+- [x] Reader AI panel now shows recent notes for the active book with loading/error/empty states
+- [x] Reader supports note lifecycle operations in-place: create, read/list, edit content, edit tags, delete
+- [x] Reader note cards support page jump navigation for PDF-linked notes
 
 ### API Contract: Summary JSON Schema
 - Endpoint: `GET /api/books/{book_id}/summary?template=cornell|bullet_points|sq3r`
@@ -597,23 +605,31 @@ Ship a reliable "real smart reader" by improving:
 
 ---
 
-## API Contracts to Add (Draft)
-- [ ] POST /api/qa/ask
-  - req: {book_id, question, mode?}
-  - res: {answer, confidence, citations[], insufficient_evidence}
-- [ ] POST /api/highlights/:id/note
-- [ ] POST /api/highlights/:id/flashcard
-- [ ] GET /api/review/due
-- [ ] POST /api/review/:item_id/rate
-- [ ] GET /api/analytics/weekly-summary
+## API Contracts (Implemented Snapshot)
+- [x] `POST /api/books/{book_id}/qa`
+  - req: `{ question, top_k }`
+  - res: `{ answer, citations[], confidence, insufficient_evidence, provider }`
+- [x] `GET /api/books/{book_id}/summary?template=cornell|bullet_points|sq3r`
+  - res: `{ template, summary_json, raw_output, provider, chunks_used }`
+- [x] `POST /api/learning/notes`
+- [x] `GET /api/learning/notes?book_id=&limit=`
+- [x] `PATCH /api/learning/notes/{note_id}`
+- [x] `DELETE /api/learning/notes/{note_id}`
+- [x] `POST /api/learning/flashcards`
+- [x] `GET /api/learning/review/due`
+- [x] `POST /api/learning/review/{item_id}/rate`
+- [x] `GET /api/personalization/profile`
+- [x] `PUT /api/personalization/profile`
+- [x] `GET /api/analytics/weekly-summary`
 
 ---
 
-## Data Model Additions (Draft)
-- [ ] notes(id, user_id, book_id, page, content, tags, created_at)
-- [ ] flashcards(id, user_id, book_id, front, back, source_chunk_id, tags)
-- [ ] review_items(id, flashcard_id, due_at, interval, ease, reps, last_rating)
-- [ ] chunk_index(id, book_id, chunk_id, text, page_start, page_end, section_path, vector_ref)
+## Data Model Snapshot (Implemented)
+- [x] `notes(id, user_id, book_id, page, source_text, content, tags, created_at, updated_at)`
+- [x] `flashcards(id, user_id, book_id, source_chunk_id, front, back, source_text, tags, created_at, updated_at)`
+- [x] `review_items(id, flashcard_id, due_at, interval_days, ease_factor, reps, last_rating, created_at, updated_at)`
+- [x] `document_chunks(..., page_start, page_end, section_path, token_count, embedding, indexed_at)`
+- [x] `users(..., explanation_level, study_goal, weak_topics, frequently_reviewed_tags)`
 
 ---
 
@@ -643,6 +659,6 @@ Ship a reliable "real smart reader" by improving:
 
 ## Immediate Next Steps (This Week)
 1. Start next roadmap cycle planning (post-Week 4 backlog prioritization).
-2. Add weekly summary chart polish and weak-topic review drill-down UX.
+2. Add weak-topic review drill-down UX from weekly summary/profile analytics.
 3. Add CI job to run `scripts/release_check.py --strict` on staging credentials.
-4. Prepare release notes using `tests/data/week4_eval_report.json`.
+4. Evaluate Mermaid code-splitting to reduce the frontend production bundle size.

@@ -1,22 +1,14 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowBack, AutoAwesomeOutlined, LocalOfferOutlined, SettingsOutlined, UploadFileOutlined, ViewSidebarOutlined } from "@mui/icons-material";
+import { ArrowBack, LocalOfferOutlined, SettingsOutlined, UploadFileOutlined, ViewSidebarOutlined } from "@mui/icons-material";
 import { Document, Page, pdfjs } from "react-pdf";
-import MarkdownViewer from "../components/MarkdownViewer";
+import MarkdownViewer, { type MarkdownSidebarEntry, type MarkdownViewerHandle } from "../components/MarkdownViewer";
 import PDFViewer from "../components/PDFViewer";
 import EPUBViewer from "../components/EPUBViewer";
-import BookSearch from "../components/BookSearch";
-import BookQA from "../components/BookQA";
+import AIPanel, { type AIPanelLearningNote } from "../components/AIPanel";
 import type { Book } from "../types/Book";
 
-type LearningNote = {
-  id: number;
-  book_id: number;
-  content: string;
-  page: number | null;
-  tags: string[];
-  created_at: string;
-};
+type LearningNote = AIPanelLearningNote;
 
 const parseTagsInput = (raw: string): string[] =>
   raw
@@ -37,7 +29,7 @@ function Reader() {
   const [error, setError] = useState<string | null>(null);
   const [jumpToPage, setJumpToPage] = useState<number | undefined>(undefined);
   const [aiTab, setAiTab] = useState<"search" | "ai">("search");
-  const [leftPanelTab, setLeftPanelTab] = useState<"thumbnails" | "tags">("thumbnails");
+  const [leftPanelTab, setLeftPanelTab] = useState<"navigation" | "tags">("navigation");
   const [prefillReferenceTerm, setPrefillReferenceTerm] = useState("");
   const [selectedExcerpt, setSelectedExcerpt] = useState("");
   const [learningTagsInput, setLearningTagsInput] = useState("highlight");
@@ -55,6 +47,8 @@ function Reader() {
   const [currentPdfPage, setCurrentPdfPage] = useState(1);
   const [pdfTotalPages, setPdfTotalPages] = useState(0);
   const [markdownJumpSection, setMarkdownJumpSection] = useState<number | undefined>(undefined);
+  const [markdownSidebarEntries, setMarkdownSidebarEntries] = useState<MarkdownSidebarEntry[]>([]);
+  const [activeMarkdownSectionIndex, setActiveMarkdownSectionIndex] = useState(0);
   const [localFile, setLocalFile] = useState<{ name: string; type: "pdf" | "epub" | "markdown"; url: string } | null>(null);
   const [localUploadStatus, setLocalUploadStatus] = useState<"idle" | "uploading" | "uploaded" | "failed">("idle");
   const [localUploadMessage, setLocalUploadMessage] = useState("");
@@ -65,16 +59,17 @@ function Reader() {
     return window.matchMedia("(min-width: 1024px)").matches;
   });
   const thumbnailRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const markdownViewerRef = useRef<MarkdownViewerHandle | null>(null);
   const localFileInputRef = useRef<HTMLInputElement>(null);
   const previousLocalUrlRef = useRef<string | null>(null);
 
-  const handleTextSelected = (text: string) => {
+  const handleTextSelected = useCallback((text: string) => {
     const clean = text.trim().replace(/\s+/g, " ");
     if (!clean) return;
     setSelectedExcerpt(clean.slice(0, 400));
     setPrefillReferenceTerm(clean.slice(0, 200));
     setAiTab("ai");
-  };
+  }, []);
 
   const createNoteFromSelection = async () => {
     if (!selectedExcerpt.trim() || !activeBookIdForAi) return;
@@ -443,6 +438,13 @@ function Reader() {
     thumbnailRefs.current[currentPdfPage - 1]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [currentPdfPage, activeFileType]);
 
+  useEffect(() => {
+    if (activeFileType !== "markdown") {
+      setMarkdownSidebarEntries([]);
+      setActiveMarkdownSectionIndex(0);
+    }
+  }, [activeFileType]);
+
   const handleJumpTarget = (target: number) => {
     if (activeFileType === "markdown") {
       setMarkdownJumpSection(target);
@@ -502,10 +504,14 @@ function Reader() {
     ) : activeFileType === "markdown" ? (
       (localFile?.type === "markdown" ? localFile.url : book.file_url) ? (
         <MarkdownViewer
+          ref={markdownViewerRef}
           fileUrl={localFile?.type === "markdown" ? localFile.url : book.file_url!}
           bookId={localFile ? (uploadedBookId ? String(uploadedBookId) : undefined) : id}
           onTextSelected={handleTextSelected}
           jumpToSection={markdownJumpSection}
+          showSidebar={!isDesktop}
+          onSidebarEntriesChange={setMarkdownSidebarEntries}
+          onActiveSectionChange={setActiveMarkdownSectionIndex}
         />
       ) : null
     ) : (
@@ -515,202 +521,6 @@ function Reader() {
         onTextSelected={handleTextSelected}
       />
     );
-
-  const renderAiPanel = () => (
-    <>
-      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 bg-gray-50">
-        <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-          <AutoAwesomeOutlined fontSize="small" />
-          <span>AI Panel</span>
-        </div>
-      </div>
-
-      <div className="flex gap-1 border-b border-gray-200 px-3 pt-3 bg-gray-50">
-        {(["search", "ai"] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setAiTab(tab)}
-            className={`px-4 py-2 text-sm font-medium rounded-t transition ${
-              aiTab === tab
-                ? "bg-white border border-b-white border-gray-200 -mb-px text-blue-700"
-                : "text-gray-500 hover:text-gray-800"
-            }`}
-          >
-            {tab === "search" ? "Search" : "AI Assistant"}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4">
-        {selectedExcerpt && (
-          <div className="mb-4 rounded border border-blue-200 bg-blue-50 p-3">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-blue-700">Selected Text</div>
-            <p className="mb-3 line-clamp-3 text-sm text-blue-900">{selectedExcerpt}</p>
-            <div className="mb-3">
-              <label className="mb-1 block text-xs font-medium text-blue-800">Tags (comma-separated)</label>
-              <input
-                type="text"
-                value={learningTagsInput}
-                onChange={(e) => setLearningTagsInput(e.target.value)}
-                placeholder="topic,question,todo"
-                className="w-full rounded border border-blue-200 bg-white px-2 py-1.5 text-xs text-blue-900 placeholder:text-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-300"
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={createNoteFromSelection}
-                disabled={!activeBookIdForAi || savingNote || savingFlashcard}
-                className="rounded border border-blue-300 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {savingNote ? "Saving..." : "Save as note"}
-              </button>
-              <button
-                type="button"
-                onClick={createFlashcardFromSelection}
-                disabled={!activeBookIdForAi || savingNote || savingFlashcard}
-                className="rounded border border-blue-600 bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {savingFlashcard ? "Creating..." : "Create flashcard"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedExcerpt("")}
-                className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-white"
-              >
-                Clear
-              </button>
-            </div>
-            {learningStatus && (
-              <div className="mt-2 text-xs text-gray-700">{learningStatus}</div>
-            )}
-            {!activeBookIdForAi && (
-              <div className="mt-2 text-xs text-amber-700">Upload/index must complete before saving learning items.</div>
-            )}
-          </div>
-        )}
-
-        <div className="mb-4 rounded border border-gray-200 bg-white p-3">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-600">Recent Notes</div>
-          {notesLoading ? (
-            <div className="text-xs text-gray-500">Loading notes...</div>
-          ) : notesError ? (
-            <div className="text-xs text-red-600">{notesError}</div>
-          ) : notes.length === 0 ? (
-            <div className="text-xs text-gray-500">No notes yet for this book.</div>
-          ) : (
-            <ul className="max-h-44 space-y-2 overflow-y-auto">
-              {notes.map((note) => (
-                <li key={note.id} className="rounded border border-gray-100 bg-gray-50 px-2 py-1.5">
-                  {editingNoteId === note.id ? (
-                    <div className="space-y-2">
-                      <textarea
-                        value={editingNoteContent}
-                        onChange={(e) => setEditingNoteContent(e.target.value)}
-                        rows={3}
-                        className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                      />
-                      <input
-                        type="text"
-                        value={editingNoteTagsInput}
-                        onChange={(e) => setEditingNoteTagsInput(e.target.value)}
-                        placeholder="tags: topic,important"
-                        className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                      />
-                      {parseTagsInput(editingNoteTagsInput).length > 0 && (
-                        <div className="flex flex-wrap items-center gap-1">
-                          {parseTagsInput(editingNoteTagsInput).map((tag) => (
-                            <span
-                              key={`edit-${note.id}-${tag}`}
-                              className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700"
-                            >
-                              #{tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={cancelEditNote}
-                          disabled={savingEditedNoteId === note.id}
-                          className="rounded px-2 py-0.5 text-[10px] text-gray-600 hover:bg-gray-100 disabled:opacity-60"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => saveEditedNote(note.id)}
-                          disabled={savingEditedNoteId === note.id}
-                          className="rounded bg-blue-600 px-2 py-0.5 text-[10px] text-white hover:bg-blue-700 disabled:opacity-60"
-                        >
-                          {savingEditedNoteId === note.id ? "Saving..." : "Save"}
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (typeof note.page === "number") {
-                          handleJumpTarget(note.page);
-                        }
-                      }}
-                      disabled={typeof note.page !== "number"}
-                      className="w-full text-left"
-                      title={typeof note.page === "number" ? `Jump to page ${note.page}` : "No page linked"}
-                    >
-                      <p className="line-clamp-2 text-xs text-gray-800">{note.content}</p>
-                    </button>
-                  )}
-                  <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-[10px] text-gray-500">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {note.page ? <span>Page {note.page}</span> : null}
-                      {note.tags.slice(0, 3).map((tag) => (
-                        <span key={`${note.id}-${tag}`} className="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700">#{tag}</span>
-                      ))}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => startEditNote(note)}
-                        disabled={deletingNoteId === note.id || savingEditedNoteId === note.id}
-                        className="rounded px-1.5 py-0.5 text-blue-600 hover:bg-blue-50 disabled:opacity-60"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteNote(note.id)}
-                        disabled={deletingNoteId === note.id || savingEditedNoteId === note.id}
-                        className="rounded px-1.5 py-0.5 text-red-600 hover:bg-red-50 disabled:opacity-60"
-                      >
-                        {deletingNoteId === note.id ? "Deleting..." : "Delete"}
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {!activeBookIdForAi ? (
-          <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            Local file is open. AI search/QA will be available after background upload finishes.
-          </div>
-        ) : aiTab === "search" ? (
-          <BookSearch bookId={activeBookIdForAi} onJumpToPage={(page) => handleJumpTarget(page)} isIndexing={localFile ? indexing : undefined} />
-        ) : (
-          <BookQA
-            bookId={activeBookIdForAi}
-            onJumpToPage={(page) => handleJumpTarget(page)}
-            prefillReferenceTerm={prefillReferenceTerm}
-          />
-        )}
-      </div>
-    </>
-  );
 
   const currentPageDisplay = activeFileType === "pdf"
     ? currentPdfPage
@@ -792,25 +602,55 @@ function Reader() {
         <div className="flex h-full flex-col overflow-y-auto">
           <div className="min-w-0">{renderReaderContent()}</div>
           <aside className="border-t border-gray-200 bg-white overflow-hidden flex flex-col min-h-[28rem]">
-            {renderAiPanel()}
+            <AIPanel
+              aiTab={aiTab}
+              onAiTabChange={setAiTab}
+              selectedExcerpt={selectedExcerpt}
+              learningTagsInput={learningTagsInput}
+              onLearningTagsInputChange={setLearningTagsInput}
+              onCreateNoteFromSelection={createNoteFromSelection}
+              onCreateFlashcardFromSelection={createFlashcardFromSelection}
+              onClearSelectedExcerpt={() => setSelectedExcerpt("")}
+              learningStatus={learningStatus}
+              savingNote={savingNote}
+              savingFlashcard={savingFlashcard}
+              activeBookIdForAi={activeBookIdForAi}
+              notesLoading={notesLoading}
+              notesError={notesError}
+              notes={notes}
+              editingNoteId={editingNoteId}
+              editingNoteContent={editingNoteContent}
+              onEditingNoteContentChange={setEditingNoteContent}
+              editingNoteTagsInput={editingNoteTagsInput}
+              onEditingNoteTagsInputChange={setEditingNoteTagsInput}
+              savingEditedNoteId={savingEditedNoteId}
+              deletingNoteId={deletingNoteId}
+              onStartEditNote={startEditNote}
+              onCancelEditNote={cancelEditNote}
+              onSaveEditedNote={saveEditedNote}
+              onDeleteNote={handleDeleteNote}
+              onJumpTarget={handleJumpTarget}
+              prefillReferenceTerm={prefillReferenceTerm}
+              isIndexing={localFile ? indexing : undefined}
+            />
           </aside>
         </div>
       ) : (
         <div className="flex h-full">
-          {activeFileType === "pdf" && (
+          {(activeFileType === "pdf" || activeFileType === "markdown") && (
             <>
               <aside className="h-full w-20 shrink-0 border-r border-gray-200 bg-white">
                 <div className="flex h-full flex-col items-center py-3">
                   <button
                     type="button"
-                    onClick={() => setLeftPanelTab("thumbnails")}
+                    onClick={() => setLeftPanelTab("navigation")}
                     className={`rounded-xl p-3 transition ${
-                      leftPanelTab === "thumbnails"
+                      leftPanelTab === "navigation"
                         ? "bg-blue-50 text-blue-700"
                         : "text-gray-600 hover:bg-gray-50"
                     }`}
-                    title="Thumbnails"
-                    aria-label="Thumbnails"
+                    title={activeFileType === "pdf" ? "Thumbnails" : "Contents"}
+                    aria-label={activeFileType === "pdf" ? "Thumbnails" : "Contents"}
                   >
                     <ViewSidebarOutlined fontSize="small" />
                   </button>
@@ -831,32 +671,58 @@ function Reader() {
               </aside>
 
               <aside className="h-full w-40 shrink-0 overflow-y-auto border-r border-gray-200 bg-gray-50">
-                {leftPanelTab === "thumbnails" ? (
-                  thumbnailFile && pdfTotalPages > 0 && (
-                    <Document file={thumbnailFile} loading="">
-                      {Array.from({ length: pdfTotalPages }, (_, i) => i + 1).map((page) => (
-                        <div
-                          key={page}
-                          ref={(el) => {
-                            thumbnailRefs.current[page - 1] = el;
-                          }}
-                          onClick={() => setJumpToPage(page)}
-                          className={`m-1 cursor-pointer rounded border-2 transition-colors ${
-                            currentPdfPage === page
-                              ? "border-blue-500 bg-blue-50"
-                              : "border-transparent hover:border-blue-300"
-                          }`}
-                        >
-                          <Page
-                            pageNumber={page}
-                            width={88}
-                            renderTextLayer={false}
-                            renderAnnotationLayer={false}
-                          />
-                          <div className="py-0.5 text-center text-xs text-gray-500">{page}</div>
-                        </div>
-                      ))}
-                    </Document>
+                {leftPanelTab === "navigation" ? (
+                  activeFileType === "pdf" ? (
+                    thumbnailFile && pdfTotalPages > 0 && (
+                      <Document file={thumbnailFile} loading="">
+                        {Array.from({ length: pdfTotalPages }, (_, i) => i + 1).map((page) => (
+                          <div
+                            key={page}
+                            ref={(el) => {
+                              thumbnailRefs.current[page - 1] = el;
+                            }}
+                            onClick={() => setJumpToPage(page)}
+                            className={`m-1 cursor-pointer rounded border-2 transition-colors ${
+                              currentPdfPage === page
+                                ? "border-blue-500 bg-blue-50"
+                                : "border-transparent hover:border-blue-300"
+                            }`}
+                          >
+                            <Page
+                              pageNumber={page}
+                              width={88}
+                              renderTextLayer={false}
+                              renderAnnotationLayer={false}
+                            />
+                            <div className="py-0.5 text-center text-xs text-gray-500">{page}</div>
+                          </div>
+                        ))}
+                      </Document>
+                    )
+                  ) : markdownSidebarEntries.length > 0 ? (
+                    <div className="p-2">
+                      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Contents</div>
+                      <nav className="space-y-1">
+                        {markdownSidebarEntries.map((entry) => (
+                          <button
+                            key={entry.id}
+                            type="button"
+                            onClick={() => markdownViewerRef.current?.scrollToSection(entry.index)}
+                            className={`block w-full truncate rounded px-2 py-1 text-left text-sm transition ${
+                              activeMarkdownSectionIndex === entry.index
+                                ? "bg-white font-medium text-blue-700 shadow-sm"
+                                : "text-gray-700 hover:bg-white"
+                            }`}
+                            style={{ paddingLeft: `${entry.level * 10}px` }}
+                            title={entry.text}
+                          >
+                            {entry.text}
+                          </button>
+                        ))}
+                      </nav>
+                    </div>
+                  ) : (
+                    <div className="p-2 text-xs text-gray-500">No headings found.</div>
                   )
                 ) : (
                   <div className="p-2 text-xs text-gray-600">
@@ -874,7 +740,39 @@ function Reader() {
 
           <aside className="h-full w-[480px] max-w-[42vw] min-w-[420px] shrink-0 border-l border-gray-200">
             <div className="flex h-full overflow-hidden bg-white">
-              <div className="flex min-w-0 flex-1 flex-col">{renderAiPanel()}</div>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <AIPanel
+                  aiTab={aiTab}
+                  onAiTabChange={setAiTab}
+                  selectedExcerpt={selectedExcerpt}
+                  learningTagsInput={learningTagsInput}
+                  onLearningTagsInputChange={setLearningTagsInput}
+                  onCreateNoteFromSelection={createNoteFromSelection}
+                  onCreateFlashcardFromSelection={createFlashcardFromSelection}
+                  onClearSelectedExcerpt={() => setSelectedExcerpt("")}
+                  learningStatus={learningStatus}
+                  savingNote={savingNote}
+                  savingFlashcard={savingFlashcard}
+                  activeBookIdForAi={activeBookIdForAi}
+                  notesLoading={notesLoading}
+                  notesError={notesError}
+                  notes={notes}
+                  editingNoteId={editingNoteId}
+                  editingNoteContent={editingNoteContent}
+                  onEditingNoteContentChange={setEditingNoteContent}
+                  editingNoteTagsInput={editingNoteTagsInput}
+                  onEditingNoteTagsInputChange={setEditingNoteTagsInput}
+                  savingEditedNoteId={savingEditedNoteId}
+                  deletingNoteId={deletingNoteId}
+                  onStartEditNote={startEditNote}
+                  onCancelEditNote={cancelEditNote}
+                  onSaveEditedNote={saveEditedNote}
+                  onDeleteNote={handleDeleteNote}
+                  onJumpTarget={handleJumpTarget}
+                  prefillReferenceTerm={prefillReferenceTerm}
+                  isIndexing={localFile ? indexing : undefined}
+                />
+              </div>
             </div>
           </aside>
         </div>

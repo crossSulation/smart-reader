@@ -27,6 +27,82 @@ interface WeeklySummary {
   reviews_completed: number;
   review_accuracy: number;
   top_weak_topics: string[];
+  daily_trend: {
+    date: string;
+    notes_created: number;
+    flashcards_created: number;
+    reviews_completed: number;
+    activity_total: number;
+  }[];
+}
+
+type TrendMetric = 'activity_total' | 'notes_created' | 'flashcards_created' | 'reviews_completed';
+
+function WeeklyTrendGraph({ data, metric }: { data: WeeklySummary['daily_trend']; metric: TrendMetric }) {
+  if (!data || data.length === 0) {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        No trend data yet.
+      </Typography>
+    );
+  }
+
+  const metricLabelMap: Record<TrendMetric, string> = {
+    activity_total: 'Total activity',
+    notes_created: 'Notes',
+    flashcards_created: 'Flashcards',
+    reviews_completed: 'Reviews',
+  };
+
+  const metricColorMap: Record<TrendMetric, string> = {
+    activity_total: '#2563eb',
+    notes_created: '#7c3aed',
+    flashcards_created: '#ea580c',
+    reviews_completed: '#059669',
+  };
+
+  const selectedColor = metricColorMap[metric];
+  const selectedLabel = metricLabelMap[metric];
+
+  const width = 640;
+  const height = 220;
+  const padding = 28;
+  const maxY = Math.max(1, ...data.map((point) => point[metric]));
+  const stepX = data.length > 1 ? (width - padding * 2) / (data.length - 1) : 0;
+
+  const points = data
+    .map((point, index) => {
+      const x = padding + index * stepX;
+      const y = height - padding - (point[metric] / maxY) * (height - padding * 2);
+      return `${x},${y}`;
+    })
+    .join(' ');
+
+  return (
+    <Box>
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto" role="img" aria-label="Weekly activity trend">
+        <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#d1d5db" strokeWidth="1" />
+        <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="#d1d5db" strokeWidth="1" />
+        <polyline fill="none" stroke={selectedColor} strokeWidth="3" points={points} strokeLinecap="round" strokeLinejoin="round" />
+        {data.map((point, index) => {
+          const x = padding + index * stepX;
+          const value = point[metric];
+          const y = height - padding - (value / maxY) * (height - padding * 2);
+          const label = new Date(point.date).toLocaleDateString(undefined, { weekday: 'short' });
+          return (
+            <g key={point.date}>
+              <circle cx={x} cy={y} r={4} fill={selectedColor} />
+              <text x={x} y={height - 8} textAnchor="middle" fontSize="10" fill="#6b7280">{label}</text>
+              <text x={x} y={y - 10} textAnchor="middle" fontSize="10" fill="#1f2937">{value}</text>
+            </g>
+          );
+        })}
+      </svg>
+      <Typography variant="caption" color="text.secondary">
+        Showing daily trend for: {selectedLabel}
+      </Typography>
+    </Box>
+  );
 }
 
 function Profile() {
@@ -43,6 +119,7 @@ function Profile() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [personalization, setPersonalization] = useState<PersonalizationProfile | null>(null);
   const [summary, setSummary] = useState<WeeklySummary | null>(null);
+  const [trendMetric, setTrendMetric] = useState<TrendMetric>('activity_total');
   const [studyGoalInput, setStudyGoalInput] = useState('');
   const [weakTopicsInput, setWeakTopicsInput] = useState('');
   const [reviewedTagsInput, setReviewedTagsInput] = useState('');
@@ -377,6 +454,43 @@ function Profile() {
                   ? summary.top_weak_topics.join(', ')
                   : t('profile.noWeakTopics', 'No weak topics detected this week.')}
               </Typography>
+            </Box>
+
+            <Box mt={3}>
+              <Typography variant="body2" fontWeight="medium" mb={1}>
+                {t('profile.weeklyTrend', 'Weekly Activity Trend')}
+              </Typography>
+              <Box display="flex" flexWrap="wrap" gap={1} mb={1.5}>
+                <Button
+                  size="small"
+                  variant={trendMetric === 'activity_total' ? 'contained' : 'outlined'}
+                  onClick={() => setTrendMetric('activity_total')}
+                >
+                  {t('profile.metricTotal', 'Total')}
+                </Button>
+                <Button
+                  size="small"
+                  variant={trendMetric === 'notes_created' ? 'contained' : 'outlined'}
+                  onClick={() => setTrendMetric('notes_created')}
+                >
+                  {t('profile.metricNotes', 'Notes')}
+                </Button>
+                <Button
+                  size="small"
+                  variant={trendMetric === 'flashcards_created' ? 'contained' : 'outlined'}
+                  onClick={() => setTrendMetric('flashcards_created')}
+                >
+                  {t('profile.metricFlashcards', 'Flashcards')}
+                </Button>
+                <Button
+                  size="small"
+                  variant={trendMetric === 'reviews_completed' ? 'contained' : 'outlined'}
+                  onClick={() => setTrendMetric('reviews_completed')}
+                >
+                  {t('profile.metricReviews', 'Reviews')}
+                </Button>
+              </Box>
+              <WeeklyTrendGraph data={summary.daily_trend || []} metric={trendMetric} />
             </Box>
           </Box>
         ) : (

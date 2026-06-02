@@ -292,6 +292,14 @@ class PersonalizationProfileUpdate(BaseModel):
     frequently_reviewed_tags: Optional[List[str]] = None
 
 
+class WeeklyTrendPoint(BaseModel):
+    date: str  # YYYY-MM-DD
+    notes_created: int
+    flashcards_created: int
+    reviews_completed: int
+    activity_total: int
+
+
 class WeeklySummaryResponse(BaseModel):
     user_id: int
     period_days: int
@@ -301,3 +309,4 @@ class WeeklySummaryResponse(BaseModel):
     reviews_completed: int
     review_accuracy: float
     top_weak_topics: List[str] = []
+    daily_trend: List[WeeklyTrendPoint] = []

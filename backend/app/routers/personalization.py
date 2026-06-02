@@ -129,6 +129,63 @@ def get_weekly_summary(
 
     top_weak_topics = [topic for topic, _ in weak_topic_counter.most_common(5)]
 
+    day_buckets = []
+    for offset in range(period_days - 1, -1, -1):
+        day = (now - timedelta(days=offset)).date()
+        day_buckets.append(day)
+
+    note_rows = (
+        db.query(Note.created_at)
+        .filter(Note.user_id == user["id"], Note.created_at >= cutoff)
+        .all()
+    )
+    flashcard_rows = (
+        db.query(Flashcard.created_at)
+        .filter(Flashcard.user_id == user["id"], Flashcard.created_at >= cutoff)
+        .all()
+    )
+    review_rows = (
+        db.query(ReviewItem.updated_at, ReviewItem.last_rating, Flashcard.user_id)
+        .join(Flashcard, Flashcard.id == ReviewItem.flashcard_id)
+        .filter(
+            Flashcard.user_id == user["id"],
+            ReviewItem.last_rating.isnot(None),
+            ReviewItem.updated_at >= cutoff,
+        )
+        .all()
+    )
+
+    notes_by_day: Counter[str] = Counter()
+    for (created_at,) in note_rows:
+        if created_at:
+            notes_by_day[created_at.date().isoformat()] += 1
+
+    flashcards_by_day: Counter[str] = Counter()
+    for (created_at,) in flashcard_rows:
+        if created_at:
+            flashcards_by_day[created_at.date().isoformat()] += 1
+
+    reviews_by_day: Counter[str] = Counter()
+    for updated_at, _, _ in review_rows:
+        if updated_at:
+            reviews_by_day[updated_at.date().isoformat()] += 1
+
+    daily_trend = []
+    for day in day_buckets:
+        key = day.isoformat()
+        note_count = notes_by_day.get(key, 0)
+        flashcard_count = flashcards_by_day.get(key, 0)
+        review_count = reviews_by_day.get(key, 0)
+        daily_trend.append(
+            {
+                "date": key,
+                "notes_created": note_count,
+                "flashcards_created": flashcard_count,
+                "reviews_completed": review_count,
+                "activity_total": note_count + flashcard_count + review_count,
+            }
+        )
+
     return WeeklySummaryResponse(
         user_id=user["id"],
         period_days=period_days,
@@ -138,4 +195,5 @@ def get_weekly_summary(
         reviews_completed=reviews_completed,
         review_accuracy=review_accuracy,
         top_weak_topics=top_weak_topics,
+        daily_trend=daily_trend,
     )

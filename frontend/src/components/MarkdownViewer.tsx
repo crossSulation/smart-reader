@@ -1,8 +1,9 @@
-import { isValidElement, type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
+import { forwardRef, isValidElement, memo, type ReactNode, useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
+import mermaid from "mermaid";
 import SmilesDrawer from "smiles-drawer";
 import "katex/dist/katex.min.css";
 
@@ -20,14 +21,95 @@ type TocItem = {
   order_index: number;
 };
 
+export type MarkdownSidebarEntry = {
+  id: string;
+  text: string;
+  level: number;
+  index: number;
+};
+
+export type MarkdownViewerHandle = {
+  scrollToSection: (sectionIndex: number) => void;
+};
+
 type MarkdownViewerProps = {
   fileUrl: string;
   bookId?: string;
   onTextSelected?: (text: string) => void;
   jumpToSection?: number;
+  showSidebar?: boolean;
+  onSidebarEntriesChange?: (entries: MarkdownSidebarEntry[]) => void;
+  onActiveSectionChange?: (sectionIndex: number) => void;
 };
 
 type SmilesBlockProps = { smiles: string };
+type MermaidBlockProps = { chart: string };
+
+function MermaidBlock({ chart }: MermaidBlockProps) {
+  const targetId = useId().replace(/:/g, "_");
+  const [error, setError] = useState<string | null>(null);
+  const [svg, setSvg] = useState("");
+  const [isRendering, setIsRendering] = useState(false);
+
+  useEffect(() => {
+    let isCancelled = false;
+    const cleaned = chart.trim();
+    if (!cleaned) {
+      setSvg("");
+      setIsRendering(false);
+      return () => {
+        isCancelled = true;
+      };
+    }
+
+    setError(null);
+    setSvg("");
+    setIsRendering(true);
+
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: "default",
+    });
+
+    mermaid
+      .render(`${targetId}-svg`, cleaned)
+      .then(({ svg }) => {
+        if (isCancelled) return;
+        setSvg(svg);
+        setIsRendering(false);
+      })
+      .catch(() => {
+        if (isCancelled) return;
+        setSvg("");
+        setIsRendering(false);
+        setError("Failed to render Mermaid diagram.");
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [chart, targetId]);
+
+  if (error) {
+    return (
+      <div className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800">
+        {error}
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto rounded border bg-white p-2">
+      {isRendering && !svg ? (
+        <div className="rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-500">
+          Rendering Mermaid diagram...
+        </div>
+      ) : null}
+      {svg ? <div dangerouslySetInnerHTML={{ __html: svg }} /> : null}
+    </div>
+  );
+}
 
 function SmilesBlock({ smiles }: SmilesBlockProps) {
   const targetId = useId().replace(/:/g, "_");
@@ -82,12 +164,21 @@ function textFromNode(node: ReactNode): string {
   return "";
 }
 
-export default function MarkdownViewer({ fileUrl, bookId, onTextSelected, jumpToSection }: MarkdownViewerProps) {
+const MarkdownViewer = memo(forwardRef<MarkdownViewerHandle, MarkdownViewerProps>(function MarkdownViewer({
+  fileUrl,
+  bookId,
+  onTextSelected,
+  jumpToSection,
+  showSidebar = true,
+  onSidebarEntriesChange,
+  onActiveSectionChange,
+}, ref) {
   const viewerInstanceId = useId();
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tocItems, setTocItems] = useState<TocItem[]>([]);
+  const [activeSectionIndex, setActiveSectionIndex] = useState(0);
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -190,7 +281,7 @@ export default function MarkdownViewer({ fileUrl, bookId, onTextSelected, jumpTo
     });
   }, [content]);
 
-  const sidebarEntries = useMemo(() => {
+  const sidebarEntries = useMemo<MarkdownSidebarEntry[]>(() => {
     if (tocItems.length > 0) {
       return tocItems.map((item, index) => ({
         id: item.id,
@@ -208,6 +299,61 @@ export default function MarkdownViewer({ fileUrl, bookId, onTextSelected, jumpTo
     }));
   }, [tocItems, headings]);
 
+  useEffect(() => {
+    onSidebarEntriesChange?.(sidebarEntries);
+  }, [onSidebarEntriesChange, sidebarEntries]);
+
+  useEffect(() => {
+    if (sidebarEntries.length === 0) {
+      setActiveSectionIndex(0);
+      onActiveSectionChange?.(0);
+      return;
+    }
+
+    const container = contentRef.current;
+    if (!container || headings.length === 0) {
+      setActiveSectionIndex(0);
+      onActiveSectionChange?.(0);
+      return;
+    }
+
+    let animationFrameId = 0;
+
+    const updateActiveSection = () => {
+      const containerRect = container.getBoundingClientRect();
+      let nextIndex = 0;
+
+      headings.forEach((heading, index) => {
+        const target = document.getElementById(`${viewerInstanceId}-${heading.id}`);
+        if (!target) return;
+
+        const targetRect = target.getBoundingClientRect();
+        if (targetRect.top - containerRect.top <= 24) {
+          nextIndex = index;
+        }
+      });
+
+      setActiveSectionIndex((previous) => {
+        if (previous === nextIndex) return previous;
+        onActiveSectionChange?.(nextIndex);
+        return nextIndex;
+      });
+    };
+
+    const handleScroll = () => {
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = window.requestAnimationFrame(updateActiveSection);
+    };
+
+    updateActiveSection();
+    container.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      container.removeEventListener("scroll", handleScroll);
+    };
+  }, [headings, onActiveSectionChange, sidebarEntries.length, viewerInstanceId]);
+
   const headingBuckets = useMemo(() => {
     return headings.reduce<Record<number, HeadingItem[]>>((acc, heading) => {
       const next = acc[heading.level] ?? [];
@@ -217,22 +363,46 @@ export default function MarkdownViewer({ fileUrl, bookId, onTextSelected, jumpTo
     }, {});
   }, [headings]);
 
-  useEffect(() => {
-    if (jumpToSection === undefined || jumpToSection === null) return;
+  const scrollToHeading = useCallback((headingId: string, behavior: "auto" | "instant" | "smooth" = "smooth") => {
+    const container = contentRef.current;
+    if (!container) return;
 
+    const target = document.getElementById(`${viewerInstanceId}-${headingId}`);
+    if (!target) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const top = targetRect.top - containerRect.top + container.scrollTop - 12;
+
+    container.scrollTo({
+      top: Math.max(0, top),
+      behavior,
+    });
+  }, [viewerInstanceId]);
+
+  const scrollToSection = useCallback((sectionIndex: number) => {
     if (headings.length === 0) {
       contentRef.current?.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
 
     const sectionCount = sidebarEntries.length || headings.length;
-    const safeIndex = Math.max(0, Math.min(jumpToSection, sectionCount - 1));
+    const safeIndex = Math.max(0, Math.min(sectionIndex, sectionCount - 1));
     const targetHeading = headings[safeIndex];
     if (!targetHeading) return;
 
-    const domId = `${viewerInstanceId}-${targetHeading.id}`;
-    document.getElementById(domId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [jumpToSection, headings, sidebarEntries.length, viewerInstanceId]);
+    scrollToHeading(targetHeading.id);
+  }, [headings, scrollToHeading, sidebarEntries.length]);
+
+  useImperativeHandle(ref, () => ({
+    scrollToSection,
+  }), [scrollToSection]);
+
+  useEffect(() => {
+    if (jumpToSection === undefined || jumpToSection === null) return;
+
+    scrollToSection(jumpToSection);
+  }, [jumpToSection, scrollToSection]);
 
   const headingRenderCounts = {
     1: new Map<string, number>(),
@@ -268,7 +438,7 @@ export default function MarkdownViewer({ fileUrl, bookId, onTextSelected, jumpTo
 
   return (
     <div className="flex h-full w-full">
-      {sidebarEntries.length > 0 && (
+      {showSidebar && sidebarEntries.length > 0 && (
         <aside className="hidden h-full w-64 shrink-0 overflow-y-auto border-r border-gray-200 bg-gray-50 lg:block">
           <div className="p-3">
             <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Contents</div>
@@ -277,13 +447,17 @@ export default function MarkdownViewer({ fileUrl, bookId, onTextSelected, jumpTo
                 <button
                   key={entry.id}
                   type="button"
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={() => {
                     const targetHeading = headings[entry.index];
                     if (!targetHeading) return;
-                    const domId = `${viewerInstanceId}-${targetHeading.id}`;
-                    document.getElementById(domId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    scrollToHeading(targetHeading.id);
                   }}
-                  className="block w-full truncate rounded px-2 py-1 text-left text-sm text-gray-700 hover:bg-white"
+                  className={`block w-full truncate rounded px-2 py-1 text-left text-sm transition ${
+                    activeSectionIndex === entry.index
+                      ? "bg-white font-medium text-blue-700 shadow-sm"
+                      : "text-gray-700 hover:bg-white"
+                  }`}
                   style={{ paddingLeft: `${entry.level * 10}px` }}
                   title={entry.text}
                 >
@@ -312,8 +486,12 @@ export default function MarkdownViewer({ fileUrl, bookId, onTextSelected, jumpTo
             li: ({ children }) => <li className="mb-1">{children}</li>,
             blockquote: ({ children }) => <blockquote className="mb-4 border-l-4 border-blue-200 bg-blue-50 px-4 py-2 text-gray-700">{children}</blockquote>,
             code: ({ className, children, ...props }: { className?: string; children?: ReactNode; inline?: boolean }) => {
+              const isMermaid = /language-mermaid\b/.test(className || "");
+              if (isMermaid) return <MermaidBlock chart={String(children ?? "")} />;
+
               const isSmiles = /language-(smiles|smi)\b/.test(className || "");
               if (isSmiles) return <SmilesBlock smiles={String(children ?? "")} />;
+
               const inline = !className;
               return inline ? (
                 <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-sm text-pink-700" {...props}>{children}</code>
@@ -325,6 +503,9 @@ export default function MarkdownViewer({ fileUrl, bookId, onTextSelected, jumpTo
               const codeChild = Array.isArray(children) ? children[0] : children;
               if (isValidElement(codeChild)) {
                 const className = (codeChild.props as { className?: string }).className || "";
+                if (/language-mermaid\b/.test(className)) {
+                  return <div className="mb-4">{children}</div>;
+                }
                 if (/language-(smiles|smi)\b/.test(className)) {
                   return <div className="mb-4">{children}</div>;
                 }
@@ -344,4 +525,8 @@ export default function MarkdownViewer({ fileUrl, bookId, onTextSelected, jumpTo
       </div>
     </div>
   );
-}
+}));
+
+MarkdownViewer.displayName = "MarkdownViewer";
+
+export default MarkdownViewer;
