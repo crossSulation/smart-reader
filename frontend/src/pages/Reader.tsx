@@ -28,7 +28,6 @@ function Reader() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [jumpToPage, setJumpToPage] = useState<number | undefined>(undefined);
-  const [aiTab, setAiTab] = useState<"search" | "ai">("search");
   const [leftPanelTab, setLeftPanelTab] = useState<"navigation" | "tags">("navigation");
   const [prefillReferenceTerm, setPrefillReferenceTerm] = useState("");
   const [selectedExcerpt, setSelectedExcerpt] = useState("");
@@ -68,7 +67,6 @@ function Reader() {
     if (!clean) return;
     setSelectedExcerpt(clean.slice(0, 400));
     setPrefillReferenceTerm(clean.slice(0, 200));
-    setAiTab("ai");
   }, []);
 
   const createNoteFromSelection = async () => {
@@ -603,8 +601,7 @@ function Reader() {
           <div className="min-w-0">{renderReaderContent()}</div>
           <aside className="border-t border-gray-200 bg-white overflow-hidden flex flex-col min-h-[28rem]">
             <AIPanel
-              aiTab={aiTab}
-              onAiTabChange={setAiTab}
+              fileType={activeFileType}
               selectedExcerpt={selectedExcerpt}
               learningTagsInput={learningTagsInput}
               onLearningTagsInputChange={setLearningTagsInput}
@@ -631,7 +628,6 @@ function Reader() {
               onDeleteNote={handleDeleteNote}
               onJumpTarget={handleJumpTarget}
               prefillReferenceTerm={prefillReferenceTerm}
-              isIndexing={localFile ? indexing : undefined}
             />
           </aside>
         </div>
@@ -742,8 +738,7 @@ function Reader() {
             <div className="flex h-full overflow-hidden bg-white">
               <div className="flex min-w-0 flex-1 flex-col">
                 <AIPanel
-                  aiTab={aiTab}
-                  onAiTabChange={setAiTab}
+                  fileType={activeFileType}
                   selectedExcerpt={selectedExcerpt}
                   learningTagsInput={learningTagsInput}
                   onLearningTagsInputChange={setLearningTagsInput}
@@ -770,7 +765,6 @@ function Reader() {
                   onDeleteNote={handleDeleteNote}
                   onJumpTarget={handleJumpTarget}
                   prefillReferenceTerm={prefillReferenceTerm}
-                  isIndexing={localFile ? indexing : undefined}
                 />
               </div>
             </div>

@@ -173,6 +173,39 @@ class WebReferenceResponse(BaseModel):
     references: List[WebReferenceItem]
 
 
+AgentToolName = Literal["read", "write", "search", "web_search", "quiz", "list_notes"]
+
+
+class AgentRequest(BaseModel):
+    message: str
+    tool: Optional[AgentToolName] = None
+    session_id: Optional[str] = None
+    allowed_tools: Optional[List[AgentToolName]] = None
+    document_type: Optional[Literal["pdf", "epub", "markdown"]] = None
+    top_k: int = 5
+    term: Optional[str] = None
+    note_content: Optional[str] = None
+    page: Optional[int] = None
+    tags: List[str] = []
+    quiz_count: int = 3
+
+
+class AgentToolResult(BaseModel):
+    tool: AgentToolName
+    status: Literal["success", "error"] = "success"
+    data: dict = {}
+    error: Optional[str] = None
+
+
+class AgentResponse(BaseModel):
+    book_id: int
+    tool: AgentToolName
+    message: str
+    session_id: Optional[str] = None
+    result: AgentToolResult
+    provider: str
+
+
 class TocItem(BaseModel):
     id: str
     title: str

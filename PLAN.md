@@ -29,8 +29,16 @@
 - [x] Reader notes panel for current book (`Recent Notes`) with live refresh after note creation
 - [x] Reader note actions: click-to-jump (when page exists), inline edit, inline tag edit preview, and delete
 - [x] Learning notes management APIs extended: list (`GET /api/learning/notes`), update (`PATCH /api/learning/notes/{note_id}`), delete (`DELETE /api/learning/notes/{note_id}`)
+- [x] Added LangChain-based AI agent endpoint (`POST /api/books/{book_id}/agent`) with tool-calling over `read`, `write`, `search`, `web_search`, and `quiz`
+- [x] Agent now supports per-call tool permissions (`allowed_tools`) and session continuity (`session_id`) in request contract
+- [x] Added real-time agent SSE streaming endpoint (`POST /api/books/{book_id}/agent/stream`) and frontend live tool-step rendering in AI panel
+- [x] AIPanel now uses a single unified agent chatbox (no Search/AI tabs); search, notes, quiz, and web reference flows are handled via one tool-calling conversation
+- [x] Unified chat now renders structured tool-result cards (search/read evidence, web links, quiz preview) with page-jump actions for book excerpts
+- [x] Legacy standalone `BookQA` and `BookSearch` components removed from active frontend flow
+- [x] Unified chat now persists per-book conversation/session state in localStorage and restores context when reopening a book
+- [x] Unified chat now uses file-type-tailored quick prompts (PDF/EPUB/Markdown) and a structured tool execution timeline
 
-### Current Status Snapshot (June 2, 2026)
+### Current Status Snapshot (June 3, 2026)
 - [x] Backend ingestion pipeline supports PDF/EPUB/Markdown with structure-aware chunking
 - [x] Chunk metadata includes page anchors and section path for grounding
 - [x] Search and QA citation UI shows section context
@@ -48,6 +56,10 @@
 - [x] Reader AI panel now shows recent notes for the active book with loading/error/empty states
 - [x] Reader supports note lifecycle operations in-place: create, read/list, edit content, edit tags, delete
 - [x] Reader note cards support page jump navigation for PDF-linked notes
+- [x] LangChain agent supports multi-turn memory by persisting/rehydrating session turns from `ai_interactions`
+- [x] BookQA now includes streaming agent mode with live tool events and token output
+- [x] Reader AIPanel now routes AI workflows through one unified streaming agent chat UI with optional tool toggles and quick prompts
+- [x] Unified chat remembers recent messages + tool permissions per book and resumes session continuity automatically
 
 ### API Contract: Summary JSON Schema
 - Endpoint: `GET /api/books/{book_id}/summary?template=cornell|bullet_points|sq3r`

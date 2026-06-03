@@ -5,15 +5,16 @@ AI endpoints:
 """
 import json
 import logging
-from typing import List
+from typing import List, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.models import AIInteraction, AICitation, DocumentChunk, User
+from app.models import AIInteraction, AICitation, DocumentChunk, User, Note
 from app.routers.auth import get_current_user
 from app.schemas import (
     QARequest,
@@ -24,6 +25,10 @@ from app.schemas import (
     SummaryCornellSchema,
     SummaryBulletPointsSchema,
     SummarySQ3RSchema,
+    AgentRequest,
+    AgentResponse,
+    AgentToolResult,
+    AgentToolName,
 )
 from app.services.embedding_service import embed_single, search_chunks
 from app.services.file_service import FileService
@@ -34,6 +39,8 @@ from app.services.llm_service import (
 )
 from app.services.retrieval_service import retrieve_hybrid, clear_retriever
 from app.services.reranker_service import rerank_candidates
+from app.services.web_reference_service import fetch_web_references
+from app.services.langchain_agent_service import run_langchain_book_agent, stream_langchain_book_agent
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/books", tags=["ai"])
@@ -134,6 +141,73 @@ def _normalize_rank_scores(hits: list[tuple[int, float]]) -> list[tuple[int, flo
         return [(cid, 0.5) for cid, _ in hits]
 
     return [(cid, (score - min_score) / score_range) for cid, score in hits]
+
+
+def _join_tags(tags: list[str]) -> str | None:
+    cleaned = [tag.strip() for tag in tags if tag.strip()]
+    return ",".join(cleaned) if cleaned else None
+
+
+def _resolve_agent_tool(message: str) -> AgentToolName:
+    text = (message or "").lower()
+    if any(token in text for token in ["quiz", "question me", "test me"]):
+        return "quiz"
+    if any(token in text for token in ["web", "reference", "wikipedia", "lookup"]):
+        return "web_search"
+    if any(token in text for token in ["show notes", "list notes", "my notes", "view notes", "open notes"]):
+        return "list_notes"
+    if any(token in text for token in ["save", "note", "write down", "remember"]):
+        return "write"
+    if any(token in text for token in ["read", "excerpt", "passage", "show me"]):
+        return "read"
+    return "search"
+
+
+def _run_search_tool(book_id: int, query: str, top_k: int, db: Session) -> list[SearchResult]:
+    settings = get_settings()
+    rows = _require_chunks(book_id, db)
+    query_vec = embed_single(query, settings.EMBEDDING_MODEL)
+
+    chunk_data = [(c.id, c.text, c.embedding) for c in rows]
+    top_hits = retrieve_hybrid(
+        book_id=book_id,
+        query=query,
+        query_vector=query_vec,
+        top_k=max(1, min(top_k, 20)) * 2,
+        chunks=chunk_data,
+    )
+
+    chunk_map = {c.id: c for c in rows}
+    candidates_for_rerank = [
+        (cid, chunk_map[cid].text, score)
+        for cid, score in top_hits
+        if cid in chunk_map
+    ]
+
+    try:
+        reranked = rerank_candidates(
+            query=query,
+            candidates=candidates_for_rerank,
+            top_k=max(1, min(top_k, 20)),
+        )
+        top_hits_final = reranked
+    except Exception:
+        top_hits_final = [(cid, score) for cid, _, score in candidates_for_rerank[:top_k]]
+
+    normalized_hits = _normalize_rank_scores(top_hits_final)
+    return [
+        SearchResult(
+            chunk_id=cid,
+            chunk_index=chunk_map[cid].chunk_index,
+            text=chunk_map[cid].text,
+            page_start=chunk_map[cid].page_start,
+            page_end=chunk_map[cid].page_end,
+            section_path=chunk_map[cid].section_path,
+            score=round(score, 4),
+        )
+        for cid, score in normalized_hits
+        if cid in chunk_map
+    ]
 
 
 def _extract_json_payload(raw_output: str) -> dict:
@@ -402,3 +476,91 @@ def get_book_summary(
         provider=settings.LLM_PROVIDER,
         chunks_used=len(context_texts),
     )
+
+
+@router.post("/{book_id}/agent", response_model=AgentResponse)
+def run_book_agent(
+    book_id: int,
+    payload: AgentRequest,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """LangChain tool-calling agent endpoint for read/write/search/web_search/quiz."""
+    settings = get_settings()
+    _get_book_or_404(book_id, user["id"], db)
+
+    tool: AgentToolName = payload.tool or _resolve_agent_tool(payload.message)
+
+    try:
+        agent_result = run_langchain_book_agent(
+            book_id=book_id,
+            user_id=user["id"],
+            payload=payload,
+            db=db,
+        )
+
+        result = AgentToolResult(
+            tool=tool,
+            data={
+                "output": agent_result.get("output", ""),
+                "trace": agent_result.get("trace", []),
+                "allowed_tools": agent_result.get("allowed_tools", []),
+            },
+        )
+
+        return AgentResponse(
+            book_id=book_id,
+            tool=tool,
+            message="LangChain agent completed.",
+            session_id=agent_result.get("session_id", payload.session_id),
+            result=result,
+            provider=settings.LLM_PROVIDER,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        return AgentResponse(
+            book_id=book_id,
+            tool=tool,
+            message="Agent tool execution failed.",
+            session_id=payload.session_id,
+            result=AgentToolResult(tool=tool, status="error", error=str(exc), data={}),
+            provider=settings.LLM_PROVIDER,
+        )
+
+
+@router.post("/{book_id}/agent/stream")
+async def run_book_agent_stream(
+    book_id: int,
+    payload: AgentRequest,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """SSE stream for real-time LangChain tool execution events and final output."""
+    settings = get_settings()
+    _get_book_or_404(book_id, user["id"], db)
+
+    tool: AgentToolName = payload.tool or _resolve_agent_tool(payload.message)
+
+    async def event_generator():
+        try:
+            async for event in stream_langchain_book_agent(
+                book_id=book_id,
+                user_id=user["id"],
+                payload=payload,
+                db=db,
+            ):
+                if event.get("type") == "final":
+                    event["tool"] = tool
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except Exception as exc:
+            error_event = {
+                "type": "error",
+                "tool": tool,
+                "provider": settings.LLM_PROVIDER,
+                "message": str(exc),
+            }
+            yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

@@ -397,29 +397,86 @@ const MarkdownViewer = memo(forwardRef<MarkdownViewerHandle, MarkdownViewerProps
     scrollToSection(jumpToSection);
   }, [jumpToSection, scrollToSection]);
 
-  const headingRenderCounts = {
-    1: new Map<string, number>(),
-    2: new Map<string, number>(),
-    3: new Map<string, number>(),
-    4: new Map<string, number>(),
-    5: new Map<string, number>(),
-    6: new Map<string, number>(),
-  };
-
-  const makeHeadingRenderer = (level: 1 | 2 | 3 | 4 | 5 | 6, className: string) => {
-    return ({ children }: { children?: ReactNode }) => {
-      const text = textFromNode(children).trim();
-      const rendered = headingRenderCounts[level].get(text) ?? 0;
-      headingRenderCounts[level].set(text, rendered + 1);
-
-      const matchingHeadings = (headingBuckets[level] ?? []).filter((item) => item.text === text);
-      const id = matchingHeadings[rendered]?.id ?? slugify(text);
-      const domId = `${viewerInstanceId}-${id}`;
-      const Tag = `h${level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
-
-      return <Tag id={domId} className={className}>{children}</Tag>;
+  const markdownBody = useMemo(() => {
+    const headingRenderCounts = {
+      1: new Map<string, number>(),
+      2: new Map<string, number>(),
+      3: new Map<string, number>(),
+      4: new Map<string, number>(),
+      5: new Map<string, number>(),
+      6: new Map<string, number>(),
     };
-  };
+
+    const makeHeadingRenderer = (level: 1 | 2 | 3 | 4 | 5 | 6, className: string) => {
+      return ({ children }: { children?: ReactNode }) => {
+        const text = textFromNode(children).trim();
+        const rendered = headingRenderCounts[level].get(text) ?? 0;
+        headingRenderCounts[level].set(text, rendered + 1);
+
+        const matchingHeadings = (headingBuckets[level] ?? []).filter((item) => item.text === text);
+        const id = matchingHeadings[rendered]?.id ?? slugify(text);
+        const domId = `${viewerInstanceId}-${id}`;
+        const Tag = `h${level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
+
+        return <Tag id={domId} className={className}>{children}</Tag>;
+      };
+    };
+
+    return (
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        components={{
+          h1: makeHeadingRenderer(1, "mb-4 mt-6 text-3xl font-bold text-gray-900 first:mt-0"),
+          h2: makeHeadingRenderer(2, "mb-3 mt-6 text-2xl font-semibold text-gray-900"),
+          h3: makeHeadingRenderer(3, "mb-2 mt-5 text-xl font-semibold text-gray-900"),
+          h4: makeHeadingRenderer(4, "mb-2 mt-4 text-lg font-semibold text-gray-900"),
+          h5: makeHeadingRenderer(5, "mb-2 mt-4 text-base font-semibold text-gray-900"),
+          h6: makeHeadingRenderer(6, "mb-2 mt-4 text-sm font-semibold uppercase tracking-wide text-gray-600"),
+          p: ({ children }) => <p className="mb-4 leading-7 text-gray-800">{children}</p>,
+          ul: ({ children }) => <ul className="mb-4 list-disc pl-6 text-gray-800">{children}</ul>,
+          ol: ({ children }) => <ol className="mb-4 list-decimal pl-6 text-gray-800">{children}</ol>,
+          li: ({ children }) => <li className="mb-1">{children}</li>,
+          blockquote: ({ children }) => <blockquote className="mb-4 border-l-4 border-blue-200 bg-blue-50 px-4 py-2 text-gray-700">{children}</blockquote>,
+          code: ({ className, children, ...props }: { className?: string; children?: ReactNode; inline?: boolean }) => {
+            const isMermaid = /language-mermaid\b/.test(className || "");
+            if (isMermaid) return <MermaidBlock chart={String(children ?? "")} />;
+
+            const isSmiles = /language-(smiles|smi)\b/.test(className || "");
+            if (isSmiles) return <SmilesBlock smiles={String(children ?? "")} />;
+
+            const inline = !className;
+            return inline ? (
+              <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-sm text-pink-700" {...props}>{children}</code>
+            ) : (
+              <code className="block overflow-x-auto rounded-lg bg-gray-900 p-4 font-mono text-sm text-gray-100" {...props}>{children}</code>
+            );
+          },
+          pre: ({ children }) => {
+            const codeChild = Array.isArray(children) ? children[0] : children;
+            if (isValidElement(codeChild)) {
+              const className = (codeChild.props as { className?: string }).className || "";
+              if (/language-mermaid\b/.test(className)) {
+                return <div className="mb-4">{children}</div>;
+              }
+              if (/language-(smiles|smi)\b/.test(className)) {
+                return <div className="mb-4">{children}</div>;
+              }
+            }
+            return <pre className="mb-4">{children}</pre>;
+          },
+          table: ({ children }) => <div className="mb-4 overflow-x-auto"><table className="min-w-full border border-gray-200 text-sm">{children}</table></div>,
+          thead: ({ children }) => <thead className="bg-gray-100">{children}</thead>,
+          th: ({ children }) => <th className="border border-gray-200 px-3 py-2 text-left font-semibold text-gray-700">{children}</th>,
+          td: ({ children }) => <td className="border border-gray-200 px-3 py-2 text-gray-800">{children}</td>,
+          a: ({ href, children }) => <a href={href} target="_blank" rel="noreferrer" className="text-blue-600 underline hover:text-blue-700">{children}</a>,
+          hr: () => <hr className="my-6 border-gray-200" />,
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    );
+  }, [content, headingBuckets, viewerInstanceId]);
 
   if (loading) {
     return <div className="py-8 text-center text-gray-500">Loading markdown...</div>;
@@ -463,58 +520,7 @@ const MarkdownViewer = memo(forwardRef<MarkdownViewerHandle, MarkdownViewerProps
       )}
 
       <div ref={contentRef} onMouseUp={handleContentMouseUp} className="min-w-0 flex-1 overflow-y-auto px-6 py-5">
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm, remarkMath]}
-          rehypePlugins={[rehypeKatex]}
-          components={{
-            h1: makeHeadingRenderer(1, "mb-4 mt-6 text-3xl font-bold text-gray-900 first:mt-0"),
-            h2: makeHeadingRenderer(2, "mb-3 mt-6 text-2xl font-semibold text-gray-900"),
-            h3: makeHeadingRenderer(3, "mb-2 mt-5 text-xl font-semibold text-gray-900"),
-            h4: makeHeadingRenderer(4, "mb-2 mt-4 text-lg font-semibold text-gray-900"),
-            h5: makeHeadingRenderer(5, "mb-2 mt-4 text-base font-semibold text-gray-900"),
-            h6: makeHeadingRenderer(6, "mb-2 mt-4 text-sm font-semibold uppercase tracking-wide text-gray-600"),
-            p: ({ children }) => <p className="mb-4 leading-7 text-gray-800">{children}</p>,
-            ul: ({ children }) => <ul className="mb-4 list-disc pl-6 text-gray-800">{children}</ul>,
-            ol: ({ children }) => <ol className="mb-4 list-decimal pl-6 text-gray-800">{children}</ol>,
-            li: ({ children }) => <li className="mb-1">{children}</li>,
-            blockquote: ({ children }) => <blockquote className="mb-4 border-l-4 border-blue-200 bg-blue-50 px-4 py-2 text-gray-700">{children}</blockquote>,
-            code: ({ className, children, ...props }: { className?: string; children?: ReactNode; inline?: boolean }) => {
-              const isMermaid = /language-mermaid\b/.test(className || "");
-              if (isMermaid) return <MermaidBlock chart={String(children ?? "")} />;
-
-              const isSmiles = /language-(smiles|smi)\b/.test(className || "");
-              if (isSmiles) return <SmilesBlock smiles={String(children ?? "")} />;
-
-              const inline = !className;
-              return inline ? (
-                <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-sm text-pink-700" {...props}>{children}</code>
-              ) : (
-                <code className="block overflow-x-auto rounded-lg bg-gray-900 p-4 font-mono text-sm text-gray-100" {...props}>{children}</code>
-              );
-            },
-            pre: ({ children }) => {
-              const codeChild = Array.isArray(children) ? children[0] : children;
-              if (isValidElement(codeChild)) {
-                const className = (codeChild.props as { className?: string }).className || "";
-                if (/language-mermaid\b/.test(className)) {
-                  return <div className="mb-4">{children}</div>;
-                }
-                if (/language-(smiles|smi)\b/.test(className)) {
-                  return <div className="mb-4">{children}</div>;
-                }
-              }
-              return <pre className="mb-4">{children}</pre>;
-            },
-            table: ({ children }) => <div className="mb-4 overflow-x-auto"><table className="min-w-full border border-gray-200 text-sm">{children}</table></div>,
-            thead: ({ children }) => <thead className="bg-gray-100">{children}</thead>,
-            th: ({ children }) => <th className="border border-gray-200 px-3 py-2 text-left font-semibold text-gray-700">{children}</th>,
-            td: ({ children }) => <td className="border border-gray-200 px-3 py-2 text-gray-800">{children}</td>,
-            a: ({ href, children }) => <a href={href} target="_blank" rel="noreferrer" className="text-blue-600 underline hover:text-blue-700">{children}</a>,
-            hr: () => <hr className="my-6 border-gray-200" />,
-          }}
-        >
-          {content}
-        </ReactMarkdown>
+        {markdownBody}
       </div>
     </div>
   );
