@@ -181,6 +181,14 @@ const MarkdownViewer = memo(forwardRef<MarkdownViewerHandle, MarkdownViewerProps
   const [activeSectionIndex, setActiveSectionIndex] = useState(0);
   const contentRef = useRef<HTMLDivElement>(null);
 
+  const handleContentMouseUp = useCallback(() => {
+    if (!onTextSelected) return;
+    const text = window.getSelection()?.toString().trim() || "";
+    if (text) {
+      onTextSelected(text);
+    }
+  }, [onTextSelected]);
+
   useEffect(() => {
     const fetchMarkdown = async () => {
       try {
@@ -243,21 +251,6 @@ const MarkdownViewer = memo(forwardRef<MarkdownViewerHandle, MarkdownViewerProps
 
     void fetchToc();
   }, [bookId]);
-
-  useEffect(() => {
-    if (!contentRef.current || !onTextSelected) return;
-
-    const handleMouseUp = () => {
-      const text = window.getSelection()?.toString().trim() || "";
-      if (text) {
-        onTextSelected(text);
-      }
-    };
-
-    const element = contentRef.current;
-    element.addEventListener("mouseup", handleMouseUp);
-    return () => element.removeEventListener("mouseup", handleMouseUp);
-  }, [onTextSelected]);
 
   const headings = useMemo<HeadingItem[]>(() => {
     const lines = content.split(/\r?\n/);
@@ -469,7 +462,7 @@ const MarkdownViewer = memo(forwardRef<MarkdownViewerHandle, MarkdownViewerProps
         </aside>
       )}
 
-      <div ref={contentRef} className="min-w-0 flex-1 overflow-y-auto px-6 py-5">
+      <div ref={contentRef} onMouseUp={handleContentMouseUp} className="min-w-0 flex-1 overflow-y-auto px-6 py-5">
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkMath]}
           rehypePlugins={[rehypeKatex]}

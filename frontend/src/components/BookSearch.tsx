@@ -27,45 +27,49 @@ export default function BookSearch({ bookId, onJumpToPage, isIndexing = false, i
   const [error, setError] = useState<string | null>(null);
   const [indexed, setIndexed] = useState<boolean | null>(indexedProp);
 
+  const fetchIndexedStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/books/${bookId}/indexed-status`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setIndexed(data.indexed);
+    } catch (err) {
+      console.error("Failed to fetch indexed status:", err);
+    }
+  }, [bookId]);
+
   // Fetch indexed status from backend on mount or when bookId changes
   useEffect(() => {
-    const fetchIndexedStatus = async () => {
-      try {
-        const res = await fetch(`/api/books/${bookId}/indexed-status`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setIndexed(data.indexed);
-        }
-      } catch (err) {
-        console.error("Failed to fetch indexed status:", err);
-      }
-    };
-
     fetchIndexedStatus();
-  }, [bookId]);
+  }, [fetchIndexedStatus]);
 
   // Update indexed state when isIndexing changes (for auto-indexing completion)
   useEffect(() => {
     if (isIndexing === false && indexed === null) {
       // Auto-indexing just completed, refresh status
-      const fetchIndexedStatus = async () => {
-        try {
-          const res = await fetch(`/api/books/${bookId}/indexed-status`, {
-            headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-          });
-          if (res.ok) {
-            const data = await res.json();
-            setIndexed(data.indexed);
-          }
-        } catch (err) {
-          console.error("Failed to fetch indexed status:", err);
-        }
-      };
       fetchIndexedStatus();
     }
-  }, [isIndexing, bookId, indexed]);
+  }, [isIndexing, indexed, fetchIndexedStatus]);
+
+  // Poll status briefly while background indexing may still be running.
+  useEffect(() => {
+    if (indexed === true) return;
+
+    const intervalId = window.setInterval(() => {
+      void fetchIndexedStatus();
+    }, 3000);
+
+    const timeoutId = window.setTimeout(() => {
+      window.clearInterval(intervalId);
+    }, 60000);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.clearTimeout(timeoutId);
+    };
+  }, [indexed, fetchIndexedStatus]);
 
   const handleIndex = useCallback(async () => {
     setLoading(true);
@@ -81,12 +85,15 @@ export default function BookSearch({ bookId, onJumpToPage, isIndexing = false, i
       }
       const result = await res.json();
       setIndexed(result.indexed);
+      if (!result.indexed) {
+        void fetchIndexedStatus();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Index failed");
     } finally {
       setLoading(false);
     }
-  }, [bookId]);
+  }, [bookId, fetchIndexedStatus]);
 
   const handleSearch = useCallback(async () => {
     if (!query.trim()) return;

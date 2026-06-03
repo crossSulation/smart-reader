@@ -1,20 +1,66 @@
 # backend/app/routers/upload.py
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import Dict, Any
 import os
 import uuid
 from datetime import datetime
 import tempfile
+import logging
 
-from app.database import get_db
-from app.models import FileMetadata, Book
+from app.database import get_db, SessionLocal
+from app.models import FileMetadata, Book, DocumentChunk
 from app.services.file_service import FileService
 from app.services.pdf_service import extract_pdf_info, get_pdf_page_count
 from app.routers.auth import get_current_user
 from app.services.oss_service import OSSManager
 
 router = APIRouter(prefix="/upload", tags=["upload"])
+logger = logging.getLogger(__name__)
+
+
+def _trigger_background_index(book_id: int, owner_id: int, file_url: str, file_type: str) -> None:
+    """Index supported book files in the background after upload."""
+    if file_type not in {"pdf", "epub", "markdown"}:
+        return
+
+    db = SessionLocal()
+    try:
+        book = db.query(Book).filter(Book.id == book_id, Book.owner_id == owner_id).first()
+        if not book:
+            return
+
+        already_indexed = (
+            db.query(DocumentChunk)
+            .filter(DocumentChunk.book_id == book_id, DocumentChunk.indexed_at.isnot(None))
+            .count()
+        )
+        if already_indexed > 0:
+            return
+
+        from app.services.ingestion_service import ingest_book
+
+        chunks_stored = ingest_book(
+            book_id=book_id,
+            file_url=file_url,
+            file_type=file_type,
+            db=db,
+        )
+        logger.info(
+            "Background indexing completed | book_id=%s owner_id=%s chunks=%s",
+            book_id,
+            owner_id,
+            chunks_stored,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Background indexing failed | book_id=%s owner_id=%s reason=%s",
+            book_id,
+            owner_id,
+            exc,
+        )
+    finally:
+        db.close()
 
 
 def _normalize_upload_file_type(file_name: str, content_type: str | None) -> str:
@@ -58,6 +104,7 @@ def _is_allowed_file(file_name: str, content_type: str | None) -> bool:
 
 @router.post("/")
 async def upload_file(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -136,6 +183,15 @@ async def upload_file(
             else:
                 book_id = existing_book.id
             
+            if book_id and normalized_file_type in {"pdf", "epub", "markdown"}:
+                background_tasks.add_task(
+                    _trigger_background_index,
+                    book_id,
+                    user["id"],
+                    file_url,
+                    normalized_file_type,
+                )
+
             return {
                 "filename": file.filename,
                 "stored_name": unique_filename,
@@ -144,7 +200,8 @@ async def upload_file(
                 "pages": pages,
                 "id": file_metadata.id,
                 "book_id": book_id,
-                "file_url": file_url  # 返回文件URL
+                "file_url": file_url,  # 返回文件URL
+                "background_indexing_started": bool(book_id and normalized_file_type in {"pdf", "epub", "markdown"}),
             }
             
         finally:

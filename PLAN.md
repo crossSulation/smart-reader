@@ -21,7 +21,7 @@
 - [x] Markdown renderer supports LaTeX math and SMILES chemical structure diagrams (both AI panel and document viewer)
 - [x] Markdown document viewer now renders Mermaid diagrams from fenced `mermaid` code blocks
 - [x] Ingestion quality metrics endpoint (`GET /api/books/{book_id}/ingestion-metrics`)
-- [x] Auto-index after upload in Reader (background indexing status shown in UI)
+- [x] Auto-index after upload at backend level (upload route enqueues background indexing for PDF/EPUB/Markdown)
 - [x] Indexed-state API (`GET /api/books/{book_id}/indexed-status`) and Search UI hides redundant Index action
 - [x] AI summary templating options in panel (Cornell, Bullet Points, SQ3R)
 - [x] Summary response moved to JSON schema contract (`summary_json`) for frontend-driven rendering
