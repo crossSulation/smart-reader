@@ -2,7 +2,9 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(() => ({
+  clearScreen: false,
+  envPrefix: ['VITE_', 'TAURI_'],
   plugins: [
     react(),
     {
@@ -20,7 +22,11 @@ export default defineConfig({
     }
   ],
   server: {
-    port: 5173,
+    port: 1420,
+    strictPort: true,
+    watch: {
+      ignored: ['**/src-tauri/**'],
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:8000', // 后端地址
@@ -31,4 +37,9 @@ export default defineConfig({
   optimizeDeps: {
     include: ['@mui/material']
   },
-})
+  build: {
+    target: process.env.TAURI_PLATFORM === 'windows' ? 'chrome105' : 'safari13',
+    minify: process.env.TAURI_DEBUG ? false : 'esbuild',
+    sourcemap: !!process.env.TAURI_DEBUG,
+  },
+}))

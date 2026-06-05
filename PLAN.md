@@ -37,8 +37,11 @@
 - [x] Legacy standalone `BookQA` and `BookSearch` components removed from active frontend flow
 - [x] Unified chat now persists per-book conversation/session state in localStorage and restores context when reopening a book
 - [x] Unified chat now uses file-type-tailored quick prompts (PDF/EPUB/Markdown) and a structured tool execution timeline
+- [x] Unified chat now supports multiple conversation sessions per book with persisted per-session history and quick session switching
+- [x] Frontend desktop scaffolding added with Tauri 2.0 (`src-tauri`, Tauri config/capabilities, npm scripts, and Vite Tauri-ready settings)
+- [x] Added root launcher script `start_desktop.bat` to start backend + Tauri desktop flow from one command
 
-### Current Status Snapshot (June 3, 2026)
+### Current Status Snapshot (June 4, 2026)
 - [x] Backend ingestion pipeline supports PDF/EPUB/Markdown with structure-aware chunking
 - [x] Chunk metadata includes page anchors and section path for grounding
 - [x] Search and QA citation UI shows section context
@@ -60,6 +63,9 @@
 - [x] BookQA now includes streaming agent mode with live tool events and token output
 - [x] Reader AIPanel now routes AI workflows through one unified streaming agent chat UI with optional tool toggles and quick prompts
 - [x] Unified chat remembers recent messages + tool permissions per book and resumes session continuity automatically
+- [x] Unified chat supports multiple saved sessions per book (create/switch) while preserving each session's chat history and tool state
+- [x] Frontend can be launched in desktop mode via `npm run tauri:dev` once Rust toolchain is installed locally
+- [x] Desktop startup helper validates prerequisites via `start_desktop.bat --check` and then launches backend + desktop in sequence
 
 ### API Contract: Summary JSON Schema
 - Endpoint: `GET /api/books/{book_id}/summary?template=cornell|bullet_points|sq3r`
@@ -670,7 +676,7 @@ Ship a reliable "real smart reader" by improving:
 ---
 
 ## Immediate Next Steps (This Week)
-1. Start next roadmap cycle planning (post-Week 4 backlog prioritization).
-2. Add weak-topic review drill-down UX from weekly summary/profile analytics.
-3. Add CI job to run `scripts/release_check.py --strict` on staging credentials.
-4. Evaluate Mermaid code-splitting to reduce the frontend production bundle size.
+1. Install Rust toolchain via `rustup` on dev machines to unblock Tauri desktop runtime/build.
+2. Start next roadmap cycle planning (post-Week 4 backlog prioritization).
+3. Add weak-topic review drill-down UX from weekly summary/profile analytics.
+4. Add CI job to run `scripts/release_check.py --strict` on staging credentials.

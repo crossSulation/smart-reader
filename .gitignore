@@ -63,6 +63,8 @@ frontend/dist/
 frontend/.vite/
 frontend/.yarn/
 frontend/yarn.lock
+frontend/src-tauri/target/
+frontend/src-tauri/gen/
 
 # Logs
 logs/
