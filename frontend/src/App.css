@@ -43,3 +43,50 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Custom Titlebar (Tauri desktop) */
+.titlebar {
+  height: 36px;
+  background: #1976d2;
+  user-select: none;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  flex-shrink: 0;
+}
+
+.titlebar-title {
+  display: flex;
+  align-items: center;
+  padding-left: 12px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.titlebar-controls {
+  display: flex;
+}
+
+.titlebar-button {
+  appearance: none;
+  padding: 0;
+  margin: 0;
+  border: none;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 46px;
+  background-color: transparent;
+  color: #ffffff;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.titlebar-button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.titlebar-close-button:hover {
+  background: #e81123;
+  color: #ffffff;
+}

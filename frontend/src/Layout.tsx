@@ -4,6 +4,7 @@ import { AppBar, Toolbar, Typography, Button, Box } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
 import LanguageSwitcher from './components/LanguageSwitcher';
+import CustomTitleBar from './components/CustomTitleBar';
 
 const Layout: React.FC = () => {
   const { t } = useTranslation();
@@ -48,7 +49,10 @@ const Layout: React.FC = () => {
               </Button>
             </Box>
           </Toolbar>
-        </AppBar>) : null}
+        </AppBar>
+      ) : (
+        <CustomTitleBar />
+      )}
 
       <Box component="main" sx={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
         <Outlet />
