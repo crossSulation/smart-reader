@@ -1,10 +1,14 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useTranslation } from 'react-i18next';
+import LanguageSwitcher from './LanguageSwitcher';
 
 const CustomTitleBar: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const titlebarRef = useRef<HTMLDivElement>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   useEffect(() => {
     const appWindow = getCurrentWindow();
@@ -28,10 +32,54 @@ const CustomTitleBar: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (profileOpen && titlebarRef.current && !titlebarRef.current.contains(e.target as Node)) {
+        setProfileOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [profileOpen]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setProfileOpen(false);
+    navigate('/login', { replace: true });
+  };
+
   return (
     <div ref={titlebarRef} className="titlebar" data-tauri-drag-region>
-      <div className="titlebar-title" data-tauri-drag-region>
-        {t('common.appName')}
+      <div className="titlebar-left" data-tauri-drag-region>
+        <span className="titlebar-brand" data-tauri-drag-region>
+          {t('common.appName')}
+        </span>
+        <nav className="titlebar-nav">
+          <Link to="/library" className="titlebar-nav-item">{t('common.home')}</Link>
+          <Link to="/review" className="titlebar-nav-item">{t('common.review', 'Review')}</Link>
+          <div className="titlebar-profile-wrap">
+            <button
+              className={`titlebar-nav-item titlebar-profile-trigger ${profileOpen ? 'active' : ''}`}
+              onClick={(e) => { e.stopPropagation(); setProfileOpen(!profileOpen); }}
+            >
+              {t('common.profile')}
+              <svg width="10" height="10" viewBox="0 0 24 24" className={`titlebar-chevron ${profileOpen ? 'open' : ''}`}>
+                <path fill="currentColor" d="M7 10l5 5 5-5z" />
+              </svg>
+            </button>
+            {profileOpen && (
+              <div className="titlebar-dropdown">
+                <div className="titlebar-dropdown-item">
+                  <LanguageSwitcher />
+                </div>
+                <button className="titlebar-dropdown-item titlebar-logout-btn" onClick={handleLogout}>
+                  {t('common.logout')}
+                </button>
+              </div>
+            )}
+          </div>
+        </nav>
       </div>
       <div className="titlebar-controls">
         <button id="titlebar-minimize" className="titlebar-button" title="Minimize">
