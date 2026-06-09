@@ -144,10 +144,17 @@
   color: #333;
 }
 
-.titlebar-dropdown-item.language-switcher {
-  display: flex;
-  justify-content: center;
-  padding: 10px 14px;
+.titlebar-dropdown-link {
+  display: block;
+  width: 100%;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: #333;
+  text-decoration: none;
+}
+
+.titlebar-dropdown-link:hover {
+  background: #f5f5f5;
 }
 
 .titlebar-logout-btn {

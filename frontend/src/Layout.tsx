@@ -3,7 +3,6 @@ import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { AppBar, Toolbar, Typography, Button, Box } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
-import LanguageSwitcher from './components/LanguageSwitcher';
 import CustomTitleBar from './components/CustomTitleBar';
 
 const Layout: React.FC = () => {
@@ -43,7 +42,6 @@ const Layout: React.FC = () => {
               <Button color="inherit" component={Link} to="/profile">
                 {t('common.profile')}
               </Button>
-              <LanguageSwitcher />
               <Button color="inherit" onClick={handleLogout}>
                 {t('common.logout')}
               </Button>

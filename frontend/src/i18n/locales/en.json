@@ -14,7 +14,9 @@
     "edit": "Edit",
     "upload": "Upload",
     "search": "Search",
-    "settings": "Settings"
+    "settings": "Settings",
+    "refresh": "Refresh",
+    "loading": "Loading..."
   },
   "noBooks": {
     "title": "📚 No Books Yet",
@@ -67,13 +69,45 @@
     "passwordHint": "Password must be at least 6 characters long",
     "updatePassword": "Update Password",
     "updating": "Updating...",
+    "loadError": "Failed to load profile",
+    "personalizationTitle": "Personalization Settings",
+    "explanationLevel": "Explanation Level",
+    "levelBeginner": "Beginner",
+    "levelIntermediate": "Intermediate",
+    "levelExpert": "Expert",
+    "studyGoal": "Study Goal",
+    "studyGoalPlaceholder": "e.g. Learn distributed systems fundamentals",
+    "weakTopics": "Weak Topics",
+    "weakTopicsPlaceholder": "topic1, topic2, topic3",
+    "commaSeparatedHint": "Use comma-separated values",
+    "reviewedTags": "Frequently Reviewed Tags",
+    "reviewedTagsPlaceholder": "tag1, tag2, tag3",
+    "saving": "Saving...",
+    "savePersonalization": "Save Settings",
+    "weeklySummary": "Weekly Learning Summary",
+    "summaryPeriod": "Last {{days}} days",
+    "pagesRead": "Pages Read",
+    "notesCreated": "Notes Created",
+    "flashcardsCreated": "Flashcards Created",
+    "reviewAccuracy": "Review Accuracy",
+    "topWeakTopics": "Top Weak Topics",
+    "noWeakTopics": "No weak topics detected this week.",
+    "weeklyTrend": "Weekly Activity Trend",
+    "metricTotal": "Total",
+    "metricNotes": "Notes",
+    "metricFlashcards": "Flashcards",
+    "metricReviews": "Reviews",
+    "noSummary": "Summary is not available yet.",
+    "noTrendData": "No trend data yet.",
+    "trendCaption": "Showing daily trend for:",
     "errors": {
       "fillAllFields": "Please fill in all fields",
       "passwordMismatch": "New passwords do not match",
       "passwordTooShort": "Password must be at least 6 characters long"
     },
     "success": {
-      "passwordChanged": "Password changed successfully"
+      "passwordChanged": "Password changed successfully",
+      "settingsSaved": "Personalization settings saved."
     }
   },
   "bookCard": {

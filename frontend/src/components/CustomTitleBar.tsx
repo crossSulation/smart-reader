@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useTranslation } from 'react-i18next';
-import LanguageSwitcher from './LanguageSwitcher';
 
 const CustomTitleBar: React.FC = () => {
   const { t } = useTranslation();
@@ -70,9 +69,13 @@ const CustomTitleBar: React.FC = () => {
             </button>
             {profileOpen && (
               <div className="titlebar-dropdown">
-                <div className="titlebar-dropdown-item language-switcher">
-                  <LanguageSwitcher />
-                </div>
+                <Link
+                  to="/profile"
+                  className="titlebar-dropdown-item titlebar-dropdown-link"
+                  onClick={() => setProfileOpen(false)}
+                >
+                  {t('common.profile')}
+                </Link>
                 <button className="titlebar-dropdown-item titlebar-logout-btn" onClick={handleLogout}>
                   {t('common.logout')}
                 </button>

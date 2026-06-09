@@ -14,7 +14,9 @@
     "edit": "编辑",
     "upload": "上传",
     "search": "搜索",
-    "settings": "设置"
+    "settings": "设置",
+    "refresh": "刷新",
+    "loading": "加载中..."
   },
   "noBooks": {
     "title": "📚 暂无书籍",
@@ -67,13 +69,45 @@
     "passwordHint": "密码长度至少为6位",
     "updatePassword": "更新密码",
     "updating": "更新中...",
+    "loadError": "加载个人资料失败",
+    "personalizationTitle": "个性化设置",
+    "explanationLevel": "解释深度",
+    "levelBeginner": "初级",
+    "levelIntermediate": "中级",
+    "levelExpert": "高级",
+    "studyGoal": "学习目标",
+    "studyGoalPlaceholder": "例如：学习分布式系统基础",
+    "weakTopics": "薄弱知识点",
+    "weakTopicsPlaceholder": "知识点1, 知识点2, 知识点3",
+    "commaSeparatedHint": "使用逗号分隔多个值",
+    "reviewedTags": "常复习标签",
+    "reviewedTagsPlaceholder": "标签1, 标签2, 标签3",
+    "saving": "保存中...",
+    "savePersonalization": "保存设置",
+    "weeklySummary": "本周学习概览",
+    "summaryPeriod": "最近{{days}}天",
+    "pagesRead": "已读页数",
+    "notesCreated": "笔记数量",
+    "flashcardsCreated": "闪卡数量",
+    "reviewAccuracy": "复习正确率",
+    "topWeakTopics": "薄弱知识点排行",
+    "noWeakTopics": "本周暂未检测到薄弱知识点。",
+    "weeklyTrend": "本周活动趋势",
+    "metricTotal": "总计",
+    "metricNotes": "笔记",
+    "metricFlashcards": "闪卡",
+    "metricReviews": "复习",
+    "noSummary": "暂无学习数据。",
+    "noTrendData": "暂无趋势数据。",
+    "trendCaption": "展示每日趋势：",
     "errors": {
       "fillAllFields": "请填写所有必填字段",
       "passwordMismatch": "两次输入的密码不一致",
       "passwordTooShort": "密码长度至少为6位"
     },
     "success": {
-      "passwordChanged": "密码修改成功"
+      "passwordChanged": "密码修改成功",
+      "settingsSaved": "个性化设置已保存。"
     }
   },
   "bookCard": {

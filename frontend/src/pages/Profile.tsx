@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { PersonOutlined, EmailOutlined } from '@mui/icons-material';
 import { TextField, Button, Alert, Paper, Typography, Box, Avatar, MenuItem } from '@mui/material';
+import LanguageSwitcher from '../components/LanguageSwitcher';
 
 interface User {
   id: number;
@@ -39,19 +40,21 @@ interface WeeklySummary {
 type TrendMetric = 'activity_total' | 'notes_created' | 'flashcards_created' | 'reviews_completed';
 
 function WeeklyTrendGraph({ data, metric }: { data: WeeklySummary['daily_trend']; metric: TrendMetric }) {
+  const { t } = useTranslation();
+
   if (!data || data.length === 0) {
     return (
       <Typography variant="body2" color="text.secondary">
-        No trend data yet.
+        {t('profile.noTrendData')}
       </Typography>
     );
   }
 
   const metricLabelMap: Record<TrendMetric, string> = {
-    activity_total: 'Total activity',
-    notes_created: 'Notes',
-    flashcards_created: 'Flashcards',
-    reviews_completed: 'Reviews',
+    activity_total: t('profile.metricTotal'),
+    notes_created: t('profile.metricNotes'),
+    flashcards_created: t('profile.metricFlashcards'),
+    reviews_completed: t('profile.metricReviews'),
   };
 
   const metricColorMap: Record<TrendMetric, string> = {
@@ -99,7 +102,7 @@ function WeeklyTrendGraph({ data, metric }: { data: WeeklySummary['daily_trend']
         })}
       </svg>
       <Typography variant="caption" color="text.secondary">
-        Showing daily trend for: {selectedLabel}
+        {t('profile.trendCaption')} {selectedLabel}
       </Typography>
     </Box>
   );
@@ -283,7 +286,7 @@ function Profile() {
 
       const data: PersonalizationProfile = await res.json();
       setPersonalization(data);
-      setSuccess('Personalization settings saved.');
+      setSuccess(t('profile.success.settingsSaved'));
       await fetchWeeklySummary();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save personalization settings');
@@ -292,15 +295,19 @@ function Profile() {
     }
   };
 
-  if (loading) return <div className="p-8 text-center">Loading...</div>;
+  if (loading) return <div className="p-8 text-center">{t('common.loading')}</div>;
 
-  if (!user) return <div className="p-8 text-center">Failed to load profile</div>;
+  if (!user) return <div className="p-8 text-center">{t('profile.loadError')}</div>;
 
   return (
     <div className="p-8 max-w-2xl mx-auto">
       <Typography variant="h4" component="h1" gutterBottom>
         {t('profile.pageTitle')}
       </Typography>
+
+      <Box mb={3}>
+        <LanguageSwitcher />
+      </Box>
 
       {/* User Info Section */}
       <Paper elevation={2} className="p-6 mb-8">

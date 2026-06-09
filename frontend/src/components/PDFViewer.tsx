@@ -120,14 +120,22 @@ export default function PDFViewer({
     }
   };
 
+  const pageNumberRef = useRef(pageNumber);
+  const isAnimatingRef = useRef(isAnimating);
+  const numPagesRef = useRef(numPages);
+
+  useEffect(() => { pageNumberRef.current = pageNumber; }, [pageNumber]);
+  useEffect(() => { isAnimatingRef.current = isAnimating; }, [isAnimating]);
+  useEffect(() => { numPagesRef.current = numPages; }, [numPages]);
+
   const handlePageChange = useCallback((newPage: number) => {
-    if (newPage >= 1 && newPage <= numPages && !isAnimating) {
-      setAnimationDirection(newPage > pageNumber ? "next" : "previous");
+    if (newPage >= 1 && newPage <= numPagesRef.current && newPage !== pageNumberRef.current && !isAnimatingRef.current) {
+      setAnimationDirection(newPage > pageNumberRef.current ? "next" : "previous");
       setIsAnimating(true);
       setPageNumber(newPage);
-      setTimeout(() => setIsAnimating(false), 300); // Animation duration
+      setTimeout(() => setIsAnimating(false), 300);
     }
-  }, [numPages, isAnimating, pageNumber]);
+  }, []);
 
   // Touch event handlers for swipe gestures
   const handleTouchStart = useCallback((e: TouchEvent) => {
@@ -136,27 +144,24 @@ export default function PDFViewer({
   }, []);
 
   const handleTouchEnd = useCallback((e: TouchEvent) => {
-    if (!touchStartX.current || isAnimating) return;
+    if (!touchStartX.current || isAnimatingRef.current) return;
 
     const touchEndX = e.changedTouches[0].clientX;
     const touchEndY = e.changedTouches[0].clientY;
     const deltaX = touchStartX.current - touchEndX;
     const deltaY = touchStartY.current - touchEndY;
 
-    // Check if it's a horizontal swipe (more horizontal than vertical)
     if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
       if (deltaX > 0) {
-        // Swipe left - next page
-        handlePageChange(pageNumber + 1);
+        handlePageChange(pageNumberRef.current + 1);
       } else {
-        // Swipe right - previous page
-        handlePageChange(pageNumber - 1);
+        handlePageChange(pageNumberRef.current - 1);
       }
     }
 
     touchStartX.current = 0;
     touchStartY.current = 0;
-  }, [pageNumber, handlePageChange, isAnimating]);
+  }, [handlePageChange]);
 
   // Jump to a specific page when triggered from search results
   useEffect(() => {
@@ -202,10 +207,8 @@ export default function PDFViewer({
 
   const activeToolRef = useRef(activeTool);
   const activeColorRef = useRef(activeColor);
-  const pageNumberRef = useRef(pageNumber);
   useEffect(() => { activeToolRef.current = activeTool; }, [activeTool]);
   useEffect(() => { activeColorRef.current = activeColor; }, [activeColor]);
-  useEffect(() => { pageNumberRef.current = pageNumber; }, [pageNumber]);
 
   const handleMouseUpSelection = useCallback(() => {
     const selection = window.getSelection();
@@ -262,7 +265,7 @@ export default function PDFViewer({
   }, []);
 
   return (
-    <div className="flex h-full w-full flex-col items-stretch overflow-y-auto px-4 md:px-6 pt-4">
+    <div className="flex w-full min-h-full flex-col items-stretch px-4 md:px-6 pt-4 pb-4">
         {/* Annotation toolbar */}
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm shadow-sm">
           <button

@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowBack, LocalOfferOutlined, SettingsOutlined, UploadFileOutlined, ViewSidebarOutlined } from "@mui/icons-material";
+import {
+  Dialog, DialogTitle, DialogContent, Slider, FormControl,
+  InputLabel, Select, MenuItem, Switch, FormControlLabel, IconButton,
+} from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
 import { Document, Page, pdfjs } from "react-pdf";
+import { invoke } from "@tauri-apps/api/core";
 import MarkdownViewer, { type MarkdownSidebarEntry, type MarkdownViewerHandle } from "../components/MarkdownViewer";
 import PDFViewer from "../components/PDFViewer";
 import EPUBViewer from "../components/EPUBViewer";
 import AIPanel, { type AIPanelLearningNote } from "../components/AIPanel";
+import BareTitleBar from "../components/BareTitleBar";
 import type { Book } from "../types/Book";
 
 type LearningNote = AIPanelLearningNote;
@@ -57,6 +64,11 @@ function Reader() {
     if (typeof window === "undefined") return true;
     return window.matchMedia("(min-width: 1024px)").matches;
   });
+  const [isTauri, setIsTauri] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [fontSize, setFontSize] = useState(16);
+  const [fontFamily, setFontFamily] = useState("sans-serif");
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const thumbnailRefs = useRef<(HTMLDivElement | null)[]>([]);
   const markdownViewerRef = useRef<MarkdownViewerHandle | null>(null);
   const localFileInputRef = useRef<HTMLInputElement>(null);
@@ -303,6 +315,10 @@ function Reader() {
   }, []);
 
   useEffect(() => {
+    invoke<boolean>("is_desktop").then(setIsTauri).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (!uploadedBookId) return;
 
     const triggerAutoIndex = async () => {
@@ -420,6 +436,22 @@ function Reader() {
         }
       : null;
 
+  const onOpenSetting = () => {
+    setSettingsOpen(true);
+  };
+
+  const handleToggleFullscreen = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().then(() => setIsFullscreen(false));
+    } else {
+      document.documentElement.requestFullscreen().then(() => setIsFullscreen(true));
+    }
+  };
+
+  const readerContentStyle = {
+    fontSize: `${fontSize}px`,
+    fontFamily,
+  };
   useEffect(() => {
     if (activeFileType !== "pdf") {
       setCurrentPdfPage(1);
@@ -473,20 +505,37 @@ function Reader() {
     fetchNotes();
   }, [activeBookIdForAi]);
 
-  if (loading) return <div className="p-8 text-center">Loading...</div>;
-
-  if (error) {
+  if (loading) {
     return (
-      <div className="p-8 text-center">
-        <div className="text-red-600 mb-4">{error}</div>
-        <button onClick={() => navigate("/")} className="text-blue-600 hover:underline">
-          ← Back to Bookshelf
-        </button>
+      <div className="h-screen overflow-hidden flex flex-col">
+        {isTauri && <BareTitleBar />}
+        <div className="p-8 text-center">Loading...</div>
       </div>
     );
   }
 
-  if (!book) return <div className="p-8 text-center">Book not found</div>;
+  if (error) {
+    return (
+      <div className="h-screen overflow-hidden flex flex-col">
+        {isTauri && <BareTitleBar />}
+        <div className="p-8 text-center">
+          <div className="text-red-600 mb-4">{error}</div>
+          <button onClick={() => navigate("/")} className="text-blue-600 hover:underline">
+            ← Back to Bookshelf
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!book) {
+    return (
+      <div className="h-screen overflow-hidden flex flex-col">
+        {isTauri && <BareTitleBar />}
+        <div className="p-8 text-center">Book not found</div>
+      </div>
+    );
+  }
 
   const renderReaderContent = () =>
     activeFileType === "pdf" ? (
@@ -532,9 +581,11 @@ function Reader() {
     : 0;
 
   return (
+    <>
     <div className="h-screen overflow-hidden flex flex-col">
+      {isTauri && <BareTitleBar />}
       <header className="border-b border-gray-200 bg-white px-4 py-3">
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center"> 
           <div className="justify-self-start">
             <button onClick={() => navigate("/")} className="text-blue-600 hover:underline">
               <ArrowBack fontSize="small" />
@@ -580,13 +631,16 @@ function Reader() {
                 <UploadFileOutlined fontSize="small" />
                 Open local
               </button>
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-100"
-                title="Reader settings"
-              >
-                <SettingsOutlined fontSize="small" />
-              </button>
+              {activeFileType === "markdown" && (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-100"
+                  title="Reader settings"
+                  onClick={onOpenSetting}
+                >
+                  <SettingsOutlined fontSize="small" />
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -598,7 +652,7 @@ function Reader() {
       <div className="flex-1 min-h-0">
       {!isDesktop ? (
         <div className="flex h-full flex-col overflow-y-auto">
-          <div className="min-w-0">{renderReaderContent()}</div>
+          <div className="min-w-0" style={readerContentStyle}>{renderReaderContent()}</div>
           <aside className="border-t border-gray-200 bg-white overflow-hidden flex flex-col min-h-[28rem]">
             <AIPanel
               fileType={activeFileType}
@@ -732,7 +786,7 @@ function Reader() {
             </>
           )}
 
-          <div className="min-w-0 flex-1 overflow-y-auto">{renderReaderContent()}</div>
+          <div className="min-w-0 flex-1 overflow-y-auto" style={readerContentStyle}>{renderReaderContent()}</div>
 
           <aside className="h-full w-[480px] max-w-[42vw] min-w-[420px] shrink-0 border-l border-gray-200">
             <div className="flex h-full overflow-hidden bg-white">
@@ -772,24 +826,56 @@ function Reader() {
         </div>
       )}
       </div>
-
-      {activeFileType !== "markdown" && (
-        <footer className="border-t border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700">
-          <div className="mb-1 flex items-center justify-between">
-            <span>Progress</span>
-            <span>{currentPageDisplay} / {totalPageDisplay}</span>
-          </div>
-          <div className="px-6">
-            <div className="h-2 w-full overflow-hidden rounded bg-gray-200">
-              <div
-                className="h-full bg-blue-500 transition-all duration-300"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-          </div>
-        </footer>
-      )}
     </div>
+      {settingsOpen && (
+        <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} maxWidth="xs" fullWidth>
+          <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            Reader Settings
+            <IconButton size="small" onClick={() => setSettingsOpen(false)}>
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent dividers>
+            <FormControl fullWidth margin="normal">
+              <InputLabel>Font Family</InputLabel>
+              <Select
+                value={fontFamily}
+                label="Font Family"
+                onChange={(e) => setFontFamily(e.target.value)}
+              >
+                <MenuItem value="sans-serif">Sans Serif</MenuItem>
+                <MenuItem value="serif">Serif</MenuItem>
+                <MenuItem value="monospace">Monospace</MenuItem>
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth margin="normal">
+              <InputLabel shrink>Font Size ({fontSize}px)</InputLabel>
+              <Slider
+                value={fontSize}
+                onChange={(_e, val) => setFontSize(val as number)}
+                min={12}
+                max={24}
+                step={1}
+                valueLabelDisplay="auto"
+                sx={{ mt: 1 }}
+              />
+            </FormControl>
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={isFullscreen}
+                  onChange={handleToggleFullscreen}
+                />
+              }
+              label="Fullscreen"
+              sx={{ mt: 2 }}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
   );
 }
 
