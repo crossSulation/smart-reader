@@ -80,7 +80,9 @@
 .titlebar-nav-item {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   height: 100%;
+  min-width: 72px;
   padding: 0 14px;
   color: rgba(255, 255, 255, 0.85);
   font-size: 13px;
@@ -110,6 +112,7 @@
 
 .titlebar-profile-trigger {
   gap: 4px;
+  min-width: 88px;
 }
 
 .titlebar-chevron {
@@ -141,8 +144,10 @@
   color: #333;
 }
 
-.titlebar-dropdown-item .language-switcher {
-  padding: 8px 14px;
+.titlebar-dropdown-item.language-switcher {
+  display: flex;
+  justify-content: center;
+  padding: 10px 14px;
 }
 
 .titlebar-logout-btn {

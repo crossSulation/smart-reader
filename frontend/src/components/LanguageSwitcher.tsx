@@ -1,28 +1,47 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 
 const LanguageSwitcher: React.FC = () => {
   const { i18n } = useTranslation();
 
-  const changeLanguage = (lng: string) => {
-    i18n.changeLanguage(lng);
+  const handleChange = (_: React.MouseEvent<HTMLElement>, value: string | null) => {
+    if (value) {
+      i18n.changeLanguage(value);
+    }
   };
 
   return (
-    <div className="language-switcher p-4">
-      <button 
-        onClick={() => changeLanguage('zh')}
-        className={`mr-2 px-3 py-1 rounded ${i18n.language === 'zh' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-      >
-        中文
-      </button>
-      <button 
-        onClick={() => changeLanguage('en')}
-        className={`px-3 py-1 rounded ${i18n.language === 'en' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-      >
-        EN
-      </button>
-    </div>
+    <ToggleButtonGroup
+      value={i18n.language}
+      exclusive
+      onChange={handleChange}
+      size="small"
+      sx={{
+        '& .MuiToggleButton-root': {
+          px: 1.5,
+          py: 0.25,
+          fontSize: 12,
+          border: '1px solid #bdbdbd !important',
+          color: '#616161',
+          '&.Mui-selected': {
+            bgcolor: '#1976d2',
+            color: '#fff',
+            borderColor: '#1976d2 !important',
+          },
+          '&.Mui-selected:hover': {
+            bgcolor: '#1565c0',
+          },
+          '&:hover': {
+            bgcolor: 'rgba(25, 118, 210, 0.08)',
+          },
+        },
+      }}
+    >
+      <ToggleButton value="zh">中文</ToggleButton>
+      <ToggleButton value="en">EN</ToggleButton>
+    </ToggleButtonGroup>
   );
 };
 

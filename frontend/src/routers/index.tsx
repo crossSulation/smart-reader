@@ -6,17 +6,20 @@ import Reader from '../pages/Reader'
 import Profile from '../pages/Profile'
 import Review from '../pages/Review'
 import Layout from '../Layout'
+import PublicLayout from '../components/PublicLayout'
 import ProtectedRoute from '../components/ProtectedRouter'
 
 function RouterContainer() {
   return (
     <Router>
       <Routes>
-        {/* Public routes */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        
-        {/* Protected routes with Layout (header shown) */}
+        {/* Public routes with minimal titlebar (desktop drag) */}
+        <Route element={<PublicLayout />}>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+        </Route>
+
+        {/* Protected routes with full Layout */}
         <Route element={
           <ProtectedRoute>
             <Layout/>
@@ -28,7 +31,7 @@ function RouterContainer() {
           <Route path="/review" element={<Review />} />
         </Route>
 
-        {/* Protected routes without Layout (no header) */}
+        {/* Protected routes without Layout (no titlebar) */}
         <Route path="/reader/:id" element={
           <ProtectedRoute>
             <Reader />

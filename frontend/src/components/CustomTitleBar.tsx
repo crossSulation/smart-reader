@@ -70,7 +70,7 @@ const CustomTitleBar: React.FC = () => {
             </button>
             {profileOpen && (
               <div className="titlebar-dropdown">
-                <div className="titlebar-dropdown-item">
+                <div className="titlebar-dropdown-item language-switcher">
                   <LanguageSwitcher />
                 </div>
                 <button className="titlebar-dropdown-item titlebar-logout-btn" onClick={handleLogout}>
