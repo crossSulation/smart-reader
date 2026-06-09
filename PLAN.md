@@ -10,6 +10,7 @@
 | **Week 2: Ingestion & Markdown** | 🟢 Complete | 5/5 tasks done + TOC API, ingestion metrics, auto-indexing, indexed-status flag |
 | **Week 3: Learning Workflow** | 🟢 Complete | 6/6 tasks done (notes/flashcards/review flow + tags + validation) |
 | **Week 4: Personalization** | 🟢 Complete | 5/5 tasks done (profile + adaptive QA + eval/release checks) |
+| **Week 5: Reading Experience** | 🟢 Complete | 11/11 tasks done - Dark mode + Keyboard shortcuts + Explain selection |
 
 ### Additional Features Completed (Not in Original Plan)
 - [x] Local file upload with background sync to backend (Reader.tsx)
@@ -680,3 +681,204 @@ Ship a reliable "real smart reader" by improving:
 2. Start next roadmap cycle planning (post-Week 4 backlog prioritization).
 3. Add weak-topic review drill-down UX from weekly summary/profile analytics.
 4. Add CI job to run `scripts/release_check.py --strict` on staging credentials.
+
+---
+
+## Week 5: Reading Experience Enhancement
+
+**Target:** Dark Mode + Keyboard Shortcuts + Explain Selection
+**Start Date:** Week 5
+
+| Milestone | Status | Progress |
+|-----------|--------|----------|
+| **Dark Mode** | 🔵 In Progress | 0/4 tasks done |
+| **Keyboard Shortcuts** | ⚪ Pending | 0/4 tasks done |
+| **Explain Selection** | ⚪ Pending | 0/3 tasks done |
+
+### W5-01: Dark Mode (Theme Toggle)
+
+#### Objectives
+- Add persistent dark/light/system theme toggle
+- Apply to all UI surfaces consistently
+- Reading area adapts separately for comfort
+
+#### W5-FE-01A: MUI Theme Infrastructure
+- [x] Implement
+- Scope:
+  - Define dark palette in `createTheme` (App.tsx)
+  - Add `ThemeContext` with `mode` state, `toggleColorMode` function
+  - Persist preference to `localStorage` key `theme-mode`
+  - Support `'light' | 'dark' | 'system'` modes
+- Files (likely):
+  - `frontend/src/App.tsx`
+  - `frontend/src/contexts/ThemeContext.tsx` (new)
+- Output: Centralized theme switching available throughout the app.
+- Done When: Toggle flips all MUI components between light and dark.
+
+#### W5-FE-01B: Theme Toggle Control
+- [x] Implement
+- Scope:
+  - Add toggle button (sun/moon icon) in CustomTitleBar (desktop) and AppBar (web)
+  - Add toggle in Profile page settings section
+  - Use MUI `IconButton` + `LightMode`/`DarkMode` icons
+- Files (likely):
+  - `frontend/src/components/CustomTitleBar.tsx`
+  - `frontend/src/Layout.tsx`
+  - `frontend/src/pages/Profile.tsx`
+- Output: User-accessible theme switching in all major navigation contexts.
+- Done When: Clicking toggle switches entire app theme instantly.
+
+#### W5-FE-01C: Reader Content Area Adaptation
+- [x] Implement
+- Scope:
+  - PDFViewer background adapts to theme
+  - MarkdownViewer prose styles follow theme
+  - Reader header/footer colors use theme tokens
+  - Add separate "Reader brightness" slider independent of theme
+- Files (likely):
+  - `frontend/src/components/PDFViewer.tsx`
+  - `frontend/src/components/MarkdownViewer.tsx`
+  - `frontend/src/pages/Reader.tsx`
+- Output: Reading area looks comfortable in both light and dark modes.
+- Done When: Reader content renders with appropriate contrast in dark mode.
+
+#### W5-FE-01D: Tailwind + MUI Integration
+- [x] Implement
+- Scope:
+  - Enable Tailwind `darkMode: 'class'` in `tailwind.config.js`
+  - Add `dark` class on `<html>` when dark mode active
+  - Ensure Tailwind `dark:` variants work alongside MUI theme
+- Files (likely):
+  - `frontend/tailwind.config.js`
+  - `frontend/src/App.tsx`
+- Output: Both MUI and Tailwind components respond to theme changes.
+- Done When: `dark:` prefixed Tailwind classes activate correctly.
+
+---
+
+### W5-02: Keyboard Shortcuts
+
+#### Objectives
+- Add reader-page keyboard shortcuts for common actions
+- Show shortcut hints in UI where relevant
+- Avoid conflicts with system/browser shortcuts
+
+#### W5-FE-02A: Define Shortcut Map
+- [x] Implement
+- Scope:
+  - Define shortcut key map in a shared constants file
+  - Use `Ctrl`/`Cmd` + key pattern (platform-aware)
+- Shortcuts:
+  | Action | Key | Scope |
+  |--------|-----|-------|
+  | Next page | `→` or `j` | Reader |
+  | Previous page | `←` or `k` | Reader |
+  | Toggle AI panel | `Ctrl+b` | Reader |
+  | Focus search/chat input | `/` | Reader |
+  | Toggle fullscreen | `F11` or `Ctrl+Shift+F` | Global |
+  | Toggle dark mode | `Ctrl+Shift+D` | Global |
+  | Create note from selection | `Ctrl+n` | Reader |
+  | Create flashcard from selection | `Ctrl+f` | Reader |
+- Files (likely):
+  - `frontend/src/constants/shortcuts.ts` (new)
+- Output: Centralized shortcut definitions shared across components.
+- Done When: All shortcuts documented in one place.
+
+#### W5-FE-02B: Global Shortcut Listener Hook
+- [x] Implement
+- Scope:
+  - Create `useKeyboardShortcuts` hook
+  - Accept a map of key → handler
+  - Ignore when focus is in input/textarea (except `/` for search focus)
+  - Support modifier keys (Ctrl, Shift, Meta)
+- Files (likely):
+  - `frontend/src/hooks/useKeyboardShortcuts.ts` (new)
+- Output: Reusable hook for any page/component.
+- Done When: Hook registers and cleans up event listeners correctly.
+
+#### W5-FE-02C: Reader Shortcuts Implementation
+- [x] Implement
+- Scope:
+  - Wire shortcuts to Reader page actions (next/prev page, toggle panel, etc.)
+  - Add visual shortcut hints to buttons (e.g., tooltip showing key combo)
+- Files (likely):
+  - `frontend/src/pages/Reader.tsx`
+- Output: Functional shortcuts in the reader.
+- Done When: All Reader-level shortcuts trigger correct actions.
+
+#### W5-FE-02D: Global Shortcuts (Dark Mode, Fullscreen)
+- [x] Implement
+- Scope:
+  - Wire dark mode toggle shortcut in App root
+  - Wire fullscreen shortcut in Reader
+- Files (likely):
+  - `frontend/src/App.tsx`
+  - `frontend/src/pages/Reader.tsx`
+- Output: Global shortcuts work regardless of current page.
+- Done When: `Ctrl+Shift+D` toggles theme from any page.
+
+---
+
+### W5-03: Explain Selection (选中文字解释)
+
+#### Objectives
+- Allow user to select text and get an AI explanation
+- Leverage existing agent infrastructure
+- Minimal new UI, maximum integration with existing flow
+
+#### W5-FE-03A: Explain Button in Selection Popup
+- [x] Implement
+- Scope:
+  - When text is selected in reader, show a small floating toolbar
+  - Toolbar has: "Explain" button (bolt icon) + existing annotation options
+  - "Explain" triggers the AI agent with context
+- Files (likely):
+  - `frontend/src/pages/Reader.tsx`
+  - `frontend/src/components/PDFViewer.tsx` (if floating toolbar needed here)
+- Output: User can select text → click "Explain" → see AI response.
+- Done When: Floating toolbar appears on text selection with Explain action.
+
+#### W5-FE-03B: Agent Integration for Explain
+- [x] Implement
+- Scope:
+  - When "Explain" clicked, pre-fill the AI panel input with:
+    "Explain the following text in simple terms: '{selected_text}'"
+  - Auto-trigger agent if panel is open, or open panel and queue the prompt
+  - Use user's preferred explanation level from personalization profile
+- Files (likely):
+  - `frontend/src/components/AIPanel.tsx`
+  - `frontend/src/pages/Reader.tsx`
+- Output: Explain action seamlessly connects to AI agent.
+- Done When: Selecting text → Explain → agent responds with context-aware explanation.
+
+#### W5-BE-03A: Explain-Specific Agent Context (Optional)
+- [x] Implement
+- Scope:
+  - If needed, add a `context_selection` field to agent payload
+  - Backend prepends selection context to the agent prompt with appropriate instructions
+- Files (likely):
+  - `backend/app/routers/ai.py`
+  - `backend/app/services/langchain_agent_service.py`
+- Output: Agent gives better explanations when given explicit text context.
+- Done When: Agent responses match the explanation depth and format requested.
+
+---
+
+### Acceptance Criteria (Week 5)
+- [ ] Dark mode toggle switches entire app from any entry point
+- [ ] Reader page shortcuts work for navigation, panel toggle, and note creation
+- [ ] Ctrl+Shift+D toggles dark mode globally
+- [ ] Selected text → Explain → AI responds with level-appropriate explanation
+- [ ] No regressions in existing reader/search/QA flows
+
+### Suggested Execution Order
+1. W5-FE-01A + W5-FE-01D (theme infrastructure + Tailwind integration)
+2. W5-FE-01B (theme toggle in navigation)
+3. W5-FE-01C (reader content theme adaptation)
+4. W5-FE-02A (shortcut definitions)
+5. W5-FE-02B (shortcut hook)
+6. W5-FE-02C + W5-FE-02D (reader + global shortcuts)
+7. W5-FE-03A (selection popup + explain button)
+8. W5-FE-03B (agent integration)
+9. W5-BE-03A (optional backend context enhancement)
+10. Final validation: dark mode + shortcuts + explain smoke test

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useTranslation } from 'react-i18next';
+import { ThemeToggleButton } from './ThemeToggle';
 
 const CustomTitleBar: React.FC = () => {
   const { t } = useTranslation();
@@ -85,6 +86,8 @@ const CustomTitleBar: React.FC = () => {
         </nav>
       </div>
       <div className="titlebar-controls">
+        <ThemeToggleButton />
+        <span className="titlebar-button" style={{ pointerEvents: 'none', width: 2 }} />
         <button id="titlebar-minimize" className="titlebar-button" title="Minimize">
           <svg width="12" height="12" viewBox="0 0 24 24">
             <path fill="currentColor" d="M19 13H5v-2h14z" />

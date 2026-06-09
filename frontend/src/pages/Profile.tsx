@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { PersonOutlined, EmailOutlined } from '@mui/icons-material';
 import { TextField, Button, Alert, Paper, Typography, Box, Avatar, MenuItem } from '@mui/material';
 import LanguageSwitcher from '../components/LanguageSwitcher';
+import { ThemeSegmentedToggle } from '../components/ThemeToggle';
 
 interface User {
   id: number;
@@ -305,8 +306,9 @@ function Profile() {
         {t('profile.pageTitle')}
       </Typography>
 
-      <Box mb={3}>
+      <Box mb={3} display="flex" alignItems="center" gap={3} flexWrap="wrap">
         <LanguageSwitcher />
+        <ThemeSegmentedToggle />
       </Box>
 
       {/* User Info Section */}

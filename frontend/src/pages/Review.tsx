@@ -16,12 +16,113 @@ type DueReviewItem = {
   book_id: number;
 };
 
+const RATING_LABELS: Record<ReviewRating, string> = {
+  again: "Again",
+  hard: "Hard",
+  good: "Good",
+  easy: "Easy",
+};
+
+const RATING_COLORS: Record<ReviewRating, string> = {
+  again: "bg-red-600 hover:bg-red-700",
+  hard: "bg-amber-600 hover:bg-amber-700",
+  good: "bg-blue-600 hover:bg-blue-700",
+  easy: "bg-green-600 hover:bg-green-700",
+};
+
+function FlashCard({
+  item,
+  flipped,
+  onFlip,
+  submitting,
+  onRate,
+}: {
+  item: DueReviewItem;
+  flipped: boolean;
+  onFlip: () => void;
+  submitting: boolean;
+  onRate: (rating: ReviewRating) => void;
+}) {
+  return (
+    <article
+      onClick={onFlip}
+      className={`rounded-lg border border-gray-200 bg-white shadow-sm cursor-pointer hover:shadow-md`}
+      style={{ perspective: "800px" }}
+    >
+      <div
+        className="relative"
+        style={{
+          transformStyle: "preserve-3d",
+          transition: "transform 0.5s ease",
+          transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
+          minHeight: "160px",
+        }}
+      >
+        {/* Front */}
+        <div
+          className="p-4"
+          style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}
+        >
+          <div className="mb-2 text-xs text-gray-500">
+            Book #{item.book_id} · Reps: {item.reps} · Ease: {item.ease_factor.toFixed(2)}
+          </div>
+          <p className="whitespace-pre-wrap text-base text-gray-900">{item.flashcard_front}</p>
+          <p className="mt-3 text-xs text-gray-400 italic">Tap to reveal answer</p>
+        </div>
+
+        {/* Back */}
+        <div
+          className="absolute inset-0 p-4"
+          style={{
+            backfaceVisibility: "hidden",
+            WebkitBackfaceVisibility: "hidden",
+            transform: "rotateY(180deg)",
+          }}
+        >
+          <div className="mb-2 text-xs text-gray-500">
+            Book #{item.book_id} · Interval: {item.interval_days} day(s)
+          </div>
+          <p className="mb-4 whitespace-pre-wrap text-base text-gray-700">
+            {item.flashcard_back || "(Empty answer)"}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(Object.keys(RATING_LABELS) as ReviewRating[]).map((rating) => (
+              <button
+                key={rating}
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onRate(rating); }}
+                disabled={submitting}
+                className={`rounded px-3 py-1.5 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${RATING_COLORS[rating]}`}
+              >
+                {submitting ? "Saving..." : RATING_LABELS[rating]}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 function Review() {
   const { t } = useTranslation();
   const [items, setItems] = useState<DueReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<number | null>(null);
+  const [flippedIds, setFlippedIds] = useState<Set<number>>(new Set());
+
+  const toggleFlip = (id: number) => {
+    setFlippedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   const loadDueItems = useCallback(async () => {
     setLoading(true);
@@ -67,6 +168,11 @@ function Review() {
         throw new Error(data.detail || `Failed to rate card (${res.status})`);
       }
 
+      setFlippedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
       setItems((prev) => prev.filter((item) => item.id !== itemId));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit rating");
@@ -100,37 +206,14 @@ function Review() {
 
       <div className="space-y-4">
         {items.map((item) => (
-          <article key={item.id} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-            <div className="mb-2 text-xs text-gray-500">
-              Book #{item.book_id} · Reps: {item.reps} · Ease: {item.ease_factor.toFixed(2)} · Interval: {item.interval_days} day(s)
-            </div>
-            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">Front</h2>
-            <p className="mb-4 whitespace-pre-wrap text-gray-900">{item.flashcard_front}</p>
-            <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">Back</h3>
-            <p className="mb-4 whitespace-pre-wrap text-gray-700">{item.flashcard_back || "(Empty answer - edit later)"}</p>
-
-            <div className="flex flex-wrap gap-2">
-              {(["again", "hard", "good", "easy"] as const).map((rating) => (
-                <button
-                  key={rating}
-                  type="button"
-                  onClick={() => rateItem(item.id, rating)}
-                  disabled={submittingId === item.id}
-                  className={`rounded px-3 py-1.5 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                    rating === "again"
-                      ? "bg-red-600 hover:bg-red-700"
-                      : rating === "hard"
-                        ? "bg-amber-600 hover:bg-amber-700"
-                        : rating === "good"
-                          ? "bg-blue-600 hover:bg-blue-700"
-                          : "bg-green-600 hover:bg-green-700"
-                  }`}
-                >
-                  {submittingId === item.id ? "Saving..." : rating}
-                </button>
-              ))}
-            </div>
-          </article>
+          <FlashCard
+            key={item.id}
+            item={item}
+            flipped={flippedIds.has(item.id)}
+            onFlip={() => toggleFlip(item.id)}
+            submitting={submittingId === item.id}
+            onRate={(rating) => rateItem(item.id, rating)}
+          />
         ))}
       </div>
     </div>

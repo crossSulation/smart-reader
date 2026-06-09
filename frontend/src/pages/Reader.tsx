@@ -13,6 +13,8 @@ import PDFViewer from "../components/PDFViewer";
 import EPUBViewer from "../components/EPUBViewer";
 import AIPanel, { type AIPanelLearningNote } from "../components/AIPanel";
 import BareTitleBar from "../components/BareTitleBar";
+import { useKeyboardShortcuts, type ShortcutBinding } from "../hooks/useKeyboardShortcuts";
+import { useThemeContext } from "../contexts/ThemeContext";
 import type { Book } from "../types/Book";
 
 type LearningNote = AIPanelLearningNote;
@@ -448,6 +450,60 @@ function Reader() {
     }
   };
 
+  const { toggleColorMode } = useThemeContext();
+
+  const shortcutBindings: ShortcutBinding[] = [
+    {
+      key: 'ArrowRight',
+      handler: () => activeFileType === 'pdf' && setJumpToPage(currentPdfPage + 1),
+    },
+    {
+      key: 'j',
+      handler: () => activeFileType === 'pdf' && setJumpToPage(currentPdfPage + 1),
+    },
+    {
+      key: 'ArrowLeft',
+      handler: () => activeFileType === 'pdf' && setJumpToPage(currentPdfPage - 1),
+    },
+    {
+      key: 'k',
+      handler: () => activeFileType === 'pdf' && setJumpToPage(currentPdfPage - 1),
+    },
+    {
+      key: 'f',
+      ctrl: true,
+      shift: true,
+      handler: handleToggleFullscreen,
+    },
+    {
+      key: 'F11',
+      handler: handleToggleFullscreen,
+    },
+    {
+      key: 'KeyD',
+      ctrl: true,
+      shift: true,
+      handler: toggleColorMode,
+    },
+    {
+      key: 'Slash',
+      handler: () => {
+        setPrefillReferenceTerm(selectedExcerpt || '');
+      },
+    },
+    {
+      key: 'b',
+      ctrl: true,
+      handler: () => {
+        if (selectedExcerpt) {
+          setPrefillReferenceTerm(selectedExcerpt);
+        }
+      },
+    },
+  ];
+
+  useKeyboardShortcuts(shortcutBindings);
+
   const readerContentStyle = {
     fontSize: `${fontSize}px`,
     fontFamily,
@@ -584,15 +640,15 @@ function Reader() {
     <>
     <div className="h-screen overflow-hidden flex flex-col">
       {isTauri && <BareTitleBar />}
-      <header className="border-b border-gray-200 bg-white px-4 py-3">
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center"> 
+      <header className="border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-900">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center">
           <div className="justify-self-start">
-            <button onClick={() => navigate("/")} className="text-blue-600 hover:underline">
+            <button onClick={() => navigate("/")} className="text-blue-600 hover:underline dark:text-blue-400">
               <ArrowBack fontSize="small" />
             </button>
           </div>
 
-          <h1 className="max-w-[55vw] truncate text-xl font-bold text-gray-900 md:text-2xl text-center">{activeTitle}</h1>
+          <h1 className="max-w-[55vw] truncate text-xl font-bold text-gray-900 md:text-2xl text-center dark:text-gray-100">{activeTitle}</h1>
 
           <div className="justify-self-end">
             <div className="flex items-center gap-2">
@@ -625,7 +681,7 @@ function Reader() {
               <button
                 type="button"
                 onClick={() => localFileInputRef.current?.click()}
-                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-100"
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                 title="Open local file"
               >
                 <UploadFileOutlined fontSize="small" />
@@ -634,7 +690,7 @@ function Reader() {
               {activeFileType === "markdown" && (
                 <button
                   type="button"
-                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-100"
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                   title="Reader settings"
                   onClick={onOpenSetting}
                 >
@@ -645,7 +701,28 @@ function Reader() {
           </div>
         </div>
         {localUploadMessage && (
-          <div className="mt-2 text-xs text-gray-500">{localUploadMessage}</div>
+          <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">{localUploadMessage}</div>
+        )}
+        {selectedExcerpt && (
+          <div className="mt-2 flex items-center gap-2 rounded bg-blue-50 px-3 py-1.5 text-sm dark:bg-blue-900">
+            <span className="truncate text-gray-600 dark:text-gray-300">
+              Selected: "{selectedExcerpt.slice(0, 80)}{selectedExcerpt.length > 80 ? '…' : ''}"
+            </span>
+            <button
+              type="button"
+              onClick={() => setPrefillReferenceTerm(`Explain the following text: ${selectedExcerpt}`)}
+              className="ml-auto shrink-0 rounded bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
+            >
+              Explain
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedExcerpt('')}
+              className="shrink-0 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+            >
+              ✕
+            </button>
+          </div>
         )}
       </header>
 
@@ -653,7 +730,7 @@ function Reader() {
       {!isDesktop ? (
         <div className="flex h-full flex-col overflow-y-auto">
           <div className="min-w-0" style={readerContentStyle}>{renderReaderContent()}</div>
-          <aside className="border-t border-gray-200 bg-white overflow-hidden flex flex-col min-h-[28rem]">
+          <aside className="border-t border-gray-200 bg-white overflow-hidden flex flex-col min-h-[28rem] dark:border-gray-700 dark:bg-gray-900">
             <AIPanel
               fileType={activeFileType}
               selectedExcerpt={selectedExcerpt}
@@ -689,15 +766,15 @@ function Reader() {
         <div className="flex h-full">
           {(activeFileType === "pdf" || activeFileType === "markdown") && (
             <>
-              <aside className="h-full w-20 shrink-0 border-r border-gray-200 bg-white">
+              <aside className="h-full w-20 shrink-0 border-r border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
                 <div className="flex h-full flex-col items-center py-3">
                   <button
                     type="button"
                     onClick={() => setLeftPanelTab("navigation")}
                     className={`rounded-xl p-3 transition ${
                       leftPanelTab === "navigation"
-                        ? "bg-blue-50 text-blue-700"
-                        : "text-gray-600 hover:bg-gray-50"
+                        ? "bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
+                        : "text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-800"
                     }`}
                     title={activeFileType === "pdf" ? "Thumbnails" : "Contents"}
                     aria-label={activeFileType === "pdf" ? "Thumbnails" : "Contents"}
@@ -709,8 +786,8 @@ function Reader() {
                     onClick={() => setLeftPanelTab("tags")}
                     className={`mt-2 rounded-xl p-3 transition ${
                       leftPanelTab === "tags"
-                        ? "bg-blue-50 text-blue-700"
-                        : "text-gray-600 hover:bg-gray-50"
+                        ? "bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
+                        : "text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-800"
                     }`}
                     title="Tags"
                     aria-label="Tags"
@@ -720,7 +797,7 @@ function Reader() {
                 </div>
               </aside>
 
-              <aside className="h-full w-40 shrink-0 overflow-y-auto border-r border-gray-200 bg-gray-50">
+              <aside className="h-full w-40 shrink-0 overflow-y-auto border-r border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800">
                 {leftPanelTab === "navigation" ? (
                   activeFileType === "pdf" ? (
                     thumbnailFile && pdfTotalPages > 0 && (
@@ -788,8 +865,8 @@ function Reader() {
 
           <div className="min-w-0 flex-1 overflow-y-auto" style={readerContentStyle}>{renderReaderContent()}</div>
 
-          <aside className="h-full w-[480px] max-w-[42vw] min-w-[420px] shrink-0 border-l border-gray-200">
-            <div className="flex h-full overflow-hidden bg-white">
+          <aside className="h-full w-[480px] max-w-[42vw] min-w-[420px] shrink-0 border-l border-gray-200 dark:border-gray-700">
+            <div className="flex h-full overflow-hidden bg-white dark:bg-gray-900">
               <div className="flex min-w-0 flex-1 flex-col">
                 <AIPanel
                   fileType={activeFileType}
@@ -826,6 +903,22 @@ function Reader() {
         </div>
       )}
       </div>
+      {activeFileType !== "markdown" && (
+        <footer className="border-t border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+          <div className="mb-1 flex items-center justify-between">
+            <span>Progress</span>
+            <span>{currentPageDisplay} / {totalPageDisplay}</span>
+          </div>
+          <div className="px-6">
+            <div className="h-2 w-full overflow-hidden rounded bg-gray-200 dark:bg-gray-700">
+              <div
+                className="h-full rounded bg-blue-500 transition-all"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+        </footer>
+      )}
     </div>
       {settingsOpen && (
         <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} maxWidth="xs" fullWidth>
