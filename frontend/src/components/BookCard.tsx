@@ -23,9 +23,9 @@ function BookCard({ book }: { book: Book }) {
   return (
     <div 
       onClick={() => navigate(`/reader/${book.id}`)}
-      className="border rounded-lg overflow-hidden hover:shadow-lg transition cursor-pointer bg-white"
+      className="rounded-lg overflow-hidden hover:shadow-lg transition cursor-pointer border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900 dark:hover:shadow-gray-900/40 hover:shadow-gray-200/60 shadow-sm"
     >
-      <div className="h-48 bg-gray-100 flex items-center justify-center">
+      <div className="h-48 bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
         {book.cover_path ? (
           <img
             src={book.cover_path}
@@ -37,11 +37,11 @@ function BookCard({ book }: { book: Book }) {
         )}
       </div>
       <div className="p-4">
-        <h3 className="font-semibold truncate">{book.title}</h3>
-        <p className="text-sm text-gray-500 truncate">
+        <h3 className="font-semibold truncate text-gray-900 dark:text-gray-100">{book.title}</h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
           {book.author || "unknown"}
         </p>
-        <div className="mt-3 text-sm text-gray-500">
+        <div className="mt-3 text-sm text-gray-500 dark:text-gray-400">
           <div>{t('bookCard.readingProgress')}: {book.current_page || 0}</div>
           {formattedLastRead && (
             <div>{t('bookCard.lastRead')}: {formattedLastRead}</div>

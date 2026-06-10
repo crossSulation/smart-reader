@@ -100,7 +100,7 @@ function MermaidBlock({ chart }: MermaidBlockProps) {
   }
 
   return (
-    <div className="overflow-x-auto rounded border bg-white p-2">
+    <div className="overflow-x-auto rounded border bg-white p-2 dark:border-gray-700 dark:bg-gray-800">
       {isRendering && !svg ? (
         <div className="rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-500">
           Rendering Mermaid diagram...
@@ -139,7 +139,7 @@ function SmilesBlock({ smiles }: SmilesBlockProps) {
   if (error) {
     return <div className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800">{error}</div>;
   }
-  return <div id={targetId} className="overflow-x-auto rounded border bg-white p-2" />;
+  return <div id={targetId} className="overflow-x-auto rounded border bg-white p-2 dark:border-gray-700 dark:bg-gray-800" />;
 }
 
 function slugify(value: string) {
@@ -427,17 +427,17 @@ const MarkdownViewer = memo(forwardRef<MarkdownViewerHandle, MarkdownViewerProps
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}
         components={{
-          h1: makeHeadingRenderer(1, "mb-4 mt-6 text-3xl font-bold text-gray-900 first:mt-0"),
-          h2: makeHeadingRenderer(2, "mb-3 mt-6 text-2xl font-semibold text-gray-900"),
-          h3: makeHeadingRenderer(3, "mb-2 mt-5 text-xl font-semibold text-gray-900"),
-          h4: makeHeadingRenderer(4, "mb-2 mt-4 text-lg font-semibold text-gray-900"),
-          h5: makeHeadingRenderer(5, "mb-2 mt-4 text-base font-semibold text-gray-900"),
-          h6: makeHeadingRenderer(6, "mb-2 mt-4 text-sm font-semibold uppercase tracking-wide text-gray-600"),
-          p: ({ children }) => <p className="mb-4 leading-7 text-gray-800">{children}</p>,
-          ul: ({ children }) => <ul className="mb-4 list-disc pl-6 text-gray-800">{children}</ul>,
-          ol: ({ children }) => <ol className="mb-4 list-decimal pl-6 text-gray-800">{children}</ol>,
+          h1: makeHeadingRenderer(1, "mb-4 mt-6 text-3xl font-bold text-gray-900 dark:text-gray-100 first:mt-0"),
+          h2: makeHeadingRenderer(2, "mb-3 mt-6 text-2xl font-semibold text-gray-900 dark:text-gray-100"),
+          h3: makeHeadingRenderer(3, "mb-2 mt-5 text-xl font-semibold text-gray-900 dark:text-gray-100"),
+          h4: makeHeadingRenderer(4, "mb-2 mt-4 text-lg font-semibold text-gray-900 dark:text-gray-100"),
+          h5: makeHeadingRenderer(5, "mb-2 mt-4 text-base font-semibold text-gray-900 dark:text-gray-100"),
+          h6: makeHeadingRenderer(6, "mb-2 mt-4 text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400"),
+          p: ({ children }) => <p className="mb-4 leading-7 text-gray-800 dark:text-gray-300">{children}</p>,
+          ul: ({ children }) => <ul className="mb-4 list-disc pl-6 text-gray-800 dark:text-gray-300">{children}</ul>,
+          ol: ({ children }) => <ol className="mb-4 list-decimal pl-6 text-gray-800 dark:text-gray-300">{children}</ol>,
           li: ({ children }) => <li className="mb-1">{children}</li>,
-          blockquote: ({ children }) => <blockquote className="mb-4 border-l-4 border-blue-200 bg-blue-50 px-4 py-2 text-gray-700">{children}</blockquote>,
+          blockquote: ({ children }) => <blockquote className="mb-4 border-l-4 border-blue-200 bg-blue-50 px-4 py-2 text-gray-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-gray-300">{children}</blockquote>,
           code: ({ className, children, ...props }: { className?: string; children?: ReactNode; inline?: boolean }) => {
             const isMermaid = /language-mermaid\b/.test(className || "");
             if (isMermaid) return <MermaidBlock chart={String(children ?? "")} />;
@@ -447,7 +447,7 @@ const MarkdownViewer = memo(forwardRef<MarkdownViewerHandle, MarkdownViewerProps
 
             const inline = !className;
             return inline ? (
-              <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-sm text-pink-700" {...props}>{children}</code>
+              <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-sm text-pink-700 dark:bg-gray-800 dark:text-pink-400" {...props}>{children}</code>
             ) : (
               <code className="block overflow-x-auto rounded-lg bg-gray-900 p-4 font-mono text-sm text-gray-100" {...props}>{children}</code>
             );
@@ -465,12 +465,12 @@ const MarkdownViewer = memo(forwardRef<MarkdownViewerHandle, MarkdownViewerProps
             }
             return <pre className="mb-4">{children}</pre>;
           },
-          table: ({ children }) => <div className="mb-4 overflow-x-auto"><table className="min-w-full border border-gray-200 text-sm">{children}</table></div>,
-          thead: ({ children }) => <thead className="bg-gray-100">{children}</thead>,
-          th: ({ children }) => <th className="border border-gray-200 px-3 py-2 text-left font-semibold text-gray-700">{children}</th>,
-          td: ({ children }) => <td className="border border-gray-200 px-3 py-2 text-gray-800">{children}</td>,
-          a: ({ href, children }) => <a href={href} target="_blank" rel="noreferrer" className="text-blue-600 underline hover:text-blue-700">{children}</a>,
-          hr: () => <hr className="my-6 border-gray-200" />,
+          table: ({ children }) => <div className="mb-4 overflow-x-auto"><table className="min-w-full border border-gray-200 text-sm dark:border-gray-700">{children}</table></div>,
+          thead: ({ children }) => <thead className="bg-gray-100 dark:bg-gray-800">{children}</thead>,
+          th: ({ children }) => <th className="border border-gray-200 px-3 py-2 text-left font-semibold text-gray-700 dark:border-gray-700 dark:text-gray-200">{children}</th>,
+          td: ({ children }) => <td className="border border-gray-200 px-3 py-2 text-gray-800 dark:border-gray-700 dark:text-gray-300">{children}</td>,
+          a: ({ href, children }) => <a href={href} target="_blank" rel="noreferrer" className="text-blue-600 underline hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">{children}</a>,
+          hr: () => <hr className="my-6 border-gray-200 dark:border-gray-700" />,
         }}
       >
         {content}
@@ -479,19 +479,19 @@ const MarkdownViewer = memo(forwardRef<MarkdownViewerHandle, MarkdownViewerProps
   }, [content, headingBuckets, viewerInstanceId]);
 
   if (loading) {
-    return <div className="py-8 text-center text-gray-500">Loading markdown...</div>;
+    return <div className="py-8 text-center text-gray-500 dark:text-gray-400">Loading markdown...</div>;
   }
 
   if (error) {
-    return <div className="py-8 text-center text-red-600">{error}</div>;
+    return <div className="py-8 text-center text-red-600 dark:text-red-400">{error}</div>;
   }
 
   return (
     <div className="flex h-full w-full">
       {showSidebar && sidebarEntries.length > 0 && (
-        <aside className="hidden h-full w-64 shrink-0 overflow-y-auto border-r border-gray-200 bg-gray-50 lg:block">
+        <aside className="hidden h-full w-64 shrink-0 overflow-y-auto border-r border-gray-200 bg-gray-50 lg:block dark:border-gray-700 dark:bg-gray-800">
           <div className="p-3">
-            <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Contents</div>
+            <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Contents</div>
             <nav className="space-y-1">
               {sidebarEntries.map((entry) => (
                 <button
@@ -505,8 +505,8 @@ const MarkdownViewer = memo(forwardRef<MarkdownViewerHandle, MarkdownViewerProps
                   }}
                   className={`block w-full truncate rounded px-2 py-1 text-left text-sm transition ${
                     activeSectionIndex === entry.index
-                      ? "bg-white font-medium text-blue-700 shadow-sm"
-                      : "text-gray-700 hover:bg-white"
+                      ? "bg-white font-medium text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-400"
+                      : "text-gray-700 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-700"
                   }`}
                   style={{ paddingLeft: `${entry.level * 10}px` }}
                   title={entry.text}

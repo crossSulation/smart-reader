@@ -442,6 +442,10 @@ function Reader() {
     setSettingsOpen(true);
   };
 
+  const onExplainSelection = (text: string) => {
+    setPrefillReferenceTerm(`Explain the following text: ${text}`);
+  };
+
   const handleToggleFullscreen = () => {
     if (document.fullscreenElement) {
       document.exitFullscreen().then(() => setIsFullscreen(false));
@@ -703,27 +707,6 @@ function Reader() {
         {localUploadMessage && (
           <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">{localUploadMessage}</div>
         )}
-        {selectedExcerpt && (
-          <div className="mt-2 flex items-center gap-2 rounded bg-blue-50 px-3 py-1.5 text-sm dark:bg-blue-900">
-            <span className="truncate text-gray-600 dark:text-gray-300">
-              Selected: "{selectedExcerpt.slice(0, 80)}{selectedExcerpt.length > 80 ? '…' : ''}"
-            </span>
-            <button
-              type="button"
-              onClick={() => setPrefillReferenceTerm(`Explain the following text: ${selectedExcerpt}`)}
-              className="ml-auto shrink-0 rounded bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
-            >
-              Explain
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedExcerpt('')}
-              className="shrink-0 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
-            >
-              ✕
-            </button>
-          </div>
-        )}
       </header>
 
       <div className="flex-1 min-h-0">
@@ -739,6 +722,7 @@ function Reader() {
               onCreateNoteFromSelection={createNoteFromSelection}
               onCreateFlashcardFromSelection={createFlashcardFromSelection}
               onClearSelectedExcerpt={() => setSelectedExcerpt("")}
+              onExplainSelection={onExplainSelection}
               learningStatus={learningStatus}
               savingNote={savingNote}
               savingFlashcard={savingFlashcard}
@@ -876,6 +860,7 @@ function Reader() {
                   onCreateNoteFromSelection={createNoteFromSelection}
                   onCreateFlashcardFromSelection={createFlashcardFromSelection}
                   onClearSelectedExcerpt={() => setSelectedExcerpt("")}
+                  onExplainSelection={onExplainSelection}
                   learningStatus={learningStatus}
                   savingNote={savingNote}
                   savingFlashcard={savingFlashcard}
