@@ -267,31 +267,31 @@ export default function PDFViewer({
   return (
     <div className="flex w-full min-h-full flex-col items-stretch px-4 md:px-6 pt-4 pb-4">
         {/* Annotation toolbar */}
-        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm shadow-sm">
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-800">
           <button
             onClick={() => setActiveTool('none')}
-            className={`rounded px-2 py-1 transition-colors ${activeTool === 'none' ? 'bg-gray-800 text-white' : 'hover:bg-gray-100'}`}
+            className={`rounded px-2 py-1 transition-colors ${activeTool === 'none' ? 'bg-gray-800 text-white dark:bg-gray-300 dark:text-gray-900' : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300'}`}
             title="Normal select"
           >✦ Select</button>
           <button
             onClick={() => { setActiveTool('highlight'); setActiveColor(HIGHLIGHT_COLORS[0]); }}
-            className={`rounded px-2 py-1 transition-colors ${activeTool === 'highlight' ? 'bg-yellow-300 text-gray-900' : 'hover:bg-gray-100'}`}
+            className={`rounded px-2 py-1 transition-colors ${activeTool === 'highlight' ? 'bg-yellow-300 text-gray-900' : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300'}`}
             title="Highlight"
           >▐ Highlight</button>
           <button
             onClick={() => { setActiveTool('underline'); setActiveColor(UNDERLINE_COLORS[0]); }}
-            className={`rounded px-2 py-1 transition-colors ${activeTool === 'underline' ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'}`}
+            className={`rounded px-2 py-1 transition-colors ${activeTool === 'underline' ? 'bg-blue-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300'}`}
             title="Underline"
           ><u>U</u> Underline</button>
 
           {activeTool !== 'none' && (
             <>
-              <span className="text-gray-300">|</span>
+              <span className="text-gray-300 dark:text-gray-600">|</span>
               {(activeTool === 'highlight' ? HIGHLIGHT_COLORS : UNDERLINE_COLORS).map(color => (
                 <button
                   key={color}
                   onClick={() => setActiveColor(color)}
-                  className={`h-5 w-5 rounded-full border-2 transition-transform ${activeColor === color ? 'scale-125 border-gray-700' : 'border-gray-300 hover:scale-110'}`}
+                  className={`h-5 w-5 rounded-full border-2 transition-transform ${activeColor === color ? 'scale-125 border-gray-700 dark:border-gray-300' : 'border-gray-300 dark:border-gray-500 hover:scale-110'}`}
                   style={{ background: color }}
                   title={color}
                 />
@@ -299,42 +299,42 @@ export default function PDFViewer({
             </>
           )}
 
-          <span className="text-gray-300">|</span>
+          <span className="text-gray-300 dark:text-gray-600">|</span>
           <button
             onClick={() => setAnnotations(prev => prev.slice(0, -1))}
             disabled={annotations.length === 0}
-            className="rounded px-2 py-1 hover:bg-gray-100 disabled:opacity-40"
+            className="rounded px-2 py-1 hover:bg-gray-100 disabled:opacity-40 dark:hover:bg-gray-700 dark:text-gray-300"
             title="Undo last annotation"
           >↩ Undo</button>
           <button
             onClick={() => setAnnotations(prev => prev.filter(a => a.page !== pageNumber))}
             disabled={annotations.filter(a => a.page === pageNumber).length === 0}
-            className="rounded px-2 py-1 text-red-500 hover:bg-red-50 disabled:opacity-40"
+            className="rounded px-2 py-1 text-red-500 hover:bg-red-50 disabled:opacity-40 dark:hover:bg-red-900/30 dark:text-red-400"
             title="Clear all annotations on this page"
           >🗑 Clear page</button>
         </div>
 
-        <div className="mb-4 flex gap-4">
+        <div className="mb-4 flex gap-4 items-center">
           <button
             onClick={() => handlePageChange(pageNumber - 1)}
             disabled={pageNumber <= 1 || isAnimating}
-            className="px-4 py-2 bg-gray-200 rounded disabled:opacity-50 hover:bg-gray-300 transition"
+            className="px-4 py-2 bg-gray-200 rounded disabled:opacity-50 hover:bg-gray-300 transition dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
           >
             {t('pdfViewer.previous')}
           </button>
-          <span className="px-4 py-2">
+          <span className="px-4 py-2 dark:text-gray-300">
             {t('pdfViewer.page')} {pageNumber} {t('pdfViewer.of')} {numPages || "?"}
           </span>
           <button
             onClick={() => handlePageChange(pageNumber + 1)}
             disabled={pageNumber >= numPages || isAnimating}
-            className="px-4 py-2 bg-gray-200 rounded disabled:opacity-50 hover:bg-gray-300 transition"
+            className="px-4 py-2 bg-gray-200 rounded disabled:opacity-50 hover:bg-gray-300 transition dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
           >
             {t('pdfViewer.next')}
           </button>
         </div>
 
-        <div className="mb-2 text-sm text-gray-500 text-center">
+        <div className="mb-2 text-sm text-gray-500 text-center dark:text-gray-400">
           {t('pdfViewer.swipeHint')}
         </div>
 
@@ -342,7 +342,7 @@ export default function PDFViewer({
           ref={viewerRef}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
-          className="w-full border shadow-lg rounded-lg overflow-hidden"
+          className="w-full border shadow-lg rounded-lg overflow-hidden dark:border-gray-700"
           style={{
             touchAction: 'pan-y',
             userSelect: 'text',
@@ -354,7 +354,7 @@ export default function PDFViewer({
             onLoadSuccess={onDocumentLoadSuccess}
             className="border shadow-lg"
           >
-            <div ref={pageContainerRef} className="relative">
+            <div ref={pageContainerRef} className="relative dark:[&_canvas]:brightness-90 dark:[&_canvas]:invert dark:[&_canvas]:hue-rotate-180">
               <Page
                 pageNumber={pageNumber}
                 width={pageWidth || Math.floor(window.innerWidth * 0.8)}

@@ -689,15 +689,15 @@ export default function BookAgentChat({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col rounded border border-gray-200 bg-white p-3">
+    <div className="flex h-full min-h-0 flex-col rounded border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Unified Agent Chat</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">Unified Agent Chat</p>
         <div className="flex items-center gap-2">
           <select
             value={sessionId}
             onChange={(e) => switchSession(e.target.value)}
             disabled={loading || sessionOptions.length === 0}
-            className="rounded border border-gray-300 bg-white px-2 py-1 text-[11px] text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-60"
+            className="rounded border border-gray-300 bg-white px-2 py-1 text-[11px] text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
             aria-label="Select conversation session"
           >
             {sessionOptions.map((item, index) => (
@@ -706,12 +706,12 @@ export default function BookAgentChat({
               </option>
             ))}
           </select>
-          <span className="text-[11px] text-gray-500">{fileType.toUpperCase()} · Session: {sessionId.slice(0, 8)}</span>
+          <span className="text-[11px] text-gray-500 dark:text-gray-400">{fileType.toUpperCase()} · Session: {sessionId.slice(0, 8)}</span>
         </div>
       </div>
 
       {selectedSnippet && (
-        <div className="mb-3 rounded border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs text-blue-800">
+        <div className="mb-3 rounded border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-200">
           Selected text is included in your next message.
         </div>
       )}
@@ -726,8 +726,8 @@ export default function BookAgentChat({
               onClick={() => toggleTool(tool)}
               className={`rounded border px-2 py-1 text-[11px] ${
                 enabled
-                  ? "border-sky-300 bg-sky-50 text-sky-700"
-                  : "border-gray-300 bg-white text-gray-500"
+                  ? "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-300"
+                  : "border-gray-300 bg-white text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400"
               }`}
             >
               {enabled ? "On" : "Off"} {tool}
@@ -736,9 +736,9 @@ export default function BookAgentChat({
         })}
       </div>
 
-      <div ref={scrollContainerRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto rounded border border-gray-100 bg-gray-50 p-2">
+      <div ref={scrollContainerRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto rounded border border-gray-100 bg-gray-50 p-2 dark:border-gray-700 dark:bg-gray-800">
         {chat.length === 0 ? (
-          <div className="text-xs text-gray-500">
+          <div className="text-xs text-gray-500 dark:text-gray-400">
             Ask one question and the agent will decide tools for search, notes, references, and quiz.
           </div>
         ) : (
@@ -746,11 +746,11 @@ export default function BookAgentChat({
             <div
               key={item.id}
               className={`rounded px-2 py-1.5 text-sm ${
-                item.role === "user" ? "ml-6 bg-blue-600 text-white" : "mr-6 bg-white text-gray-800"
+                item.role === "user" ? "ml-6 bg-blue-600 text-white" : "mr-6 bg-white text-gray-800 dark:bg-gray-700 dark:text-gray-200"
               }`}
             >
               {item.role === "assistant" ? (
-                <div className="prose prose-sm max-w-none">
+                <div className="prose prose-sm max-w-none dark:prose-invert">
                   <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
                     {item.content || "..."}
                   </ReactMarkdown>
@@ -763,15 +763,15 @@ export default function BookAgentChat({
         )}
 
         {agentSteps.length > 0 && (
-          <div className="rounded border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-600">
-            <p className="mb-1 font-semibold text-gray-700">Tool timeline</p>
+          <div className="rounded border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+            <p className="mb-1 font-semibold text-gray-700 dark:text-gray-200">Tool timeline</p>
             <div className="space-y-1">
               {agentSteps.map((step, index) => (
                 <div key={step.id} className="flex items-center gap-2">
                   <span className={`inline-block h-2 w-2 rounded-full ${step.phase === "start" ? "bg-amber-500" : "bg-emerald-500"}`} />
-                  <span className="font-medium text-gray-700">{step.tool}</span>
+                  <span className="font-medium text-gray-700 dark:text-gray-200">{step.tool}</span>
                   <span>{step.phase === "start" ? "started" : "finished"}</span>
-                  <span className="ml-auto text-[10px] text-gray-400">#{index + 1}</span>
+                  <span className="ml-auto text-[10px] text-gray-400 dark:text-gray-500">#{index + 1}</span>
                 </div>
               ))}
             </div>
@@ -779,16 +779,16 @@ export default function BookAgentChat({
         )}
 
         {insights.map((insight, idx) => (
-          <div key={`${insight.kind}-${idx}`} className="rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700">
+          <div key={`${insight.kind}-${idx}`} className="rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
             {insight.kind === "search" && (
               <>
-                <p className="mb-1 font-semibold text-gray-600">Search evidence</p>
+                <p className="mb-1 font-semibold text-gray-600 dark:text-gray-300">Search evidence</p>
                 <ul className="space-y-1">
                   {insight.items.map((item, itemIdx) => (
-                    <li key={`search-${idx}-${itemIdx}`} className="rounded border border-gray-100 bg-gray-50 px-2 py-1">
+                    <li key={`search-${idx}-${itemIdx}`} className="rounded border border-gray-100 bg-gray-50 px-2 py-1 dark:border-gray-600 dark:bg-gray-700">
                       <p className="line-clamp-2">{item.text}</p>
                       <div className="mt-1 flex items-center justify-between">
-                        <span className="text-[11px] text-gray-500">
+                        <span className="text-[11px] text-gray-500 dark:text-gray-400">
                           {item.page !== null ? `Page ${item.page}` : "No page"}
                           {item.score !== null ? ` · ${(item.score * 100).toFixed(1)}%` : ""}
                         </span>
@@ -796,7 +796,7 @@ export default function BookAgentChat({
                           <button
                             type="button"
                             onClick={() => onJumpToPage(item.page as number)}
-                            className="text-[11px] text-blue-600 hover:underline"
+                            className="text-[11px] text-blue-600 hover:underline dark:text-blue-400"
                           >
                             Go
                           </button>
@@ -810,16 +810,16 @@ export default function BookAgentChat({
 
             {insight.kind === "read" && (
               <>
-                <p className="mb-1 font-semibold text-gray-600">Read excerpts</p>
+                <p className="mb-1 font-semibold text-gray-600 dark:text-gray-300">Read excerpts</p>
                 <ul className="space-y-1">
                   {insight.items.map((item, itemIdx) => (
-                    <li key={`read-${idx}-${itemIdx}`} className="rounded border border-gray-100 bg-gray-50 px-2 py-1">
+                    <li key={`read-${idx}-${itemIdx}`} className="rounded border border-gray-100 bg-gray-50 px-2 py-1 dark:border-gray-600 dark:bg-gray-700">
                       <p className="line-clamp-2">{item.text}</p>
                       {item.page !== null && onJumpToPage && (
                         <button
                           type="button"
                           onClick={() => onJumpToPage(item.page as number)}
-                          className="mt-1 text-[11px] text-blue-600 hover:underline"
+                          className="mt-1 text-[11px] text-blue-600 hover:underline dark:text-blue-400"
                         >
                           Jump to page {item.page}
                         </button>
@@ -832,14 +832,14 @@ export default function BookAgentChat({
 
             {insight.kind === "web_search" && (
               <>
-                <p className="mb-1 font-semibold text-gray-600">Web references</p>
+                <p className="mb-1 font-semibold text-gray-600 dark:text-gray-300">Web references</p>
                 <ul className="space-y-1">
                   {insight.items.map((item, itemIdx) => (
-                    <li key={`web-${idx}-${itemIdx}`} className="rounded border border-gray-100 bg-gray-50 px-2 py-1">
-                      <a href={item.url} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">
+                    <li key={`web-${idx}-${itemIdx}`} className="rounded border border-gray-100 bg-gray-50 px-2 py-1 dark:border-gray-600 dark:bg-gray-700">
+                      <a href={item.url} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline dark:text-blue-400">
                         {item.title}
                       </a>
-                      <p className="text-[11px] text-gray-500">{item.source}</p>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400">{item.source}</p>
                     </li>
                   ))}
                 </ul>
@@ -848,12 +848,12 @@ export default function BookAgentChat({
 
             {insight.kind === "quiz" && (
               <>
-                <p className="mb-1 font-semibold text-gray-600">Quiz preview</p>
+                <p className="mb-1 font-semibold text-gray-600 dark:text-gray-300">Quiz preview</p>
                 <ul className="space-y-1">
                   {insight.items.map((item, itemIdx) => (
-                    <li key={`quiz-${idx}-${itemIdx}`} className="rounded border border-gray-100 bg-gray-50 px-2 py-1">
+                    <li key={`quiz-${idx}-${itemIdx}`} className="rounded border border-gray-100 bg-gray-50 px-2 py-1 dark:border-gray-600 dark:bg-gray-700">
                       <p className="font-medium">Q: {item.question}</p>
-                      <p className="text-gray-600">A: {item.answer}</p>
+                      <p className="text-gray-600 dark:text-gray-400">A: {item.answer}</p>
                     </li>
                   ))}
                 </ul>
@@ -862,15 +862,15 @@ export default function BookAgentChat({
 
             {insight.kind === "list_notes" && (
               <>
-                <p className="mb-1 font-semibold text-gray-600">Notes list</p>
+                <p className="mb-1 font-semibold text-gray-600 dark:text-gray-300">Notes list</p>
                 <ul className="space-y-1">
                   {insight.items.map((item, itemIdx) => (
-                    <li key={`notes-${idx}-${itemIdx}`} className="rounded border border-gray-100 bg-gray-50 px-2 py-1">
+                    <li key={`notes-${idx}-${itemIdx}`} className="rounded border border-gray-100 bg-gray-50 px-2 py-1 dark:border-gray-600 dark:bg-gray-700">
                       <p className="line-clamp-2">{item.content}</p>
-                      <div className="mt-1 flex items-center gap-2 text-[11px] text-gray-500">
+                      <div className="mt-1 flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400">
                         {item.page !== null ? <span>Page {item.page}</span> : <span>No page</span>}
                         {item.tags.map((tag) => (
-                          <span key={`${itemIdx}-${tag}`} className="rounded bg-blue-100 px-1 py-0.5 text-blue-700">#{tag}</span>
+                          <span key={`${itemIdx}-${tag}`} className="rounded bg-blue-100 px-1 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">#{tag}</span>
                         ))}
                       </div>
                     </li>
@@ -882,8 +882,8 @@ export default function BookAgentChat({
         ))}
       </div>
 
-      <div className="mt-3 border-t border-gray-100 pt-3">
-        {error && <div className="mb-2 text-xs text-red-600">{error}</div>}
+      <div className="mt-3 border-t border-gray-100 pt-3 dark:border-gray-700">
+        {error && <div className="mb-2 text-xs text-red-600 dark:text-red-400">{error}</div>}
 
         <div className="mb-2 flex flex-wrap gap-1">
           {quickPrompts.map((prompt) => (
@@ -892,7 +892,7 @@ export default function BookAgentChat({
               type="button"
               onClick={() => void sendMessage(buildQuickPromptInput(prompt))}
               disabled={loading}
-              className="rounded border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-100 disabled:opacity-60"
+              className="rounded border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-100 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
             >
               {prompt.slice(0, 32)}...
             </button>
@@ -904,7 +904,7 @@ export default function BookAgentChat({
             type="button"
             onClick={startNewConversation}
             disabled={loading}
-            className="rounded border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+            className="rounded border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-60 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800"
             title="Start a new conversation"
             aria-label="Start a new conversation"
           >
@@ -915,7 +915,7 @@ export default function BookAgentChat({
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Ask anything: search facts, save note, quiz me, or find web refs"
-            className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:placeholder:text-gray-500"
           />
           <button
             type="submit"
