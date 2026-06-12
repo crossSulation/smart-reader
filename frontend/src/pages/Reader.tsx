@@ -71,6 +71,8 @@ function Reader() {
   const [fontSize, setFontSize] = useState(16);
   const [fontFamily, setFontFamily] = useState("sans-serif");
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [aiPanelWidth, setAiPanelWidth] = useState(480);
+  const aiPanelDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const thumbnailRefs = useRef<(HTMLDivElement | null)[]>([]);
   const markdownViewerRef = useRef<MarkdownViewerHandle | null>(null);
   const localFileInputRef = useRef<HTMLInputElement>(null);
@@ -445,6 +447,33 @@ function Reader() {
   const onExplainSelection = (text: string) => {
     setPrefillReferenceTerm(`Explain the following text: ${text}`);
   };
+
+  const handlePanelDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    aiPanelDragRef.current = { startX: e.clientX, startWidth: aiPanelWidth };
+  }, [aiPanelWidth]);
+
+  const handlePanelDragMove = useCallback((e: MouseEvent) => {
+    if (!aiPanelDragRef.current) return;
+    const delta = aiPanelDragRef.current.startX - e.clientX;
+    const newWidth = Math.max(280, Math.min(window.innerWidth * 0.6, aiPanelDragRef.current.startWidth + delta));
+    setAiPanelWidth(newWidth);
+  }, []);
+
+  const handlePanelDragEnd = useCallback(() => {
+    aiPanelDragRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => handlePanelDragMove(e);
+    const onUp = () => handlePanelDragEnd();
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [handlePanelDragMove, handlePanelDragEnd]);
 
   const handleToggleFullscreen = () => {
     if (document.fullscreenElement) {
@@ -849,7 +878,14 @@ function Reader() {
 
           <div className="min-w-0 flex-1 overflow-y-auto" style={readerContentStyle}>{renderReaderContent()}</div>
 
-          <aside className="h-full w-[480px] max-w-[42vw] min-w-[420px] shrink-0 border-l border-gray-200 dark:border-gray-700">
+          <aside
+            className="relative h-full shrink-0 border-l border-gray-200 dark:border-gray-700"
+            style={{ width: aiPanelWidth, minWidth: 280, maxWidth: "60vw" }}
+          >
+            <div
+              className="absolute left-0 top-0 z-10 h-full w-1.5 cursor-col-resize select-none transition-colors hover:bg-blue-400/30 active:bg-blue-400/50"
+              onMouseDown={handlePanelDragStart}
+            />
             <div className="flex h-full overflow-hidden bg-white dark:bg-gray-900">
               <div className="flex min-w-0 flex-1 flex-col">
                 <AIPanel

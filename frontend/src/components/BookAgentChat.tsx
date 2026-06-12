@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -231,6 +231,8 @@ export default function BookAgentChat({
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const latestSelectedNoteIdRef = useRef<number | null>(null);
+  const autoSentSeedRef = useRef<string>('');
+  const sendMessageRef = useRef<((msg: string) => Promise<void>) | null>(null);
 
   const selectedSnippet = useMemo(
     () => selectedExcerpt.trim().replace(/\s+/g, " ").slice(0, 400),
@@ -331,7 +333,16 @@ export default function BookAgentChat({
 
   useEffect(() => {
     if (!seedPrompt.trim()) return;
-    setMessage((prev) => (prev.trim() ? prev : seedPrompt.trim().slice(0, 300)));
+    const trimmed = seedPrompt.trim().slice(0, 300);
+    setMessage((prev) => (prev.trim() ? prev : trimmed));
+    if (autoSentSeedRef.current !== seedPrompt) {
+      autoSentSeedRef.current = seedPrompt;
+      setTimeout(() => {
+        if (sendMessageRef.current && autoSentSeedRef.current === seedPrompt) {
+          sendMessageRef.current(trimmed);
+        }
+      }, 100);
+    }
   }, [seedPrompt]);
 
   useEffect(() => {
@@ -642,6 +653,10 @@ export default function BookAgentChat({
     }
   };
 
+  useEffect(() => {
+    sendMessageRef.current = sendMessage;
+  });
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     await sendMessage(message);
@@ -750,8 +765,57 @@ export default function BookAgentChat({
               }`}
             >
               {item.role === "assistant" ? (
-                <div className="prose prose-sm max-w-none dark:prose-invert">
-                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+                <div className="space-y-2">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm, remarkMath]}
+                    rehypePlugins={[rehypeKatex]}
+                    components={{
+                      h1: ({ children }) => <h1 className="mb-4 mt-6 text-3xl font-bold text-gray-900 first:mt-0 dark:text-gray-100">{children}</h1>,
+                      h2: ({ children }) => <h2 className="mb-3 mt-6 text-2xl font-semibold text-gray-900 dark:text-gray-100">{children}</h2>,
+                      h3: ({ children }) => <h3 className="mb-2 mt-5 text-xl font-semibold text-gray-900 dark:text-gray-100">{children}</h3>,
+                      h4: ({ children }) => <h4 className="mb-2 mt-4 text-lg font-semibold text-gray-900 dark:text-gray-100">{children}</h4>,
+                      h5: ({ children }) => <h5 className="mb-2 mt-4 text-base font-semibold text-gray-900 dark:text-gray-100">{children}</h5>,
+                      h6: ({ children }) => <h6 className="mb-2 mt-4 text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">{children}</h6>,
+                      p: ({ children }) => <p className="mb-4 leading-7 text-gray-800 dark:text-gray-300">{children}</p>,
+                      ul: ({ children }) => <ul className="mb-4 list-disc pl-6 text-gray-800 dark:text-gray-300">{children}</ul>,
+                      ol: ({ children }) => <ol className="mb-4 list-decimal pl-6 text-gray-800 dark:text-gray-300">{children}</ol>,
+                      li: ({ children }) => <li className="mb-1">{children}</li>,
+                      blockquote: ({ children }) => <blockquote className="mb-4 border-l-4 border-blue-200 bg-blue-50 px-4 py-2 text-gray-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-gray-300">{children}</blockquote>,
+                      code: ({ className, children, ...props }: { className?: string; children?: ReactNode; inline?: boolean }) => {
+                        const inline = !className;
+                        if (inline) {
+                          return (
+                            <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-sm text-pink-700 dark:bg-gray-800 dark:text-pink-400" {...props}>{children}</code>
+                          );
+                        }
+                        const codeText = String(children ?? "").replace(/\n$/, "");
+                        return (
+                          <span className="group relative block">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                navigator.clipboard.writeText(codeText);
+                                const btn = e.currentTarget;
+                                btn.textContent = "Copied!";
+                                setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+                              }}
+                              className="absolute right-2 top-2 z-10 rounded bg-gray-700 px-2 py-1 text-xs text-gray-300 opacity-0 transition group-hover:opacity-100 hover:bg-gray-600"
+                            >
+                              Copy
+                            </button>
+                            <code className="block overflow-x-auto rounded-lg bg-gray-900 p-4 font-mono text-sm text-gray-100" {...props}>{children}</code>
+                          </span>
+                        );
+                      },
+                      pre: ({ children }) => <pre className="mb-4">{children}</pre>,
+                      table: ({ children }) => <div className="mb-4 overflow-x-auto"><table className="min-w-full border border-gray-200 text-sm dark:border-gray-700">{children}</table></div>,
+                      thead: ({ children }) => <thead className="bg-gray-100 dark:bg-gray-800">{children}</thead>,
+                      th: ({ children }) => <th className="border border-gray-200 px-3 py-2 text-left font-semibold text-gray-700 dark:border-gray-700 dark:text-gray-200">{children}</th>,
+                      td: ({ children }) => <td className="border border-gray-200 px-3 py-2 text-gray-800 dark:border-gray-700 dark:text-gray-300">{children}</td>,
+                      a: ({ href, children }) => <a href={href} target="_blank" rel="noreferrer" className="text-blue-600 underline hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">{children}</a>,
+                      hr: () => <hr className="my-6 border-gray-200 dark:border-gray-700" />,
+                    }}
+                  >
                     {item.content || "..."}
                   </ReactMarkdown>
                 </div>

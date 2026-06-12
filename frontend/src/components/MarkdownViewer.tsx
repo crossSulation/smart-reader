@@ -446,10 +446,28 @@ const MarkdownViewer = memo(forwardRef<MarkdownViewerHandle, MarkdownViewerProps
             if (isSmiles) return <SmilesBlock smiles={String(children ?? "")} />;
 
             const inline = !className;
-            return inline ? (
-              <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-sm text-pink-700 dark:bg-gray-800 dark:text-pink-400" {...props}>{children}</code>
-            ) : (
-              <code className="block overflow-x-auto rounded-lg bg-gray-900 p-4 font-mono text-sm text-gray-100" {...props}>{children}</code>
+            if (inline) {
+              return (
+                <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-sm text-pink-700 dark:bg-gray-800 dark:text-pink-400" {...props}>{children}</code>
+              );
+            }
+            const codeText = String(children ?? "").replace(/\n$/, "");
+            return (
+              <span className="group relative block">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    navigator.clipboard.writeText(codeText);
+                    const btn = e.currentTarget;
+                    btn.textContent = "Copied!";
+                    setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+                  }}
+                  className="absolute right-2 top-2 z-10 rounded bg-gray-700 px-2 py-1 text-xs text-gray-300 opacity-0 transition group-hover:opacity-100 hover:bg-gray-600"
+                >
+                  Copy
+                </button>
+                <code className="block overflow-x-auto rounded-lg bg-gray-900 p-4 font-mono text-sm text-gray-100" {...props}>{children}</code>
+              </span>
             );
           },
           pre: ({ children }) => {
