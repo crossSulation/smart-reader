@@ -54,6 +54,10 @@ function Reader() {
   const [savingEditedNoteId, setSavingEditedNoteId] = useState<number | null>(null);
   const [currentPdfPage, setCurrentPdfPage] = useState(1);
   const [pdfTotalPages, setPdfTotalPages] = useState(0);
+  const [epubProgress, setEpubProgress] = useState(0);
+  const [currentPageDisplay, setCurrentPageDisplay] = useState<string | number>("?");
+  const [totalPageDisplay, setTotalPageDisplay] = useState<string | number>("?");
+  const [progressPercent, setProgressPercent] = useState(0);
   const [markdownJumpSection, setMarkdownJumpSection] = useState<number | undefined>(undefined);
   const [markdownSidebarEntries, setMarkdownSidebarEntries] = useState<MarkdownSidebarEntry[]>([]);
   const [activeMarkdownSectionIndex, setActiveMarkdownSectionIndex] = useState(0);
@@ -434,6 +438,29 @@ function Reader() {
     ? (uploadedBookId ? String(uploadedBookId) : null)
     : (id ?? null);
 
+  // Sync page display state from file-type-specific sources
+  useEffect(() => {
+    if (activeFileType === "pdf") {
+      setCurrentPageDisplay(currentPdfPage);
+      setTotalPageDisplay(pdfTotalPages || (!localFile ? book?.total_pages : undefined) || "?");
+      setProgressPercent(pdfTotalPages ? Math.min(100, Math.max(0, (currentPdfPage / pdfTotalPages) * 100)) : 0);
+    } else if (activeFileType === "epub") {
+      setCurrentPageDisplay(`${epubProgress}%`);
+      setTotalPageDisplay("100%");
+      setProgressPercent(epubProgress);
+    } else {
+      const cp = Math.max(1, book?.current_page ?? 1);
+      const tp = (!localFile ? book?.total_pages : undefined) || "?";
+      setCurrentPageDisplay(cp);
+      setTotalPageDisplay(tp);
+      if (typeof tp === "number") {
+        setProgressPercent(Math.min(100, Math.max(0, (cp / tp) * 100)));
+      } else {
+        setProgressPercent(0);
+      }
+    }
+  }, [activeFileType, currentPdfPage, pdfTotalPages, epubProgress, book?.current_page, book?.total_pages, localFile]);
+
   const thumbnailFile = localFile && activeFileType === "pdf"
     ? localFile.url
     : book?.file_url
@@ -662,19 +689,10 @@ function Reader() {
         bookId={localFile ? undefined : id!}
         fileUrlOverride={localFile?.type === "epub" ? localFile.url : undefined}
         onTextSelected={handleTextSelected}
+        onProgressChange={setEpubProgress}
+        showSidebar={isDesktop}
       />
     );
-
-  const currentPageDisplay = activeFileType === "pdf"
-    ? currentPdfPage
-    : Math.max(1, book.current_page ?? 1);
-  const totalPageDisplay = activeFileType === "pdf"
-    ? (pdfTotalPages || (!localFile ? book.total_pages : undefined) || "?")
-    : ((!localFile ? book.total_pages : undefined) || "?");
-  const totalPagesNumber = typeof totalPageDisplay === "number" ? totalPageDisplay : null;
-  const progressPercent = totalPagesNumber
-    ? Math.min(100, Math.max(0, (currentPageDisplay / totalPagesNumber) * 100))
-    : 0;
 
   return (
     <>

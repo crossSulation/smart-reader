@@ -2,7 +2,7 @@
 
 ## Overall Progress Summary
 **Start Date:** Week 1 (May 15, 2026)
-**Current Phase:** Post-Week 6 — Desktop Polish & Settings Complete
+**Current Phase:** Post-Week 6 — EPUB Polish & Library UX
 
 | Milestone | Status | Progress |
 |-----------|--------|----------|
@@ -52,6 +52,11 @@
 - [x] Weak-topic chips in Profile weekly summary are clickable and navigate to Review with topic filter
 - [x] Review page supports `?topic=` query param with filter chip display and backend tag filtering (`GET /api/learning/review/due?tag=`)
 - [x] CI GitHub Actions workflow (`.github/workflows/ci.yml`) running frontend tsc + eslint and backend import check + release_check
+- [x] EPUB viewer parity: TOC sidebar (collapsible mobile, sidebar desktop), progress via spine-based percentage calculation, iframe sandbox fix, page-turn animation removed
+- [x] EPUB file loading via authenticated fetch → ArrayBuffer (fixes 403 on protected file URLs), with 30s timeout on `book.ready`
+- [x] EPUB progress synced to Reader footer as percentage (42%), saved to backend as `current_page` percent integer
+- [x] BookCard component differentiates EPUB (% display), Markdown (— placeholder), PDF (page number) for reading progress
+- [x] Library page supports grid/list view toggle with persistent `viewMode` state and compact `BookListRow` component
 
 ### Current Status Snapshot (June 15, 2026)
 - [x] Backend ingestion pipeline supports PDF/EPUB/Markdown with structure-aware chunking
@@ -694,8 +699,8 @@ Ship a reliable "real smart reader" by improving:
 4. [x] CI job — add GitHub Actions workflow to run `release_check.py --strict` + frontend typecheck on PRs.
 
 ## Immediate Next Steps (Post Week 6)
-1. EPUB viewer parity — heading navigation, text selection for notes/flashcards, page tracking.
-2. Reading progress persistence — save last page/scroll position per book to backend for cross-device sync.
+1. [x] EPUB viewer parity — heading navigation, text selection for notes/flashcards, page tracking.
+2. [~] Reading progress persistence — EPUB progress saved as percentage; cross-device sync not yet implemented.
 3. Export functionality — notes → markdown, flashcards → Anki/CSV export.
 4. Offline desktop mode — cache book content locally for offline reading in Tauri desktop.
 

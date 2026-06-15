@@ -7,6 +7,21 @@ function BookCard({ book }: { book: Book }) {
   const navigate = useNavigate();
   const { t } = useTranslation();
 
+  const fileType = (book.file_type || "").toLowerCase();
+  const isEpub = fileType.includes("epub") || book.title.toLowerCase().endsWith(".epub");
+  const isMarkdown = fileType.includes("markdown") || fileType === "md" ||
+    book.title.toLowerCase().endsWith(".md") ||
+    book.title.toLowerCase().endsWith(".markdown");
+
+  const formatProgress = () => {
+    if (isMarkdown) return "\u2014";
+    if (isEpub) {
+      const pct = book.current_page ?? 0;
+      return `${pct}%`;
+    }
+    return book.current_page || 0;
+  };
+
   const formattedLastRead = book.last_read_time
     ? new Intl.DateTimeFormat(undefined, {
         year: 'numeric',
@@ -42,7 +57,7 @@ function BookCard({ book }: { book: Book }) {
           {book.author || "unknown"}
         </p>
         <div className="mt-3 text-sm text-gray-500 dark:text-gray-400">
-          <div>{t('bookCard.readingProgress')}: {book.current_page || 0}</div>
+          <div>{t('bookCard.readingProgress')}: {formatProgress()}</div>
           {formattedLastRead && (
             <div>{t('bookCard.lastRead')}: {formattedLastRead}</div>
           )}
