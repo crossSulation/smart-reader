@@ -5,6 +5,7 @@ import Library from '../pages/Library'
 import Reader from '../pages/Reader'
 import Profile from '../pages/Profile'
 import Review from '../pages/Review'
+import Settings from '../pages/Settings'
 import Layout from '../Layout'
 import PublicLayout from '../components/PublicLayout'
 import ProtectedRoute from '../components/ProtectedRouter'
@@ -28,6 +29,7 @@ function RouterContainer() {
           <Route path="/" element={<Library />} />
           <Route path="/library" element={<Library />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="/review" element={<Review />} />
         </Route>
 

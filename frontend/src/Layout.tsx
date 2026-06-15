@@ -40,6 +40,9 @@ const Layout: React.FC = () => {
               <Button color="inherit" component={Link} to="/review">
                 {t('common.review', 'Review')}
               </Button>
+              <Button color="inherit" component={Link} to="/settings">
+                {t('common.settings')}
+              </Button>
               <Button color="inherit" component={Link} to="/profile">
                 {t('common.profile')}
               </Button>

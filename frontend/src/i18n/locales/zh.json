@@ -134,5 +134,13 @@
     "page": "页",
     "chunk": "片段",
     "goToPage": "跳转到页面"
+  },
+  "settings": {
+    "appearance": "外观",
+    "language": "语言",
+    "theme": "主题",
+    "shortcuts": "快捷键说明",
+    "shortcutsAction": "操作",
+    "shortcutsKey": "快捷键"
   }
 }

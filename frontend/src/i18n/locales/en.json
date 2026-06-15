@@ -134,5 +134,13 @@
     "page": "Page",
     "chunk": "Chunk",
     "goToPage": "Go to page"
+  },
+  "settings": {
+    "appearance": "Appearance",
+    "language": "Language",
+    "theme": "Theme",
+    "shortcuts": "Keyboard Shortcuts",
+    "shortcutsAction": "Action",
+    "shortcutsKey": "Shortcut"
   }
 }

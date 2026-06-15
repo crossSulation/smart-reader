@@ -41,8 +41,12 @@
 - [x] Unified chat now supports multiple conversation sessions per book with persisted per-session history and quick session switching
 - [x] Frontend desktop scaffolding added with Tauri 2.0 (`src-tauri`, Tauri config/capabilities, npm scripts, and Vite Tauri-ready settings)
 - [x] Added root launcher script `start_desktop.bat` to start backend + Tauri desktop flow from one command
+- [x] Explain selection now auto-triggers LLM agent (seedPrompt auto-sends in BookAgentChat, no manual Enter required)
+- [x] BookAgentChat markdown rendering uses explicit Tailwind components matching MarkdownViewer (h1-h6, p, ul/ol, blockquote, code, table, a, hr)
+- [x] Installed @tailwindcss/typography plugin; code blocks in AI chat and document viewer have one-click Copy button with "Copied!" feedback
+- [x] Desktop-mode AIPanel supports drag-to-resize (280px–60vw) via left-edge drag handle with cursor-col-resize indicator
 
-### Current Status Snapshot (June 4, 2026)
+### Current Status Snapshot (June 15, 2026)
 - [x] Backend ingestion pipeline supports PDF/EPUB/Markdown with structure-aware chunking
 - [x] Chunk metadata includes page anchors and section path for grounding
 - [x] Search and QA citation UI shows section context
@@ -676,11 +680,11 @@ Ship a reliable "real smart reader" by improving:
 
 ---
 
-## Immediate Next Steps (This Week)
-1. Install Rust toolchain via `rustup` on dev machines to unblock Tauri desktop runtime/build.
-2. Start next roadmap cycle planning (post-Week 4 backlog prioritization).
-3. Add weak-topic review drill-down UX from weekly summary/profile analytics.
-4. Add CI job to run `scripts/release_check.py --strict` on staging credentials.
+## Immediate Next Steps (Week 6)
+1. Desktop AIPanel width persistence — save user's drag-resize width to localStorage for session restore.
+2. Desktop native window controls — enhance CustomTitleBar with minimize/maximize/close and Tauri window API integration.
+3. Weak-topic review drill-down — click from weekly summary/profile analytics into filtered review sessions targeting weak topics.
+4. CI job — add GitHub Actions workflow to run `release_check.py --strict` + frontend typecheck on PRs.
 
 ---
 
@@ -691,9 +695,9 @@ Ship a reliable "real smart reader" by improving:
 
 | Milestone | Status | Progress |
 |-----------|--------|----------|
-| **Dark Mode** | 🔵 In Progress | 0/4 tasks done |
-| **Keyboard Shortcuts** | ⚪ Pending | 0/4 tasks done |
-| **Explain Selection** | ⚪ Pending | 0/3 tasks done |
+| **Dark Mode** | 🟢 Complete | 4/4 tasks done |
+| **Keyboard Shortcuts** | 🟢 Complete | 4/4 tasks done |
+| **Explain Selection** | 🟢 Complete | 3/3 tasks done |
 
 ### W5-01: Dark Mode (Theme Toggle)
 
