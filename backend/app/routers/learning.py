@@ -202,6 +202,35 @@ def create_flashcard(
     )
 
 
+@router.get("/flashcards", response_model=list[FlashcardResponse])
+def list_flashcards(
+    limit: int = Query(200, ge=1, le=1000),
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(Flashcard)
+        .filter(Flashcard.user_id == user["id"])
+        .order_by(Flashcard.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        FlashcardResponse(
+            id=f.id,
+            user_id=f.user_id,
+            book_id=f.book_id,
+            front=f.front,
+            back=f.back,
+            source_text=f.source_text,
+            source_chunk_id=f.source_chunk_id,
+            tags=_split_tags(f.tags),
+            created_at=f.created_at,
+        )
+        for f in rows
+    ]
+
+
 @router.get("/review/due", response_model=list[ReviewItemResponse])
 def list_due_review_items(
     limit: int = Query(20, ge=1, le=200),

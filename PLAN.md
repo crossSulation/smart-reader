@@ -57,6 +57,10 @@
 - [x] EPUB progress synced to Reader footer as percentage (42%), saved to backend as `current_page` percent integer
 - [x] BookCard component differentiates EPUB (% display), Markdown (— placeholder), PDF (page number) for reading progress
 - [x] Library page supports grid/list view toggle with persistent `viewMode` state and compact `BookListRow` component
+- [x] Notes export as Markdown (.md) via Settings page, with date/heading/tags formatting per note
+- [x] Flashcards export as Anki-compatible CSV (.csv) via Settings page, with front/back/tags columns
+- [x] `GET /api/learning/flashcards` endpoint added for listing all user flashcards
+- [x] EPUB file caching via IndexedDB (`fileCache.ts`) — files downloaded once, served from cache on subsequent opens for offline reading
 
 ### Current Status Snapshot (June 15, 2026)
 - [x] Backend ingestion pipeline supports PDF/EPUB/Markdown with structure-aware chunking
@@ -651,6 +655,7 @@ Ship a reliable "real smart reader" by improving:
 - [x] `PATCH /api/learning/notes/{note_id}`
 - [x] `DELETE /api/learning/notes/{note_id}`
 - [x] `POST /api/learning/flashcards`
+- [x] `GET /api/learning/flashcards?limit=`
 - [x] `GET /api/learning/review/due?limit=&tag=`
 - [x] `POST /api/learning/review/{item_id}/rate`
 - [x] `GET /api/personalization/profile`
@@ -701,8 +706,8 @@ Ship a reliable "real smart reader" by improving:
 ## Immediate Next Steps (Post Week 6)
 1. [x] EPUB viewer parity — heading navigation, text selection for notes/flashcards, page tracking.
 2. [~] Reading progress persistence — EPUB progress saved as percentage; cross-device sync not yet implemented.
-3. Export functionality — notes → markdown, flashcards → Anki/CSV export.
-4. Offline desktop mode — cache book content locally for offline reading in Tauri desktop.
+3. [x] Export functionality — notes → markdown, flashcards → CSV export.
+4. [x] Offline desktop mode — IndexedDB-based file cache for EPUB books, cached on first download.
 
 ---
 

@@ -141,6 +141,12 @@
     "theme": "主题",
     "shortcuts": "快捷键说明",
     "shortcutsAction": "操作",
-    "shortcutsKey": "快捷键"
+    "shortcutsKey": "快捷键",
+    "exportData": "数据导出",
+    "exportNotesMd": "导出笔记 (Markdown)",
+    "exportFlashcardsCsv": "导出闪卡 (CSV)",
+    "exportSuccess": "导出成功。",
+    "clearCache": "清除离线缓存",
+    "cacheCleared": "缓存已清除。"
   }
 }

@@ -141,6 +141,12 @@
     "theme": "Theme",
     "shortcuts": "Keyboard Shortcuts",
     "shortcutsAction": "Action",
-    "shortcutsKey": "Shortcut"
+    "shortcutsKey": "Shortcut",
+    "exportData": "Data Export",
+    "exportNotesMd": "Export Notes (Markdown)",
+    "exportFlashcardsCsv": "Export Flashcards (CSV)",
+    "exportSuccess": "Exported successfully.",
+    "clearCache": "Clear Offline Cache",
+    "cacheCleared": "Cache cleared."
   }
 }

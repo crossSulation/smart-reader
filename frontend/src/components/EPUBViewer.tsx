@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback, type TouchEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import { fetchWithCache } from '../utils/fileCache';
 
 type EPUBNavItem = {
   label: string;
@@ -107,16 +108,11 @@ export default function EPUBViewer({
           throw new Error('Failed to resolve EPUB file URL');
         }
 
-        // Fetch the EPUB file with auth token, then pass as Blob URL to epubjs
-        const token = localStorage.getItem("token");
-        const epubRes = await fetch(resolvedFileUrl, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        // Fetch the EPUB file with auth token and cache for offline use
+        const token = localStorage.getItem("token") || undefined;
+        const { blob } = await fetchWithCache(resolvedFileUrl, token);
         if (cancelled) return;
-        if (!epubRes.ok) {
-          throw new Error(`Failed to download EPUB (${epubRes.status})`);
-        }
-        const buffer = await epubRes.arrayBuffer();
+        const buffer = await blob.arrayBuffer();
         if (cancelled) return;
 
         const book = EPUBJS(buffer);
