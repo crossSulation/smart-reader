@@ -71,7 +71,10 @@ function Reader() {
   const [fontSize, setFontSize] = useState(16);
   const [fontFamily, setFontFamily] = useState("sans-serif");
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [aiPanelWidth, setAiPanelWidth] = useState(480);
+  const [aiPanelWidth, setAiPanelWidth] = useState(() => {
+    const saved = localStorage.getItem("ai-panel-width");
+    return saved ? Number(saved) : 480;
+  });
   const aiPanelDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const thumbnailRefs = useRef<(HTMLDivElement | null)[]>([]);
   const markdownViewerRef = useRef<MarkdownViewerHandle | null>(null);
@@ -474,6 +477,10 @@ function Reader() {
       window.removeEventListener("mouseup", onUp);
     };
   }, [handlePanelDragMove, handlePanelDragEnd]);
+
+  useEffect(() => {
+    localStorage.setItem("ai-panel-width", String(aiPanelWidth));
+  }, [aiPanelWidth]);
 
   const handleToggleFullscreen = () => {
     if (document.fullscreenElement) {

@@ -205,15 +205,23 @@ def create_flashcard(
 @router.get("/review/due", response_model=list[ReviewItemResponse])
 def list_due_review_items(
     limit: int = Query(20, ge=1, le=200),
+    tag: str | None = Query(None),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     now = datetime.now(timezone.utc)
 
-    rows = (
+    query = (
         db.query(ReviewItem, Flashcard)
         .join(Flashcard, Flashcard.id == ReviewItem.flashcard_id)
         .filter(Flashcard.user_id == user["id"], ReviewItem.due_at <= now)
+    )
+
+    if tag:
+        query = query.filter(Flashcard.tags.like(f"%{tag}%"))
+
+    rows = (
+        query
         .order_by(ReviewItem.due_at.asc())
         .limit(limit)
         .all()

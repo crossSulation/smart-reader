@@ -2,7 +2,7 @@
 
 ## Overall Progress Summary
 **Start Date:** Week 1 (May 15, 2026)
-**Current Phase:** Post-Week 4 Hardening - Reader Learning UX Improvements
+**Current Phase:** Post-Week 6 — Desktop Polish & Settings Complete
 
 | Milestone | Status | Progress |
 |-----------|--------|----------|
@@ -45,6 +45,13 @@
 - [x] BookAgentChat markdown rendering uses explicit Tailwind components matching MarkdownViewer (h1-h6, p, ul/ol, blockquote, code, table, a, hr)
 - [x] Installed @tailwindcss/typography plugin; code blocks in AI chat and document viewer have one-click Copy button with "Copied!" feedback
 - [x] Desktop-mode AIPanel supports drag-to-resize (280px–60vw) via left-edge drag handle with cursor-col-resize indicator
+- [x] Desktop-mode AIPanel width persists to localStorage and restores across sessions
+- [x] Desktop CustomTitleBar enhanced with double-click-to-maximize and dynamic maximize/restore icon
+- [x] Settings page with language switcher, theme toggle, and keyboard shortcuts reference table (MUI Table + kbd styling)
+- [x] Settings nav link added to both web AppBar and desktop CustomTitleBar; language/theme toggles moved from Profile to Settings
+- [x] Weak-topic chips in Profile weekly summary are clickable and navigate to Review with topic filter
+- [x] Review page supports `?topic=` query param with filter chip display and backend tag filtering (`GET /api/learning/review/due?tag=`)
+- [x] CI GitHub Actions workflow (`.github/workflows/ci.yml`) running frontend tsc + eslint and backend import check + release_check
 
 ### Current Status Snapshot (June 15, 2026)
 - [x] Backend ingestion pipeline supports PDF/EPUB/Markdown with structure-aware chunking
@@ -639,7 +646,7 @@ Ship a reliable "real smart reader" by improving:
 - [x] `PATCH /api/learning/notes/{note_id}`
 - [x] `DELETE /api/learning/notes/{note_id}`
 - [x] `POST /api/learning/flashcards`
-- [x] `GET /api/learning/review/due`
+- [x] `GET /api/learning/review/due?limit=&tag=`
 - [x] `POST /api/learning/review/{item_id}/rate`
 - [x] `GET /api/personalization/profile`
 - [x] `PUT /api/personalization/profile`
@@ -681,10 +688,16 @@ Ship a reliable "real smart reader" by improving:
 ---
 
 ## Immediate Next Steps (Week 6)
-1. Desktop AIPanel width persistence — save user's drag-resize width to localStorage for session restore.
-2. Desktop native window controls — enhance CustomTitleBar with minimize/maximize/close and Tauri window API integration.
-3. Weak-topic review drill-down — click from weekly summary/profile analytics into filtered review sessions targeting weak topics.
-4. CI job — add GitHub Actions workflow to run `release_check.py --strict` + frontend typecheck on PRs.
+1. [x] Desktop AIPanel width persistence — save user's drag-resize width to localStorage for session restore.
+2. [x] Desktop native window controls — enhance CustomTitleBar with double-click maximize + dynamic maximize/restore icon.
+3. [x] Weak-topic review drill-down — click from weekly summary/profile analytics into filtered review sessions targeting weak topics.
+4. [x] CI job — add GitHub Actions workflow to run `release_check.py --strict` + frontend typecheck on PRs.
+
+## Immediate Next Steps (Post Week 6)
+1. EPUB viewer parity — heading navigation, text selection for notes/flashcards, page tracking.
+2. Reading progress persistence — save last page/scroll position per book to backend for cross-device sync.
+3. Export functionality — notes → markdown, flashcards → Anki/CSV export.
+4. Offline desktop mode — cache book content locally for offline reading in Tauri desktop.
 
 ---
 

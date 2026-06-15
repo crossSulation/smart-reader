@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router-dom";
 
 type ReviewRating = "again" | "hard" | "good" | "easy";
 
@@ -106,6 +107,8 @@ function FlashCard({
 
 function Review() {
   const { t } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTopic = searchParams.get("topic") || null;
   const [items, setItems] = useState<DueReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -129,7 +132,9 @@ function Review() {
     setError(null);
 
     try {
-      const res = await fetch("/api/learning/review/due?limit=50", {
+      const params = new URLSearchParams({ limit: "50" });
+      if (activeTopic) params.set("tag", activeTopic);
+      const res = await fetch(`/api/learning/review/due?${params.toString()}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       });
       if (!res.ok) {
@@ -144,7 +149,7 @@ function Review() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeTopic]);
 
   useEffect(() => {
     loadDueItems();
@@ -185,13 +190,27 @@ function Review() {
     <div className="mx-auto w-full max-w-5xl px-6 py-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">{t("review.title", "Daily Review")}</h1>
-        <button
-          type="button"
-          onClick={loadDueItems}
-          className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
-        >
-          {t("review.refresh", "Refresh")}
-        </button>
+        <div className="flex items-center gap-2">
+          {activeTopic && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+              {activeTopic}
+              <button
+                type="button"
+                onClick={() => setSearchParams({})}
+                className="ml-1 text-blue-500 hover:text-blue-800 dark:hover:text-blue-200"
+              >
+                &times;
+              </button>
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={loadDueItems}
+            className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            {t("review.refresh", "Refresh")}
+          </button>
+        </div>
       </div>
 
       {loading && <div className="rounded border border-gray-200 bg-white p-4 text-sm text-gray-600">Loading due cards...</div>}

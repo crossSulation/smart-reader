@@ -9,9 +9,16 @@ const CustomTitleBar: React.FC = () => {
   const navigate = useNavigate();
   const titlebarRef = useRef<HTMLDivElement>(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
     const appWindow = getCurrentWindow();
+
+    appWindow.isMaximized().then(setIsMaximized);
+
+    const unlistenResize = appWindow.onResized(async () => {
+      setIsMaximized(await appWindow.isMaximized());
+    });
 
     const onMinimize = () => appWindow.minimize();
     const onToggleMaximize = () => appWindow.toggleMaximize();
@@ -26,11 +33,16 @@ const CustomTitleBar: React.FC = () => {
     closeBtn?.addEventListener('click', onClose);
 
     return () => {
+      unlistenResize.then((fn) => fn());
       minimizeBtn?.removeEventListener('click', onMinimize);
       maximizeBtn?.removeEventListener('click', onToggleMaximize);
       closeBtn?.removeEventListener('click', onClose);
     };
   }, []);
+
+  const handleTitlebarDoubleClick = () => {
+    getCurrentWindow().toggleMaximize();
+  };
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -51,7 +63,7 @@ const CustomTitleBar: React.FC = () => {
 
   return (
     <div ref={titlebarRef} className="titlebar" data-tauri-drag-region>
-      <div className="titlebar-left" data-tauri-drag-region>
+      <div className="titlebar-left" data-tauri-drag-region onDoubleClick={handleTitlebarDoubleClick}>
         <span className="titlebar-brand" data-tauri-drag-region>
           {t('common.appName')}
         </span>
@@ -94,10 +106,17 @@ const CustomTitleBar: React.FC = () => {
             <path fill="currentColor" d="M19 13H5v-2h14z" />
           </svg>
         </button>
-        <button id="titlebar-maximize" className="titlebar-button" title="Maximize">
-          <svg width="12" height="12" viewBox="0 0 24 24">
-            <path fill="currentColor" d="M4 4h16v16H4zm2 4v10h12V8z" />
-          </svg>
+        <button id="titlebar-maximize" className="titlebar-button" title={isMaximized ? "Restore" : "Maximize"}>
+          {isMaximized ? (
+            <svg width="12" height="12" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M8 8h8v8H8zm2 2h4v4h-4z" />
+              <path fill="currentColor" d="M4 4h4v2H6v2H4zm14 0h2v4h-2V6h-2V4zm0 14v-2h2v4h-4v-2zm-14 0h4v2H4v-4h2z" />
+            </svg>
+          ) : (
+            <svg width="12" height="12" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M4 4h16v16H4zm2 4v10h12V8z" />
+            </svg>
+          )}
         </button>
         <button id="titlebar-close" className="titlebar-button titlebar-close-button" title="Close">
           <svg width="12" height="12" viewBox="0 0 24 24">

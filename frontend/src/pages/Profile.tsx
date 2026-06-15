@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { PersonOutlined, EmailOutlined } from '@mui/icons-material';
-import { TextField, Button, Alert, Paper, Typography, Box, Avatar, MenuItem } from '@mui/material';
+import { TextField, Button, Alert, Paper, Typography, Box, Avatar, MenuItem, Chip } from '@mui/material';
 
 interface User {
   id: number;
@@ -448,14 +448,26 @@ function Profile() {
               </Paper>
             </Box>
             <Box mt={2}>
-              <Typography variant="body2" fontWeight="medium">
+              <Typography variant="body2" fontWeight="medium" mb={1}>
                 {t('profile.topWeakTopics', 'Top Weak Topics')}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {summary.top_weak_topics.length > 0
-                  ? summary.top_weak_topics.join(', ')
-                  : t('profile.noWeakTopics', 'No weak topics detected this week.')}
-              </Typography>
+              {summary.top_weak_topics.length > 0 ? (
+                <Box display="flex" flexWrap="wrap" gap={1}>
+                  {summary.top_weak_topics.map((topic) => (
+                    <Chip
+                      key={topic}
+                      label={topic}
+                      size="small"
+                      clickable
+                      onClick={() => navigate(`/review?topic=${encodeURIComponent(topic)}`)}
+                    />
+                  ))}
+                </Box>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  {t('profile.noWeakTopics', 'No weak topics detected this week.')}
+                </Typography>
+              )}
             </Box>
 
             <Box mt={3}>
