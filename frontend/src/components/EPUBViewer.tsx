@@ -21,7 +21,7 @@ type EPUBViewerProps = {
 
 type AnnotationType = 'highlight' | 'underline';
 
-type ReadingTheme = 'default' | 'wechat';
+type ReadingTheme = 'default' | 'wechat' | 'kindle';
 
 interface EpubAnnotation {
   id: string;
@@ -52,10 +52,15 @@ const WECHAT_THEME_CSS = `
     background-color: #F6F1E8 !important;
     color: #333333 !important;
   }
-  body * {
-    font-family: Georgia, "Times New Roman", "Noto Serif SC", "Source Han Serif SC", serif !important;
-  }
   a { color: #576B95 !important; }
+`;
+
+const KINDLE_THEME_CSS = `
+  body {
+    background-color: #F5F4F0 !important;
+    color: #1A1A1A !important;
+  }
+  a { color: #4A6A8A !important; }
 `;
 
 function NavTree({
@@ -126,7 +131,7 @@ export default function EPUBViewer({
 
   useEffect(() => { activeToolRef.current = activeTool; }, [activeTool]);
   const currentHighlightColors = useMemo(
-    () => readingTheme === 'wechat' ? HIGHLIGHT_COLORS_WECHAT : HIGHLIGHT_COLORS,
+    () => readingTheme !== 'default' ? HIGHLIGHT_COLORS_WECHAT : HIGHLIGHT_COLORS,
     [readingTheme]
   );
 
@@ -147,13 +152,17 @@ export default function EPUBViewer({
   const applyThemeToDocument = useCallback((doc: Document | undefined) => {
     if (!doc) return;
     let styleEl = doc.getElementById('epub-reading-theme') as HTMLStyleElement | null;
-    if (readingThemeRef.current === 'wechat') {
+    const css =
+      readingThemeRef.current === 'wechat' ? WECHAT_THEME_CSS
+      : readingThemeRef.current === 'kindle' ? KINDLE_THEME_CSS
+      : null;
+    if (css) {
       if (!styleEl) {
         styleEl = doc.createElement('style');
         styleEl.id = 'epub-reading-theme';
         doc.head.appendChild(styleEl);
       }
-      styleEl.textContent = WECHAT_THEME_CSS;
+      styleEl.textContent = css;
     } else {
       if (styleEl) styleEl.remove();
     }
@@ -563,15 +572,24 @@ export default function EPUBViewer({
           </div>
 
           {/* Reading theme switcher */}
-          <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-800">
-            <button
-              onClick={() => setReadingTheme(prev => prev === 'wechat' ? 'default' : 'wechat')}
-              className={`rounded px-2 py-1 transition-colors ${readingTheme === 'wechat'
-                ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
-                : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300'
+          <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-0.5 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            {(['default', 'wechat', 'kindle'] as ReadingTheme[]).map(theme => (
+              <button
+                key={theme}
+                onClick={() => setReadingTheme(theme)}
+                className={`rounded px-2 py-1 transition-colors text-xs ${
+                  readingTheme === theme
+                    ? theme === 'wechat'
+                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                      : theme === 'kindle'
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                        : 'bg-gray-200 text-gray-800 dark:bg-gray-600 dark:text-gray-200'
+                    : 'text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700'
                 }`}
-              title="WeChat Read theme"
-            >&#128214; 护眼模式</button>
+              >
+                {theme === 'default' ? '默认' : theme === 'wechat' ? '护眼' : '墨水屏'}
+              </button>
+            ))}
           </div>
         </div>
 
