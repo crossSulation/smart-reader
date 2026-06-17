@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback, type TouchEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchWithCache } from '../utils/fileCache';
+import Rendition from 'epubjs/types/rendition';
+import View from 'epubjs/types/managers/view';
 
 type EPUBNavItem = {
   label: string;
@@ -16,6 +18,25 @@ type EPUBViewerProps = {
   onProgressChange?: (percent: number) => void;
   showSidebar?: boolean;
 };
+
+type AnnotationType = 'highlight' | 'underline';
+
+interface EpubAnnotation {
+  id: string;
+  cfiRange: string;
+  type: AnnotationType;
+  color: string;
+  text: string;
+}
+
+const HIGHLIGHT_COLORS = [
+  'rgba(255,235,0,0.5)',
+  'rgba(74,222,128,0.45)',
+  'rgba(249,168,212,0.55)',
+  'rgba(147,197,253,0.55)',
+];
+
+const UNDERLINE_COLORS = ['#2563eb', '#dc2626', '#16a34a', '#d97706'];
 
 function NavTree({
   items,
@@ -68,10 +89,34 @@ export default function EPUBViewer({
   const [navItems, setNavItems] = useState<EPUBNavItem[]>([]);
   const [activeHref, setActiveHref] = useState<string | null>(null);
   const bookRef = useRef<any>(null);
-  const renditionRef = useRef<any>(null);
+  const renditionRef = useRef<Rendition | null>(null);
   const touchStartX = useRef<number>(0);
   const touchStartY = useRef<number>(0);
   const prevJumpHrefRef = useRef<string | undefined>(undefined);
+
+  const [activeTool, setActiveTool] = useState<'none' | AnnotationType>('none');
+  const [activeColor, setActiveColor] = useState(HIGHLIGHT_COLORS[0]);
+  const [annotations, setAnnotations] = useState<EpubAnnotation[]>([]);
+  const activeToolRef = useRef(activeTool);
+  const activeColorRef = useRef(activeColor);
+  const annotationsRef = useRef(annotations);
+
+  useEffect(() => { activeToolRef.current = activeTool; }, [activeTool]);
+  useEffect(() => { activeColorRef.current = activeColor; }, [activeColor]);
+  useEffect(() => { annotationsRef.current = annotations; }, [annotations]);
+
+  const annotationStorageKey = bookId ? `epub-annotations-${bookId}` : 'epub-annotations-local';
+
+  useEffect(() => {
+    const saved = localStorage.getItem(annotationStorageKey);
+    if (saved) {
+      try { setAnnotations(JSON.parse(saved)); } catch { /* ignore */ }
+    }
+  }, [annotationStorageKey]);
+
+  useEffect(() => {
+    localStorage.setItem(annotationStorageKey, JSON.stringify(annotations));
+  }, [annotations, annotationStorageKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -108,7 +153,6 @@ export default function EPUBViewer({
           throw new Error('Failed to resolve EPUB file URL');
         }
 
-        // Fetch the EPUB file with auth token and cache for offline use
         const token = localStorage.getItem("token") || undefined;
         const { blob } = await fetchWithCache(resolvedFileUrl, token);
         if (cancelled) return;
@@ -118,7 +162,6 @@ export default function EPUBViewer({
         const book = EPUBJS(buffer);
         bookRef.current = book;
 
-        // Wait for the book to finish parsing before rendering
         const readyPromise = book.ready;
         const timeout = new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('EPUB loading timed out')), 30000),
@@ -139,14 +182,12 @@ export default function EPUBViewer({
           await rendition.display();
         }
 
-        // epubjs creates an internal iframe; ensure scripts are allowed for rendering
         const iframe = container.querySelector('iframe');
         if (iframe && iframe.sandbox) {
           iframe.sandbox.add('allow-scripts');
           iframe.sandbox.add('allow-same-origin');
         }
 
-        // Extract TOC
         const bookAny = book as any;
         const nav: EPUBNavItem[] = bookAny.loaded?.navigation?.toc || [];
         setNavItems(nav);
@@ -156,15 +197,26 @@ export default function EPUBViewer({
             if (resolved?.toc) {
               setNavItems(resolved.toc);
             }
-          } catch {
-            // TOC unavailable
-          }
+          } catch { /* TOC unavailable */ }
         }
 
-        // Track current location
+        setTimeout(() => {
+          const current = annotationsRef.current;
+          if (current.length > 0 && rendition.annotations) {
+            current.forEach(ann => {
+              try {
+                if (ann.type === 'highlight') {
+                  rendition.annotations.highlight(ann.cfiRange, {}, () => {}, '', { fill: ann.color });
+                } else {
+                  rendition.annotations.underline(ann.cfiRange, {}, () => {}, '', { stroke: ann.color, 'stroke-width': '2px', fill: 'none' });
+                }
+              } catch { /* CFI may be stale */ }
+            });
+          }
+        }, 800);
+
         rendition.on('relocated', (location: any) => {
           try {
-            // Re-ensure iframe sandbox allows scripts
             const iframe = container.querySelector('iframe');
             if (iframe?.sandbox) {
               iframe.sandbox.add('allow-scripts');
@@ -172,8 +224,6 @@ export default function EPUBViewer({
             }
 
             let percent = 0;
-
-            // Calculate from spine position and displayed page within section
             const displayed = location.start?.displayed;
             const index = location.start?.index;
             const spineLength = bookAny.spine?.length || bookAny.loaded?.spine?.items?.length;
@@ -186,7 +236,6 @@ export default function EPUBViewer({
                 percent = (index + 1) / spineLength;
               }
             } else if (typeof location.start?.percentage === 'number' && location.start.percentage > 0) {
-              // Fall back to epubjs percentage if spine data unavailable
               percent = location.start.percentage;
             }
 
@@ -208,21 +257,45 @@ export default function EPUBViewer({
                 body: JSON.stringify({ current_page: pct }),
               }).catch(() => {});
             }
-          } catch {
-            // Ignore progress save errors
-          }
+          } catch { /* Ignore progress save errors */ }
         });
 
-        // Capture selected text
-        rendition.on('selected', (_cfiRange: string, contents: any) => {
+        rendition.on('selected', (cfiRange: string, contents: any) => {
+          const tool = activeToolRef.current;
           try {
             const text = contents?.window?.getSelection?.()?.toString?.().trim?.() || '';
-            if (text) {
+            if (!text) return;
+
+            if (tool !== 'none' && cfiRange) {
+              const color = activeColorRef.current;
+              const annotation: EpubAnnotation = {
+                id: crypto.randomUUID(),
+                cfiRange,
+                type: tool as AnnotationType,
+                color,
+                text: text.substring(0, 200),
+              };
+
+              setAnnotations(prev => [...prev, annotation]);
+
+              try {
+                const r = renditionRef.current;
+                if (r?.annotations) {
+                  if (tool === 'highlight') {
+                    r.annotations.highlight(cfiRange, {}, () => {}, '', { fill: color });
+                  } else {
+                    r.annotations.underline(cfiRange, {}, () => {}, '', { stroke: color, 'stroke-width': '2px', fill: 'none' });
+                  }
+                }
+              } catch { /* Ignore */ }
+
+              try {
+                contents?.window?.getSelection?.()?.removeAllRanges?.();
+              } catch { /* ignore */ }
+            } else {
               onTextSelected?.(text);
             }
-          } catch {
-            // Ignore selection extraction errors
-          }
+          } catch { /* Ignore */ }
         });
 
         setLoading(false);
@@ -244,7 +317,6 @@ export default function EPUBViewer({
     };
   }, [bookId, fileUrlOverride, onTextSelected]);
 
-  // Jump to href when prop changes
   useEffect(() => {
     if (!jumpToHref || jumpToHref === prevJumpHrefRef.current) return;
     prevJumpHrefRef.current = jumpToHref;
@@ -267,7 +339,6 @@ export default function EPUBViewer({
     }
   }, []);
 
-  // Touch event handlers for swipe gestures
   const handleTouchStart = useCallback((e: TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
@@ -275,23 +346,49 @@ export default function EPUBViewer({
 
   const handleTouchEnd = useCallback((e: TouchEvent) => {
     if (!touchStartX.current) return;
-
     const touchEndX = e.changedTouches[0].clientX;
     const touchEndY = e.changedTouches[0].clientY;
     const deltaX = touchStartX.current - touchEndX;
     const deltaY = touchStartY.current - touchEndY;
-
     if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
-      if (deltaX > 0) {
-        handleNext();
-      } else {
-        handlePrevious();
-      }
+      if (deltaX > 0) handleNext();
+      else handlePrevious();
     }
-
     touchStartX.current = 0;
     touchStartY.current = 0;
   }, [handleNext, handlePrevious]);
+
+  const handleUndo = useCallback(() => {
+    if (annotations.length === 0) return;
+    const last = annotations[annotations.length - 1];
+    const prev = annotations.slice(0, -1);
+    setAnnotations(prev);
+
+    const r = renditionRef.current;
+    if (!r) return;
+
+    try { r.annotations?.remove?.(last.cfiRange, last.type); } catch { /* ignore */ }
+  }, [annotations]);
+
+  const handleClearAll = useCallback(() => {
+    const list = [...annotations];
+    setAnnotations([]);
+
+    const r = renditionRef.current;
+    if (!r) return;
+    const views: View[] = r.views?.() || [];
+    list.forEach(ann => {
+      views.forEach((view: View) => {
+        try {
+          if (ann.type === 'highlight' && typeof view.unhighlight === 'function') {
+            view.unhighlight(ann.cfiRange);
+          } else if (ann.type === 'underline' && typeof view.ununderline === 'function') {
+            view.ununderline(ann.cfiRange);
+          }
+        } catch { /* ignore */ }
+      });
+    });
+  }, [annotations]);
 
   const navContent = navItems.length > 0 && (
     <div className="p-3">
@@ -326,7 +423,57 @@ export default function EPUBViewer({
           </div>
         )}
 
-        <div className="mb-4 flex gap-4 pt-4">
+        {/* Annotation toolbar */}
+        <div className="mb-3 mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <button
+            onClick={() => setActiveTool('none')}
+            className={`rounded px-2 py-1 transition-colors ${activeTool === 'none' ? 'bg-gray-800 text-white dark:bg-gray-300 dark:text-gray-900' : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300'}`}
+          >&#10022; Select</button>
+          <button
+            onClick={() => { setActiveTool('highlight'); setActiveColor(HIGHLIGHT_COLORS[0]); }}
+            className={`rounded px-2 py-1 transition-colors ${activeTool === 'highlight' ? 'bg-yellow-300 text-gray-900' : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300'}`}
+          >&#9614; Highlight</button>
+          <button
+            onClick={() => { setActiveTool('underline'); setActiveColor(UNDERLINE_COLORS[0]); }}
+            className={`rounded px-2 py-1 transition-colors ${activeTool === 'underline' ? 'bg-blue-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300'}`}
+          ><u>U</u> Underline</button>
+
+          {activeTool !== 'none' && (
+            <>
+              <span className="text-gray-300 dark:text-gray-600">|</span>
+              {(activeTool === 'highlight' ? HIGHLIGHT_COLORS : UNDERLINE_COLORS).map(color => (
+                <button
+                  key={color}
+                  onClick={() => setActiveColor(color)}
+                  className={`h-5 w-5 rounded-full border-2 transition-transform ${activeColor === color ? 'scale-125 border-gray-700 dark:border-gray-300' : 'border-gray-300 dark:border-gray-500 hover:scale-110'}`}
+                  style={{ background: color }}
+                  title={color}
+                />
+              ))}
+            </>
+          )}
+
+          <span className="text-gray-300 dark:text-gray-600">|</span>
+          <button
+            onClick={handleUndo}
+            disabled={annotations.length === 0}
+            className="rounded px-2 py-1 hover:bg-gray-100 disabled:opacity-40 dark:hover:bg-gray-700 dark:text-gray-300"
+            title="Undo last annotation"
+          >&#8617; Undo</button>
+          <button
+            onClick={handleClearAll}
+            disabled={annotations.length === 0}
+            className="rounded px-2 py-1 text-red-500 hover:bg-red-50 disabled:opacity-40 dark:hover:bg-red-900/30 dark:text-red-400"
+            title="Clear all annotations"
+          >&#128465; Clear all</button>
+          {annotations.length > 0 && (
+            <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">
+              {annotations.length} marks
+            </span>
+          )}
+        </div>
+
+        <div className="mb-4 flex gap-4">
           <button
             onClick={handlePrevious}
             className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 transition dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200"
