@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, type TouchEvent } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo, type TouchEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchWithCache } from '../utils/fileCache';
 import Rendition from 'epubjs/types/rendition';
@@ -21,6 +21,8 @@ type EPUBViewerProps = {
 
 type AnnotationType = 'highlight' | 'underline';
 
+type ReadingTheme = 'default' | 'wechat';
+
 interface EpubAnnotation {
   id: string;
   cfiRange: string;
@@ -36,7 +38,25 @@ const HIGHLIGHT_COLORS = [
   'rgba(147,197,253,0.55)',
 ];
 
+const HIGHLIGHT_COLORS_WECHAT = [
+  'rgba(255,200,50,0.65)',
+  'rgba(74,222,128,0.6)',
+  'rgba(249,168,212,0.65)',
+  'rgba(100,180,255,0.65)',
+];
+
 const UNDERLINE_COLORS = ['#2563eb', '#dc2626', '#16a34a', '#d97706'];
+
+const WECHAT_THEME_CSS = `
+  body {
+    background-color: #F6F1E8 !important;
+    color: #333333 !important;
+  }
+  body * {
+    font-family: Georgia, "Times New Roman", "Noto Serif SC", "Source Han Serif SC", serif !important;
+  }
+  a { color: #576B95 !important; }
+`;
 
 function NavTree({
   items,
@@ -56,11 +76,10 @@ function NavTree({
           <button
             type="button"
             onClick={() => item.href && onNavigate(item.href)}
-            className={`block w-full truncate rounded px-2 py-1 text-left text-sm transition ${
-              activeHref === item.href
-                ? 'bg-white font-medium text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-400'
-                : 'text-gray-700 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-700'
-            }`}
+            className={`block w-full truncate rounded px-2 py-1 text-left text-sm transition ${activeHref === item.href
+              ? 'bg-white font-medium text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-400'
+              : 'text-gray-700 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-700'
+              }`}
             title={item.label}
           >
             {item.label}
@@ -97,15 +116,58 @@ export default function EPUBViewer({
   const [activeTool, setActiveTool] = useState<'none' | AnnotationType>('none');
   const [activeColor, setActiveColor] = useState(HIGHLIGHT_COLORS[0]);
   const [annotations, setAnnotations] = useState<EpubAnnotation[]>([]);
+  const [readingTheme, setReadingTheme] = useState<ReadingTheme>(() => {
+    return (localStorage.getItem('epub-reading-theme') as ReadingTheme) || 'default';
+  });
   const activeToolRef = useRef(activeTool);
   const activeColorRef = useRef(activeColor);
   const annotationsRef = useRef(annotations);
+  const readingThemeRef = useRef(readingTheme);
 
   useEffect(() => { activeToolRef.current = activeTool; }, [activeTool]);
+  const currentHighlightColors = useMemo(
+    () => readingTheme === 'wechat' ? HIGHLIGHT_COLORS_WECHAT : HIGHLIGHT_COLORS,
+    [readingTheme]
+  );
+
   useEffect(() => { activeColorRef.current = activeColor; }, [activeColor]);
   useEffect(() => { annotationsRef.current = annotations; }, [annotations]);
+  useEffect(() => { readingThemeRef.current = readingTheme; localStorage.setItem('epub-reading-theme', readingTheme); }, [readingTheme]);
+
+  useEffect(() => {
+    if (activeTool === 'highlight') {
+      const idx = HIGHLIGHT_COLORS.indexOf(activeColor);
+      const target = idx >= 0 ? currentHighlightColors[idx] : currentHighlightColors[0];
+      if (target !== activeColor) setActiveColor(target);
+    }
+  }, [readingTheme]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const annotationStorageKey = bookId ? `epub-annotations-${bookId}` : 'epub-annotations-local';
+
+  const applyThemeToDocument = useCallback((doc: Document | undefined) => {
+    if (!doc) return;
+    let styleEl = doc.getElementById('epub-reading-theme') as HTMLStyleElement | null;
+    if (readingThemeRef.current === 'wechat') {
+      if (!styleEl) {
+        styleEl = doc.createElement('style');
+        styleEl.id = 'epub-reading-theme';
+        doc.head.appendChild(styleEl);
+      }
+      styleEl.textContent = WECHAT_THEME_CSS;
+    } else {
+      if (styleEl) styleEl.remove();
+    }
+  }, []);
+
+  useEffect(() => {
+    const r = renditionRef.current;
+    if (!r) return;
+    const views: any[] = (r as any).views?.() || [];
+    views.forEach((view: any) => {
+      const doc = view.document || view.contents?.document?.();
+      applyThemeToDocument(doc);
+    });
+  }, [readingTheme, applyThemeToDocument]);
 
   useEffect(() => {
     const saved = localStorage.getItem(annotationStorageKey);
@@ -188,6 +250,11 @@ export default function EPUBViewer({
           iframe.sandbox.add('allow-same-origin');
         }
 
+        rendition.hooks.render.register((view: any) => {
+          const doc = view.document;
+          applyThemeToDocument(doc);
+        });
+
         const bookAny = book as any;
         const nav: EPUBNavItem[] = bookAny.loaded?.navigation?.toc || [];
         setNavItems(nav);
@@ -206,15 +273,23 @@ export default function EPUBViewer({
             current.forEach(ann => {
               try {
                 if (ann.type === 'highlight') {
-                  rendition.annotations.highlight(ann.cfiRange, {}, () => {}, '', { fill: ann.color });
+                  rendition.annotations.highlight(ann.cfiRange, {}, () => { }, '', { fill: ann.color });
                 } else {
-                  rendition.annotations.underline(ann.cfiRange, {}, () => {}, '', { stroke: ann.color, 'stroke-width': '2px', fill: 'none' });
+                  rendition.annotations.underline(ann.cfiRange, {}, () => { }, '', { stroke: ann.color, 'stroke-width': '2px', fill: 'none' });
                 }
               } catch { /* CFI may be stale */ }
             });
           }
         }, 800);
 
+        rendition.hooks.content.register((contents: any) => {
+          contents.addStylesheetRules({
+            "::selection": {
+              "background": "rgba(252, 227, 0, 0.3)",
+              "color": "inherit"
+            }
+          })
+        })
         rendition.on('relocated', (location: any) => {
           try {
             const iframe = container.querySelector('iframe');
@@ -245,7 +320,7 @@ export default function EPUBViewer({
             const href = location.start?.href || null;
             const cfi = location.start?.cfi || null;
             setActiveHref(href);
-            
+
             if (bookId) {
               localStorage.setItem(`epub-location-${bookId}`, cfi || '');
               fetch(`/api/books/${bookId}/progress`, {
@@ -255,7 +330,7 @@ export default function EPUBViewer({
                   Authorization: `Bearer ${localStorage.getItem("token")}`,
                 },
                 body: JSON.stringify({ current_page: pct }),
-              }).catch(() => {});
+              }).catch(() => { });
             }
           } catch { /* Ignore progress save errors */ }
         });
@@ -282,9 +357,9 @@ export default function EPUBViewer({
                 const r = renditionRef.current;
                 if (r?.annotations) {
                   if (tool === 'highlight') {
-                    r.annotations.highlight(cfiRange, {}, () => {}, '', { fill: color });
+                    r.annotations.highlight(cfiRange, {}, () => { }, '', { fill: color });
                   } else {
-                    r.annotations.underline(cfiRange, {}, () => {}, '', { stroke: color, 'stroke-width': '2px', fill: 'none' });
+                    r.annotations.underline(cfiRange, {}, () => { }, '', { stroke: color, 'stroke-width': '2px', fill: 'none' });
                   }
                 }
               } catch { /* Ignore */ }
@@ -368,6 +443,17 @@ export default function EPUBViewer({
     if (!r) return;
 
     try { r.annotations?.remove?.(last.cfiRange, last.type); } catch { /* ignore */ }
+
+    const views: View[] = r.views?.() || [];
+    views.forEach((view: View) => {
+      try {
+        if (last.type === 'highlight' && typeof view.unhighlight === 'function') {
+          view.unhighlight(last.cfiRange);
+        } else if (last.type === 'underline' && typeof view.ununderline === 'function') {
+          view.ununderline(last.cfiRange);
+        }
+      } catch { /* ignore */ }
+    });
   }, [annotations]);
 
   const handleClearAll = useCallback(() => {
@@ -376,8 +462,10 @@ export default function EPUBViewer({
 
     const r = renditionRef.current;
     if (!r) return;
+
     const views: View[] = r.views?.() || [];
     list.forEach(ann => {
+      try { r.annotations?.remove?.(ann.cfiRange, ann.type); } catch { /* ignore */ }
       views.forEach((view: View) => {
         try {
           if (ann.type === 'highlight' && typeof view.unhighlight === 'function') {
@@ -409,7 +497,7 @@ export default function EPUBViewer({
         </aside>
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col items-center">
+      <div className="flex min-w-0 flex-1 flex-col items-center px-4 md:px-8">
         {!showSidebar && navItems.length > 0 && (
           <div className="w-full border-b border-gray-200 bg-gray-50 p-2 dark:border-gray-700 dark:bg-gray-800">
             <details>
@@ -423,54 +511,68 @@ export default function EPUBViewer({
           </div>
         )}
 
-        {/* Annotation toolbar */}
-        <div className="mb-3 mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <button
-            onClick={() => setActiveTool('none')}
-            className={`rounded px-2 py-1 transition-colors ${activeTool === 'none' ? 'bg-gray-800 text-white dark:bg-gray-300 dark:text-gray-900' : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300'}`}
-          >&#10022; Select</button>
-          <button
-            onClick={() => { setActiveTool('highlight'); setActiveColor(HIGHLIGHT_COLORS[0]); }}
-            className={`rounded px-2 py-1 transition-colors ${activeTool === 'highlight' ? 'bg-yellow-300 text-gray-900' : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300'}`}
-          >&#9614; Highlight</button>
-          <button
-            onClick={() => { setActiveTool('underline'); setActiveColor(UNDERLINE_COLORS[0]); }}
-            className={`rounded px-2 py-1 transition-colors ${activeTool === 'underline' ? 'bg-blue-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300'}`}
-          ><u>U</u> Underline</button>
+        {/* Toolbar row: annotation tools + reading theme */}
+        <div className="mb-3 mt-4 flex w-full flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <button
+              onClick={() => setActiveTool('none')}
+              className={`rounded px-2 py-1 transition-colors ${activeTool === 'none' ? 'bg-gray-800 text-white dark:bg-gray-300 dark:text-gray-900' : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300'}`}
+            >&#10022; Select</button>
+            <button
+              onClick={() => { setActiveTool('highlight'); setActiveColor(currentHighlightColors[0]); }}
+              className={`rounded px-2 py-1 transition-colors ${activeTool === 'highlight' ? 'bg-yellow-300 text-gray-900' : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300'}`}
+            >&#9614; Highlight</button>
+            <button
+              onClick={() => { setActiveTool('underline'); setActiveColor(UNDERLINE_COLORS[0]); }}
+              className={`rounded px-2 py-1 transition-colors ${activeTool === 'underline' ? 'bg-blue-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300'}`}
+            ><u>U</u> Underline</button>
 
-          {activeTool !== 'none' && (
-            <>
-              <span className="text-gray-300 dark:text-gray-600">|</span>
-              {(activeTool === 'highlight' ? HIGHLIGHT_COLORS : UNDERLINE_COLORS).map(color => (
-                <button
-                  key={color}
-                  onClick={() => setActiveColor(color)}
-                  className={`h-5 w-5 rounded-full border-2 transition-transform ${activeColor === color ? 'scale-125 border-gray-700 dark:border-gray-300' : 'border-gray-300 dark:border-gray-500 hover:scale-110'}`}
-                  style={{ background: color }}
-                  title={color}
-                />
-              ))}
-            </>
-          )}
+            {activeTool !== 'none' && (
+              <>
+                <span className="text-gray-300 dark:text-gray-600">|</span>
+                {(activeTool === 'highlight' ? currentHighlightColors : UNDERLINE_COLORS).map(color => (
+                  <button
+                    key={color}
+                    onClick={() => setActiveColor(color)}
+                    className={`h-5 w-5 rounded-full border-2 transition-transform ${activeColor === color ? 'scale-125 border-gray-700 dark:border-gray-300' : 'border-gray-300 dark:border-gray-500 hover:scale-110'}`}
+                    style={{ background: color }}
+                    title={color}
+                  />
+                ))}
+              </>
+            )}
 
-          <span className="text-gray-300 dark:text-gray-600">|</span>
-          <button
-            onClick={handleUndo}
-            disabled={annotations.length === 0}
-            className="rounded px-2 py-1 hover:bg-gray-100 disabled:opacity-40 dark:hover:bg-gray-700 dark:text-gray-300"
-            title="Undo last annotation"
-          >&#8617; Undo</button>
-          <button
-            onClick={handleClearAll}
-            disabled={annotations.length === 0}
-            className="rounded px-2 py-1 text-red-500 hover:bg-red-50 disabled:opacity-40 dark:hover:bg-red-900/30 dark:text-red-400"
-            title="Clear all annotations"
-          >&#128465; Clear all</button>
-          {annotations.length > 0 && (
-            <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">
-              {annotations.length} marks
-            </span>
-          )}
+            <span className="text-gray-300 dark:text-gray-600">|</span>
+            <button
+              onClick={handleUndo}
+              disabled={annotations.length === 0}
+              className="rounded px-2 py-1 hover:bg-gray-100 disabled:opacity-40 dark:hover:bg-gray-700 dark:text-gray-300"
+              title="Undo last annotation"
+            >&#8617; Undo</button>
+            <button
+              onClick={handleClearAll}
+              disabled={annotations.length === 0}
+              className="rounded px-2 py-1 text-red-500 hover:bg-red-50 disabled:opacity-40 dark:hover:bg-red-900/30 dark:text-red-400"
+              title="Clear all annotations"
+            >&#128465; Clear all</button>
+            {annotations.length > 0 && (
+              <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">
+                {annotations.length} marks
+              </span>
+            )}
+          </div>
+
+          {/* Reading theme switcher */}
+          <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <button
+              onClick={() => setReadingTheme(prev => prev === 'wechat' ? 'default' : 'wechat')}
+              className={`rounded px-2 py-1 transition-colors ${readingTheme === 'wechat'
+                ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300'
+                }`}
+              title="WeChat Read theme"
+            >&#128214; 护眼模式</button>
+          </div>
         </div>
 
         <div className="mb-4 flex gap-4">
@@ -492,7 +594,7 @@ export default function EPUBViewer({
           {t('pdfViewer.swipeHint')}
         </div>
 
-        <div className="relative w-full flex-1" style={{ maxWidth: '900px', minHeight: '400px' }}>
+        <div className="relative w-full flex-1" style={{ minHeight: '400px' }}>
           {error && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-lg bg-white/90 dark:bg-gray-800/90">
               <span className="text-sm text-red-600 dark:text-red-400">{error}</span>
@@ -508,15 +610,15 @@ export default function EPUBViewer({
             ref={viewerRef}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
-          className="border shadow-lg rounded-lg overflow-auto bg-white epub-viewer dark:border-gray-600 dark:bg-gray-800"
-          style={{
-            width: '100%',
-            height: '100%',
-            minHeight: '400px',
-            touchAction: 'pan-y',
-            userSelect: 'text',
-          }}
-        />
+            className="border shadow-lg rounded-lg overflow-auto bg-white epub-viewer dark:border-gray-600 dark:bg-gray-800"
+            style={{
+              width: '100%',
+              height: '100%',
+              minHeight: '400px',
+              touchAction: 'pan-y',
+              userSelect: 'text',
+            }}
+          />
         </div>
       </div>
     </div>
