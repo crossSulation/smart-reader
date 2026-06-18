@@ -2,7 +2,7 @@
 
 ## Overall Progress Summary
 **Start Date:** Week 1 (May 15, 2026)
-**Current Phase:** Post-Week 6 — EPUB Polish & Library UX
+**Current Phase:** Post-Week 6 — EPUB Polish & Library UX + Knowledge Graph
 
 | Milestone | Status | Progress |
 |-----------|--------|----------|
@@ -61,8 +61,9 @@
 - [x] Flashcards export as Anki-compatible CSV (.csv) via Settings page, with front/back/tags columns
 - [x] `GET /api/learning/flashcards` endpoint added for listing all user flashcards
 - [x] EPUB file caching via IndexedDB (`fileCache.ts`) — files downloaded once, served from cache on subsequent opens for offline reading
+- [x] Knowledge Graph backend — `knowledge_points` + `knowledge_links` tables, LLM extraction pipeline, relation inference, REST API (`GET/POST/PATCH/DELETE /api/knowledge/*`, `/api/knowledge/graph`, `/api/knowledge/stats`), auto-trigger after ingestion
 
-### Current Status Snapshot (June 15, 2026)
+### Current Status Snapshot (June 17, 2026)
 - [x] Backend ingestion pipeline supports PDF/EPUB/Markdown with structure-aware chunking
 - [x] Chunk metadata includes page anchors and section path for grounding
 - [x] Search and QA citation UI shows section context
@@ -661,6 +662,15 @@ Ship a reliable "real smart reader" by improving:
 - [x] `GET /api/personalization/profile`
 - [x] `PUT /api/personalization/profile`
 - [x] `GET /api/analytics/weekly-summary`
+- [x] `GET /api/knowledge/points?book_id=&entity_type=&search=&limit=&offset=`
+- [x] `GET /api/knowledge/points/{kp_id}` — detail with linked points and sample chunks
+- [x] `POST /api/knowledge/points` — create knowledge point
+- [x] `PATCH /api/knowledge/points/{kp_id}` — update knowledge point
+- [x] `DELETE /api/knowledge/points/{kp_id}`
+- [x] `GET /api/knowledge/graph?book_id=&depth=2&central_kp_id=` — subgraph query
+- [x] `POST /api/knowledge/links` — create manual link
+- [x] `DELETE /api/knowledge/links/{link_id}`
+- [x] `GET /api/knowledge/stats` — node/edge/density counts
 
 ---
 
@@ -670,6 +680,8 @@ Ship a reliable "real smart reader" by improving:
 - [x] `review_items(id, flashcard_id, due_at, interval_days, ease_factor, reps, last_rating, created_at, updated_at)`
 - [x] `document_chunks(..., page_start, page_end, section_path, token_count, embedding, indexed_at)`
 - [x] `users(..., explanation_level, study_goal, weak_topics, frequently_reviewed_tags)`
+- [x] `knowledge_points(id, user_id, label, aliases, description, source_chunk_ids, entity_type, created_at, updated_at)`
+- [x] `knowledge_links(id, source_kp_id, target_kp_id, relation_type, weight, evidence_chunk_ids, created_at)`
 
 ---
 
@@ -708,6 +720,197 @@ Ship a reliable "real smart reader" by improving:
 2. [~] Reading progress persistence — EPUB progress saved as percentage; cross-device sync not yet implemented.
 3. [x] Export functionality — notes → markdown, flashcards → CSV export.
 4. [x] Offline desktop mode — IndexedDB-based file cache for EPUB books, cached on first download.
+5. [x] EPUB viewer annotation tools — highlight (background color marker) and underline (text decoration) tools for marking text passages in EPUB content, with toolbar toggle and color picker.
+
+---
+
+## Week 7: Cross-Document Knowledge Graph
+
+**Target:** Multi-document knowledge graph with management navigation and relationship visualization
+**Start Date:** Week 7
+
+| Milestone | Status | Progress |
+|-----------|--------|----------|
+| **Backend Graph API** | 🟢 Complete | 4/4 tasks done |
+| **Knowledge Explorer UI** | 🟢 Complete | 3/3 tasks done |
+| **Graph Visualization** | 🟡 Partial | 2/3 tasks done |
+
+### Objectives
+- Extract knowledge points (entities, concepts, key terms) from document chunks across the library
+- Build and persist a cross-document knowledge graph linking related knowledge points
+- Provide a knowledge management navigation page for browsing and exploring the graph
+- Visualize knowledge point relationships as an interactive graph
+- Enable linking notes, flashcards, and highlights to knowledge points
+
+### W7-01: Backend Knowledge Graph API
+
+#### W7-BE-01A: Knowledge Point Data Model
+- [x] Implement
+- Scope:
+  - Define `knowledge_points` table: `id, user_id, label, aliases, description, source_chunk_ids (JSON array), entity_type (concept/term/person/event), created_at, updated_at`
+  - Define `knowledge_links` table: `id, source_kp_id, target_kp_id, relation_type (related_to/prerequisite_of/derived_from/contradicts/extends), weight, evidence_chunk_ids (JSON array), created_at`
+  - Add migration script for new tables
+- Files (likely):
+  - `backend/app/models.py`
+  - `backend/alembic/versions/` (new migration)
+- Output: Database schema for knowledge graph entities and relationships.
+- Done When: Tables created and migration runs successfully.
+
+#### W7-BE-01B: Knowledge Extraction Pipeline
+- [x] Implement
+- Scope:
+  - Build async extraction service that processes ingested documents
+  - Use LLM to extract knowledge points from chunk text (entity recognition + concept extraction)
+  - Deduplicate similar knowledge points across documents
+  - Store extracted knowledge points with source chunk references
+- Files (likely):
+  - `backend/app/services/knowledge_extraction_service.py` (new)
+  - `backend/app/services/ingestion_service.py` (trigger after ingestion)
+- Output: Automated knowledge point extraction from document corpus.
+- Done When: After ingesting a book, knowledge points are extracted and stored.
+
+#### W7-BE-01C: Knowledge Graph Construction
+- [x] Implement
+- Scope:
+  - Build relationship inference between knowledge points using LLM + co-occurrence analysis
+  - Weight edges by relationship confidence and frequency
+  - Support manual link creation/editing via API
+  - Store graph as adjacency data for efficient traversal
+- Files (likely):
+  - `backend/app/services/knowledge_graph_service.py` (new)
+  - `backend/app/routers/knowledge.py` (new)
+- Output: Cross-document knowledge graph with typed, weighted edges.
+- Done When: Related concepts from different books are connected with labeled relationships.
+
+#### W7-BE-01D: Knowledge Graph API Endpoints
+- [x] Implement
+- Scope:
+  - `GET /api/knowledge/points?book_id=&tag=&limit=` — list/search knowledge points
+  - `GET /api/knowledge/points/{kp_id}` — detail with linked knowledge points and source chunks
+  - `GET /api/knowledge/graph?book_id=&depth=2&central_kp_id=` — graph subgraph query
+  - `POST /api/knowledge/links` — create manual link between knowledge points
+  - `DELETE /api/knowledge/links/{link_id}` — remove a link
+  - `GET /api/knowledge/stats` — graph stats (total nodes, edges, density, clusters)
+- Files (likely):
+  - `backend/app/routers/knowledge.py` (new)
+  - `backend/app/schemas.py` (add knowledge schemas)
+- Output: REST API for knowledge graph CRUD and traversal.
+- Done When: All endpoints return correct JSON with proper pagination and filtering.
+
+---
+
+### W7-02: Knowledge Explorer Frontend
+
+#### W7-FE-01A: Knowledge Graph Page Shell
+- [x] Implement
+- Scope:
+  - Add new route `/knowledge` to frontend router
+  - Add "Knowledge Graph" nav link in sidebar/AppBar (icon: hub/graph)
+  - Page shell with: left panel (knowledge point list/search), main area (graph visualization), right panel (selected node detail)
+- Files (likely):
+  - `frontend/src/pages/KnowledgeGraph.tsx` (new)
+  - `frontend/src/App.tsx` (add route)
+  - `frontend/src/Layout.tsx` (add nav link)
+- Output: Navigable knowledge graph page with three-panel layout.
+- Done When: User can navigate to `/knowledge` and see the page shell.
+
+#### W7-FE-01B: Knowledge Point List & Search
+- [x] Implement
+- Scope:
+  - Left panel: searchable list of all knowledge points across the library
+  - Search by label, filter by book, sort by frequency/recency
+  - Each item shows: label, entity type badge, linked count, source book count
+  - Click to select and center the graph on that node
+- Files (likely):
+  - `frontend/src/components/KnowledgeList.tsx` (new)
+  - `frontend/src/pages/KnowledgeGraph.tsx`
+- Output: Searchable, filterable knowledge point directory.
+- Done When: User can search and browse all extracted knowledge points.
+
+#### W7-FE-01C: Knowledge Point Detail Panel
+- [x] Implement
+- Scope:
+  - Right panel: detailed view of selected knowledge point
+  - Show: label, aliases, description, entity type, source chunks (with book reference and page jump)
+  - Show linked knowledge points with relationship labels
+  - Show associated notes/flashcards for this knowledge point
+  - "Explore Connections" button to expand graph from this node
+- Files (likely):
+  - `frontend/src/components/KnowledgeDetail.tsx` (new)
+  - `frontend/src/pages/KnowledgeGraph.tsx`
+- Output: Rich detail view for any knowledge point.
+- Done When: Clicking a node or list item shows comprehensive detail panel.
+
+---
+
+### W7-03: Graph Visualization
+
+#### W7-FE-02A: Interactive Graph Canvas
+- [x] Implement
+- Scope:
+  - Main area: interactive force-directed graph visualization
+  - Use a graph visualization library (e.g., `vis-network`, `react-force-graph`, or `d3-force`)
+  - Nodes = knowledge points, sized by connection count, colored by entity type
+  - Edges = relationships, labeled with relation type, thickness by weight
+  - Interactions: pan, zoom, drag nodes, click to select
+- Files (likely):
+  - `frontend/src/components/KnowledgeGraphCanvas.tsx` (new)
+  - `frontend/package.json` (add graph visualization dependency)
+- Output: Interactive, navigable knowledge graph visualization.
+- Done When: Graph renders with nodes and edges, supports pan/zoom/drag/click.
+
+#### W7-FE-02B: Graph Expansion & Navigation
+- [x] Implement
+- Scope:
+  - Double-click a node to expand its neighborhood (+depth 1)
+  - Breadcrumb trail showing current focus path
+  - "Focus" mode: hide unrelated nodes, dim distant connections
+  - Back/forward navigation through graph exploration history
+  - Filter by relation type (show/hide specific edge types)
+- Files (likely):
+  - `frontend/src/components/KnowledgeGraphCanvas.tsx`
+  - `frontend/src/pages/KnowledgeGraph.tsx`
+- Output: Progressive graph exploration with history and filtering.
+- Done When: User can navigate knowledge graph step by step with breadcrumb trail.
+
+#### W7-FE-02C: Reader-to-Graph Integration
+- [ ] Implement
+- Scope:
+  - In Reader, show "Related Knowledge" chip/panel showing knowledge points mentioned in current page
+  - Click a knowledge chip to open Knowledge Graph page scoped to that node
+  - When creating a note/flashcard, offer to link it to relevant knowledge points
+  - Highlight text selection -> "Link to Knowledge Point" option
+- Files (likely):
+  - `frontend/src/pages/Reader.tsx`
+  - `frontend/src/components/AIPanel.tsx`
+  - `frontend/src/components/KnowledgeGraphCanvas.tsx`
+- Output: Seamless integration between reading and knowledge graph.
+- Done When: Reader shows related knowledge points and supports linking annotations to them.
+
+---
+
+### Acceptance Criteria (Week 7)
+- [ ] Knowledge points are automatically extracted after document ingestion
+- [ ] Cross-document relationships are inferred and visible in the graph
+- [ ] Knowledge graph page renders an interactive force-directed visualization
+- [ ] User can search, filter, and browse all knowledge points
+- [ ] Clicking a node shows detail panel with source chunks and related concepts
+- [ ] Graph exploration supports expansion, focus, and history navigation
+- [ ] Reader surfaces related knowledge points for current page content
+- [ ] Notes and flashcards can be linked to knowledge points
+
+### Suggested Execution Order
+1. W7-BE-01A (data model + migration)
+2. W7-BE-01B (knowledge extraction pipeline)
+3. W7-BE-01C (graph construction + relationship inference)
+4. W7-BE-01D (API endpoints)
+5. W7-FE-01A (page shell + routing)
+6. W7-FE-02A (graph canvas visualization)
+7. W7-FE-01B (knowledge point list & search)
+8. W7-FE-01C (detail panel)
+9. W7-FE-02B (expansion & navigation)
+10. W7-FE-02C (reader-to-graph integration)
+11. Final validation: multi-document knowledge graph end-to-end
 
 ---
 

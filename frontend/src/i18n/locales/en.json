@@ -5,6 +5,7 @@
     "library": "Library",
     "review": "Review",
     "profile": "Profile",
+    "knowledge": "Knowledge",
     "login": "Login",
     "register": "Register",
     "logout": "Logout",
@@ -148,5 +149,26 @@
     "exportSuccess": "Exported successfully.",
     "clearCache": "Clear Offline Cache",
     "cacheCleared": "Cache cleared."
+  },
+  "knowledge": {
+    "title": "Knowledge Base",
+    "resetview": "Reset View",
+    "nodes": "nodes",
+    "edges": "edges",
+    "density": "Density",
+    "clickNode": "Click a node or list item to see details",
+    "loading": "Loading...",
+    "detail": "Detail",
+    "aliases": "Aliases",
+    "detailDescription": "Description",
+    "sourceChunks": "Source Chunks",
+    "linkedPoints": "Linked",
+    "noKnowledgePoints": "No knowledge points yet. Index a book to get started.",
+    "related": "Related",
+    "prerequisite": "Prerequisite",
+    "derived": "Derived from",
+    "contradicts": "Contradicts",
+    "extends": "Extends",
+    "noResults": "No knowledge points found. Try expanding your search?"
   }
 }

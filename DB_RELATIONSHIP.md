@@ -1,6 +1,6 @@
 # Smart Reader DB Relationship Map
 
-Last updated: 2026-06-02
+Last updated: 2026-06-18
 Database: `backend/smart_reader.db` (SQLite)
 
 ## Tables
@@ -13,6 +13,8 @@ Database: `backend/smart_reader.db` (SQLite)
 - `notes`
 - `flashcards`
 - `review_items`
+- `knowledge_points`
+- `knowledge_links`
 - `alembic_version` (migration metadata)
 
 ## Entity Relationship Diagram (High-Level)
@@ -60,12 +62,22 @@ erDiagram
         INTEGER id PK
         INTEGER flashcard_id FK
     }
+    KNOWLEDGE_POINTS {
+        INTEGER id PK
+        INTEGER user_id FK
+    }
+    KNOWLEDGE_LINKS {
+        INTEGER id PK
+        INTEGER source_kp_id FK
+        INTEGER target_kp_id FK
+    }
 
     USERS ||--o{ BOOKS : owner_id
     USERS ||--o{ FILES : uploaded_by
     USERS ||--o{ AI_INTERACTIONS : user_id
     USERS ||--o{ NOTES : user_id
     USERS ||--o{ FLASHCARDS : user_id
+    USERS ||--o{ KNOWLEDGE_POINTS : user_id
 
     BOOKS ||--o{ DOCUMENT_CHUNKS : book_id
     BOOKS ||--o{ AI_INTERACTIONS : book_id
@@ -79,6 +91,9 @@ erDiagram
     AI_INTERACTIONS ||--o{ AI_CITATIONS : interaction_id
 
     FLASHCARDS ||--o{ REVIEW_ITEMS : flashcard_id
+
+    KNOWLEDGE_POINTS ||--o{ KNOWLEDGE_LINKS : source_kp_id
+    KNOWLEDGE_POINTS ||--o{ KNOWLEDGE_LINKS : target_kp_id
 ```
 
 ## Foreign Key Detail (from live DB)
@@ -113,6 +128,18 @@ erDiagram
 ### `review_items`
 - `flashcard_id -> flashcards.id` (on_delete=NO ACTION)
 
+### `knowledge_points`
+- `user_id -> users.id` (on_delete=NO ACTION)
+
+### `knowledge_links`
+- `source_kp_id -> knowledge_points.id` (on_delete=NO ACTION)
+- `target_kp_id -> knowledge_points.id` (on_delete=NO ACTION)
+
 ## Notes
 - `WeeklyTrendPoint` is an API response schema in `backend/app/schemas.py`, not a physical DB table.
 - `alembic_version` is used only for migration version tracking.
+- `knowledge_points.aliases` and `knowledge_points.source_chunk_ids` are stored as JSON strings (Text columns) for SQLite compatibility.
+- `knowledge_links.evidence_chunk_ids` is stored as a JSON string (Text column).
+- `knowledge_links.relation_type` accepts: `related_to`, `prerequisite_of`, `derived_from`, `contradicts`, `extends`.
+- `knowledge_points.entity_type` accepts: `concept`, `term`, `person`, `event`.
+- Knowledge extraction is triggered automatically after document ingestion (best-effort, non-blocking).

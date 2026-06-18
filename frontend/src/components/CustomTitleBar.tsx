@@ -70,6 +70,7 @@ const CustomTitleBar: React.FC = () => {
         <nav className="titlebar-nav">
           <Link to="/library" className="titlebar-nav-item">{t('common.home')}</Link>
           <Link to="/review" className="titlebar-nav-item">{t('common.review', 'Review')}</Link>
+          <Link to="/knowledge" className="titlebar-nav-item">{t('common.knowledge')}</Link>
           <Link to="/settings" className="titlebar-nav-item">{t('common.settings')}</Link>
           <div className="titlebar-profile-wrap">
             <button

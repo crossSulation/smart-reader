@@ -343,3 +343,88 @@ class WeeklySummaryResponse(BaseModel):
     review_accuracy: float
     top_weak_topics: List[str] = []
     daily_trend: List[WeeklyTrendPoint] = []
+
+
+# ---- Knowledge Graph Schemas ----
+
+class KnowledgePointCreate(BaseModel):
+    label: str
+    aliases: List[str] = []
+    description: Optional[str] = None
+    source_chunk_ids: List[int] = []
+    entity_type: Literal["concept", "term", "person", "event"] = "concept"
+
+
+class KnowledgePointUpdate(BaseModel):
+    label: Optional[str] = None
+    aliases: Optional[List[str]] = None
+    description: Optional[str] = None
+    source_chunk_ids: Optional[List[int]] = None
+    entity_type: Optional[Literal["concept", "term", "person", "event"]] = None
+
+
+class KnowledgePointResponse(BaseModel):
+    id: int
+    user_id: int
+    label: str
+    aliases: List[str] = []
+    description: Optional[str] = None
+    source_chunk_ids: List[int] = []
+    entity_type: str
+    link_count: int = 0
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class KnowledgePointDetail(KnowledgePointResponse):
+    linked_points: List["KnowledgePointResponse"] = []
+    sample_chunks: List[dict] = []
+
+
+class KnowledgeLinkCreate(BaseModel):
+    source_kp_id: int
+    target_kp_id: int
+    relation_type: Literal["related_to", "prerequisite_of", "derived_from", "contradicts", "extends"] = "related_to"
+    weight: float = 1.0
+    evidence_chunk_ids: List[int] = []
+
+
+class KnowledgeLinkResponse(BaseModel):
+    id: int
+    source_kp_id: int
+    target_kp_id: int
+    relation_type: str
+    weight: float
+    evidence_chunk_ids: List[int] = []
+    created_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class GraphNode(BaseModel):
+    id: int
+    label: str
+    entity_type: str
+    link_count: int
+
+
+class GraphEdge(BaseModel):
+    id: int
+    source: int
+    target: int
+    relation_type: str
+    weight: float
+
+
+class GraphResponse(BaseModel):
+    nodes: List[GraphNode]
+    edges: List[GraphEdge]
+
+
+class KnowledgeStatsResponse(BaseModel):
+    total_nodes: int
+    total_edges: int
+    density: float
+    entity_type_distribution: dict

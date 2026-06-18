@@ -23,6 +23,7 @@ class User(Base):
     books = relationship("Book", back_populates="owner")
     notes = relationship("Note", back_populates="owner", cascade="all, delete-orphan")
     flashcards = relationship("Flashcard", back_populates="owner", cascade="all, delete-orphan")
+    knowledge_points = relationship("KnowledgePoint", back_populates="owner", cascade="all, delete-orphan")
 
 
 class FileMetadata(Base):
@@ -163,3 +164,36 @@ class ReviewItem(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     flashcard = relationship("Flashcard", back_populates="review_items")
+
+
+class KnowledgePoint(Base):
+    __tablename__ = "knowledge_points"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    label = Column(String, nullable=False)
+    aliases = Column(Text, nullable=True)  # JSON list of strings
+    description = Column(Text, nullable=True)
+    source_chunk_ids = Column(Text, nullable=True)  # JSON list of chunk IDs
+    entity_type = Column(String, nullable=False, default="concept")  # concept|term|person|event
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    owner = relationship("User", back_populates="knowledge_points")
+    outgoing_links = relationship("KnowledgeLink", foreign_keys="KnowledgeLink.source_kp_id", back_populates="source", cascade="all, delete-orphan")
+    incoming_links = relationship("KnowledgeLink", foreign_keys="KnowledgeLink.target_kp_id", back_populates="target", cascade="all, delete-orphan")
+
+
+class KnowledgeLink(Base):
+    __tablename__ = "knowledge_links"
+
+    id = Column(Integer, primary_key=True, index=True)
+    source_kp_id = Column(Integer, ForeignKey("knowledge_points.id"), nullable=False, index=True)
+    target_kp_id = Column(Integer, ForeignKey("knowledge_points.id"), nullable=False, index=True)
+    relation_type = Column(String, nullable=False, default="related_to")  # related_to|prerequisite_of|derived_from|contradicts|extends
+    weight = Column(Float, nullable=False, default=1.0)
+    evidence_chunk_ids = Column(Text, nullable=True)  # JSON list of chunk IDs
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    source = relationship("KnowledgePoint", foreign_keys=[source_kp_id], back_populates="outgoing_links")
+    target = relationship("KnowledgePoint", foreign_keys=[target_kp_id], back_populates="incoming_links")

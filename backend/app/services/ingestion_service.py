@@ -46,7 +46,7 @@ def ingest_book(book_id: int, file_url: str, file_type: str, db) -> int:
     Returns the number of chunks stored.
     Raises ValueError on unrecoverable extraction errors.
     """
-    from app.models import DocumentChunk
+    from app.models import DocumentChunk, Book
     from app.services.embedding_service import embed_texts, to_json
 
     settings = get_settings()
@@ -114,6 +114,17 @@ def ingest_book(book_id: int, file_url: str, file_type: str, db) -> int:
         "failed_units": failed_units,
         "updated_at": datetime.utcnow().isoformat(),
     }
+
+    # Trigger knowledge point extraction as best-effort (non-blocking)
+    try:
+        from app.services.knowledge_extraction_service import extract_knowledge_points_for_book
+        book_owner = db.query(Book).filter(Book.id == book_id).first()
+        if book_owner:
+            count = extract_knowledge_points_for_book(book_id, book_owner.owner_id, db)
+            logger.info("Knowledge extraction for book_id=%s: %d points extracted", book_id, count)
+    except Exception as exc:
+        logger.warning("Knowledge extraction failed for book_id=%s: %s", book_id, exc)
+
     return len(db_chunks)
 
 

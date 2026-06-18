@@ -5,6 +5,7 @@
     "library": "书架",
     "review": "复习",
     "profile": "个人资料",
+    "knowledge": "知识库",
     "login": "登录",
     "register": "注册",
     "logout": "退出登录",
@@ -148,5 +149,27 @@
     "exportSuccess": "导出成功。",
     "clearCache": "清除离线缓存",
     "cacheCleared": "缓存已清除。"
+  },
+    "knowledge": {
+    "title": "知识库",
+    "description": "基于您的阅读和笔记构建的个人知识库。在这里，您可以复习和整理所学的关键概念，创建用于间隔重复的闪卡，并跟踪您的学习进度。",
+    "resetview": "重置视图",
+    "nodes": "节点",
+    "edges": "边",
+    "density": "密度",
+    "clickNode": "点击节点或列表项以查看详情",
+    "loading": "加载中...",
+    "detail": "详情",
+    "aliases": "别名",
+    "detailDescription": "描述",
+    "sourceChunks": "来源片段",
+    "linkedPoints": "关联知识点",
+    "noKnowledgePoints": "尚无知识点。请先为一本书建立索引。",
+    "related": "相关",
+    "prerequisite": "前置知识",
+    "derived": "派生自",
+    "contradicts": "矛盾",
+    "extends": "扩展",
+    "noResults": "未找到知识点。尝试扩大搜索范围？"
   }
 }
