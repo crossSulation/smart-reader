@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+import json
 
 from app.database import get_db
 from app.models import Book, Flashcard, Note, ReviewItem
@@ -54,6 +55,8 @@ def create_note(
         page=payload.page,
         tags=_join_tags(payload.tags),
     )
+    if payload.knowledge_point_ids:
+        note.knowledge_point_ids = json.dumps(payload.knowledge_point_ids)
     db.add(note)
     db.commit()
     db.refresh(note)
@@ -66,6 +69,7 @@ def create_note(
         source_text=note.source_text,
         page=note.page,
         tags=_split_tags(note.tags),
+        knowledge_point_ids=json.loads(note.knowledge_point_ids) if note.knowledge_point_ids else [],
         created_at=note.created_at,
     )
 
@@ -94,6 +98,7 @@ def list_notes(
             source_text=item.source_text,
             page=item.page,
             tags=_split_tags(item.tags),
+            knowledge_point_ids=json.loads(item.knowledge_point_ids) if item.knowledge_point_ids else [],
             created_at=item.created_at,
         )
         for item in rows
@@ -141,6 +146,9 @@ def update_note(
     if payload.tags is not None:
         note.tags = _join_tags(payload.tags)
 
+    if payload.knowledge_point_ids is not None:
+        note.knowledge_point_ids = json.dumps(payload.knowledge_point_ids) if payload.knowledge_point_ids else None
+
     db.commit()
     db.refresh(note)
 
@@ -152,6 +160,7 @@ def update_note(
         source_text=note.source_text,
         page=note.page,
         tags=_split_tags(note.tags),
+        knowledge_point_ids=json.loads(note.knowledge_point_ids) if note.knowledge_point_ids else [],
         created_at=note.created_at,
     )
 
@@ -173,6 +182,8 @@ def create_flashcard(
         source_chunk_id=payload.source_chunk_id,
         tags=_join_tags(payload.tags),
     )
+    if payload.knowledge_point_ids:
+        flashcard.knowledge_point_ids = json.dumps(payload.knowledge_point_ids)
     db.add(flashcard)
     db.flush()
 
@@ -198,6 +209,7 @@ def create_flashcard(
         source_text=flashcard.source_text,
         source_chunk_id=flashcard.source_chunk_id,
         tags=_split_tags(flashcard.tags),
+        knowledge_point_ids=json.loads(flashcard.knowledge_point_ids) if flashcard.knowledge_point_ids else [],
         created_at=flashcard.created_at,
     )
 
@@ -225,6 +237,7 @@ def list_flashcards(
             source_text=f.source_text,
             source_chunk_id=f.source_chunk_id,
             tags=_split_tags(f.tags),
+            knowledge_point_ids=json.loads(f.knowledge_point_ids) if f.knowledge_point_ids else [],
             created_at=f.created_at,
         )
         for f in rows

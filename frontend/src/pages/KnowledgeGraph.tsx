@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import KnowledgeGraphCanvas from "../components/KnowledgeGraphCanvas";
 import KnowledgeList from "../components/KnowledgeList";
@@ -9,6 +10,12 @@ type PanelMode = "list" | "detail" | "none";
 
 export default function KnowledgeGraphPage() {
   const { t } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const urlKpId = searchParams.get("kp_id");
+  const urlBookId = searchParams.get("book_id");
+  const initialKpId = urlKpId ? Number(urlKpId) : null;
+  const initialBookId = urlBookId ? Number(urlBookId) : null;
 
   const [graph, setGraph] = useState<GraphData | null>(null);
   const [graphLoading, setGraphLoading] = useState(true);
@@ -16,11 +23,11 @@ export default function KnowledgeGraphPage() {
   const [pointsLoading, setPointsLoading] = useState(true);
   const [stats, setStats] = useState<KnowledgeStats | null>(null);
 
-  const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
-  const [rightPanel, setRightPanel] = useState<PanelMode>("none");
+  const [selectedNodeId, setSelectedNodeId] = useState<number | null>(initialKpId);
+  const [rightPanel, setRightPanel] = useState<PanelMode>(initialKpId ? "detail" : "none");
   const [search, setSearch] = useState("");
   const [entityFilter, setEntityFilter] = useState("");
-  const [bookId] = useState<number | null>(null);
+  const [bookId] = useState<number | null>(initialBookId);
 
   const getAuthHeaders = useCallback(() => ({
     Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -62,6 +69,15 @@ export default function KnowledgeGraphPage() {
     finally { setPointsLoading(false); }
   }, [search, entityFilter, bookId, getAuthHeaders]);
 
+  useEffect(() => {
+    if (initialKpId) {
+      loadGraph(initialKpId);
+    } else {
+      loadGraph();
+    }
+    loadStats();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const loadStats = useCallback(async () => {
     try {
       const res = await fetch("/api/knowledge/stats", {
@@ -74,8 +90,6 @@ export default function KnowledgeGraphPage() {
     } catch { /* ignore */ }
   }, [getAuthHeaders]);
 
-  useEffect(() => { loadGraph(); loadStats(); }, [loadGraph, loadStats]);
-
   useEffect(() => {
     const timer = setTimeout(() => loadPoints(), 200);
     return () => clearTimeout(timer);
@@ -84,24 +98,40 @@ export default function KnowledgeGraphPage() {
   const handleNodeClick = useCallback((nodeId: number) => {
     setSelectedNodeId(nodeId);
     setRightPanel("detail");
-  }, []);
+    const params = new URLSearchParams();
+    params.set("kp_id", String(nodeId));
+    if (bookId) params.set("book_id", String(bookId));
+    setSearchParams(params, { replace: true });
+  }, [bookId, setSearchParams]);
 
   const handleNodeDblClick = useCallback((nodeId: number) => {
     loadGraph(nodeId);
     setSelectedNodeId(nodeId);
     setRightPanel("detail");
-  }, [loadGraph]);
+    const params = new URLSearchParams();
+    params.set("kp_id", String(nodeId));
+    if (bookId) params.set("book_id", String(bookId));
+    setSearchParams(params, { replace: true });
+  }, [loadGraph, bookId, setSearchParams]);
 
   const handleListSelect = useCallback((id: number) => {
     setSelectedNodeId(id);
     setRightPanel("detail");
-  }, []);
+    const params = new URLSearchParams();
+    params.set("kp_id", String(id));
+    if (bookId) params.set("book_id", String(bookId));
+    setSearchParams(params, { replace: true });
+  }, [bookId, setSearchParams]);
 
   const handleNavigateTo = useCallback((id: number) => {
     setSelectedNodeId(id);
     setRightPanel("detail");
     loadGraph(id);
-  }, [loadGraph]);
+    const params = new URLSearchParams();
+    params.set("kp_id", String(id));
+    if (bookId) params.set("book_id", String(bookId));
+    setSearchParams(params, { replace: true });
+  }, [loadGraph, bookId, setSearchParams]);
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
@@ -120,7 +150,7 @@ export default function KnowledgeGraphPage() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => { setSelectedNodeId(null); loadGraph(); setRightPanel("none"); }}
+            onClick={() => { setSelectedNodeId(null); loadGraph(); setRightPanel("none"); setSearchParams({}, { replace: true }); }}
             className="rounded border border-gray-300 px-3 py-1 text-xs hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800 dark:text-gray-300"
           >
             {t("knowledge.resetview", "Reset View")}

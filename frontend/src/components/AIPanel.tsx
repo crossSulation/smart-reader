@@ -1,6 +1,8 @@
-import { AutoAwesomeOutlined } from "@mui/icons-material";
+import { AutoAwesomeOutlined, HubOutlined } from "@mui/icons-material";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import BookAgentChat from "./BookAgentChat";
+import type { KnowledgePointItem } from "../types/KnowledgeGraph";
 
 export type AIPanelLearningNote = {
   id: number;
@@ -8,6 +10,7 @@ export type AIPanelLearningNote = {
   content: string;
   page: number | null;
   tags: string[];
+  knowledge_point_ids: number[];
   created_at: string;
 };
 
@@ -16,8 +19,6 @@ type AIPanelProps = {
   selectedExcerpt: string;
   learningTagsInput: string;
   onLearningTagsInputChange: (value: string) => void;
-  onCreateNoteFromSelection: () => void;
-  onCreateFlashcardFromSelection: () => void;
   onClearSelectedExcerpt: () => void;
   onExplainSelection: (text: string) => void;
   learningStatus: string | null;
@@ -40,6 +41,12 @@ type AIPanelProps = {
   onDeleteNote: (noteId: number) => void;
   onJumpTarget: (target: number) => void;
   prefillReferenceTerm: string;
+  knowledgePoints: KnowledgePointItem[];
+  knowledgePointsLoading: boolean;
+  selectedKpIds: number[];
+  onSelectedKpIdsChange: (ids: number[]) => void;
+  onCreateNoteFromSelectionWithKp: (kpIds: number[]) => void;
+  onCreateFlashcardFromSelectionWithKp: (kpIds: number[]) => void;
 };
 
 const parseTagsInput = (raw: string): string[] =>
@@ -53,8 +60,6 @@ export default function AIPanel({
   selectedExcerpt,
   learningTagsInput,
   onLearningTagsInputChange,
-  onCreateNoteFromSelection,
-  onCreateFlashcardFromSelection,
   onClearSelectedExcerpt,
   onExplainSelection,
   learningStatus,
@@ -77,12 +82,21 @@ export default function AIPanel({
   onDeleteNote,
   onJumpTarget,
   prefillReferenceTerm,
+  knowledgePoints,
+  knowledgePointsLoading,
+  selectedKpIds,
+  onSelectedKpIdsChange,
+  onCreateNoteFromSelectionWithKp,
+  onCreateFlashcardFromSelectionWithKp,
 }: AIPanelProps) {
+  const navigate = useNavigate();
   const [showRecentNotes, setShowRecentNotes] = useState(false);
+  const [showKnowledge, setShowKnowledge] = useState(false);
   const [selectedNoteForChat, setSelectedNoteForChat] = useState<AIPanelLearningNote | null>(null);
 
   useEffect(() => {
     setShowRecentNotes(false);
+    setShowKnowledge(false);
     setSelectedNoteForChat(null);
   }, [activeBookIdForAi]);
 
@@ -143,7 +157,9 @@ export default function AIPanel({
                 </button>
                 <button
                   type="button"
-                  onClick={onCreateNoteFromSelection}
+                  onClick={() => {
+                    onCreateNoteFromSelectionWithKp(selectedKpIds);
+                  }}
                   disabled={!activeBookIdForAi || savingNote || savingFlashcard}
                   className="flex-1 rounded border border-blue-300 bg-white px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-blue-700 dark:bg-gray-800 dark:text-blue-400 dark:hover:bg-blue-900/30"
                 >
@@ -151,13 +167,50 @@ export default function AIPanel({
                 </button>
                 <button
                   type="button"
-                  onClick={onCreateFlashcardFromSelection}
+                  onClick={() => {
+                    onCreateFlashcardFromSelectionWithKp(selectedKpIds);
+                  }}
                   disabled={!activeBookIdForAi || savingNote || savingFlashcard}
                   className="flex-1 rounded border border-blue-600 bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-500 dark:hover:bg-blue-600"
                 >
                   {savingFlashcard ? "Creating..." : "Create card"}
                 </button>
               </div>
+
+              {knowledgePoints.length > 0 && (
+                <div className="mb-3 rounded border border-gray-100 bg-gray-50 p-2 dark:border-gray-700 dark:bg-gray-800">
+                  <div className="mb-1.5 flex items-center gap-1 text-[10px] font-medium text-gray-500 dark:text-gray-400">
+                    <HubOutlined sx={{ fontSize: 12 }} />
+                    Link to Knowledge Points
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {knowledgePoints.slice(0, 8).map((kp) => {
+                      const isSelected = selectedKpIds.includes(kp.id);
+                      return (
+                        <button
+                          key={kp.id}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              onSelectedKpIdsChange(selectedKpIds.filter((id) => id !== kp.id));
+                            } else {
+                              onSelectedKpIdsChange([...selectedKpIds, kp.id]);
+                            }
+                          }}
+                          className={`truncate rounded px-1.5 py-0.5 text-[10px] transition ${
+                            isSelected
+                              ? "bg-blue-100 text-blue-700 ring-1 ring-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:ring-blue-700"
+                              : "bg-white text-gray-600 hover:bg-blue-50 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-blue-900/20"
+                          }`}
+                          title={kp.label}
+                        >
+                          {kp.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {learningStatus && (
                 <div className="mb-2 text-xs text-gray-600 dark:text-gray-400">{learningStatus}</div>
@@ -178,9 +231,9 @@ export default function AIPanel({
             <div className="mb-3 flex gap-1 rounded border border-gray-200 bg-gray-50 p-1 dark:border-gray-700 dark:bg-gray-800">
               <button
                 type="button"
-                onClick={() => setShowRecentNotes(false)}
+                onClick={() => { setShowRecentNotes(false); setShowKnowledge(false); }}
                 className={`rounded px-3 py-1.5 text-xs font-medium transition ${
-                  !showRecentNotes
+                  !showRecentNotes && !showKnowledge
                     ? "bg-white text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-400"
                     : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                 }`}
@@ -189,7 +242,7 @@ export default function AIPanel({
               </button>
               <button
                 type="button"
-                onClick={() => setShowRecentNotes(true)}
+                onClick={() => { setShowRecentNotes(true); setShowKnowledge(false); }}
                 className={`rounded px-3 py-1.5 text-xs font-medium transition ${
                   showRecentNotes
                     ? "bg-white text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-400"
@@ -198,9 +251,21 @@ export default function AIPanel({
               >
                 Recent Notes
               </button>
+              <button
+                type="button"
+                onClick={() => { setShowKnowledge(true); setShowRecentNotes(false); }}
+                className={`rounded px-3 py-1.5 text-xs font-medium transition ${
+                  showKnowledge
+                    ? "bg-white text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-400"
+                    : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                }`}
+              >
+                <HubOutlined sx={{ fontSize: 14 }} className="mr-1" />
+                Knowledge
+              </button>
             </div>
 
-            {!showRecentNotes ? (
+            {!showRecentNotes && !showKnowledge ? (
               <div className="min-h-0 flex-1">
                 <BookAgentChat
                   bookId={activeBookIdForAi}
@@ -208,9 +273,53 @@ export default function AIPanel({
                   seedPrompt={prefillReferenceTerm}
                   onJumpToPage={onJumpTarget}
                   fileType={fileType}
-                  onRequestShowNotes={() => setShowRecentNotes(true)}
+                  onRequestShowNotes={() => { setShowRecentNotes(true); setShowKnowledge(false); }}
                   selectedNote={selectedNoteForChat}
                 />
+              </div>
+            ) : showKnowledge ? (
+              <div className="min-h-0 flex-1 overflow-y-auto rounded border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+                    Related Knowledge Points
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/knowledge" + (activeBookIdForAi ? `?book_id=${activeBookIdForAi}` : ""))}
+                    className="rounded px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                  >
+                    Open Graph &rarr;
+                  </button>
+                </div>
+                {knowledgePointsLoading ? (
+                  <div className="text-xs text-gray-500 dark:text-gray-400">Loading knowledge points...</div>
+                ) : knowledgePoints.length === 0 ? (
+                  <div className="rounded border border-dashed border-gray-300 p-3 text-center text-xs text-gray-500 dark:border-gray-600 dark:text-gray-400">
+                    <HubOutlined sx={{ fontSize: 24 }} className="mb-1 text-gray-300 dark:text-gray-600" />
+                    <div>No knowledge points extracted yet for this book.</div>
+                    <div className="mt-1">Index the book to auto-extract concepts.</div>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {knowledgePoints.map((kp) => (
+                      <button
+                        key={kp.id}
+                        type="button"
+                        onClick={() => navigate(`/knowledge?kp_id=${kp.id}` + (activeBookIdForAi ? `&book_id=${activeBookIdForAi}` : ""))}
+                        className="flex w-full items-center gap-2 rounded border border-gray-100 bg-gray-50 px-2.5 py-2 text-left transition hover:bg-blue-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-blue-900/20"
+                      >
+                        <HubOutlined sx={{ fontSize: 14 }} className="shrink-0 text-blue-500" />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-xs font-medium text-gray-800 dark:text-gray-200">{kp.label}</div>
+                          <div className="flex items-center gap-2 text-[10px] text-gray-500 dark:text-gray-400">
+                            <span className="rounded bg-gray-200 px-1 py-0.5 dark:bg-gray-700">{kp.entity_type}</span>
+                            {kp.link_count > 0 && <span>{kp.link_count} links</span>}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="min-h-0 flex-1 rounded border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
@@ -294,6 +403,24 @@ export default function AIPanel({
                             {note.tags.slice(0, 3).map((tag) => (
                               <span key={`${note.id}-${tag}`} className="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">#{tag}</span>
                             ))}
+                            {note.knowledge_point_ids?.map((kpId) => {
+                              const kp = knowledgePoints.find((k) => k.id === kpId);
+                              if (!kp) return null;
+                              return (
+                                <span
+                                  key={`${note.id}-kp-${kpId}`}
+                                  className="flex cursor-pointer items-center gap-1 rounded bg-purple-100 px-1.5 py-0.5 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate(`/knowledge?kp_id=${kpId}` + (activeBookIdForAi ? `&book_id=${activeBookIdForAi}` : ""));
+                                  }}
+                                  title={`Knowledge: ${kp.label}`}
+                                >
+                                  <HubOutlined sx={{ fontSize: 10 }} />
+                                  {kp.label.length > 12 ? kp.label.slice(0, 12) + "…" : kp.label}
+                                </span>
+                              );
+                            })}
                           </div>
                           <div className="flex items-center gap-1">
                             <button

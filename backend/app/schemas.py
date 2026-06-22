@@ -246,6 +246,7 @@ class NoteCreate(BaseModel):
     source_text: Optional[str] = None
     page: Optional[int] = None
     tags: List[str] = []
+    knowledge_point_ids: List[int] = []
 
 
 class NoteUpdate(BaseModel):
@@ -253,6 +254,7 @@ class NoteUpdate(BaseModel):
     source_text: Optional[str] = None
     page: Optional[int] = None
     tags: Optional[List[str]] = None
+    knowledge_point_ids: Optional[List[int]] = None
 
 
 class NoteResponse(BaseModel):
@@ -263,6 +265,7 @@ class NoteResponse(BaseModel):
     source_text: Optional[str] = None
     page: Optional[int] = None
     tags: List[str] = []
+    knowledge_point_ids: List[int] = []
     created_at: datetime
 
     class Config:
@@ -276,6 +279,7 @@ class FlashcardCreate(BaseModel):
     source_text: Optional[str] = None
     source_chunk_id: Optional[int] = None
     tags: List[str] = []
+    knowledge_point_ids: List[int] = []
 
 
 class FlashcardResponse(BaseModel):
@@ -287,6 +291,7 @@ class FlashcardResponse(BaseModel):
     source_text: Optional[str] = None
     source_chunk_id: Optional[int] = None
     tags: List[str] = []
+    knowledge_point_ids: List[int] = []
     created_at: datetime
 
     class Config:

@@ -124,6 +124,7 @@ class Note(Base):
     source_text = Column(Text, nullable=True)
     content = Column(Text, nullable=False)
     tags = Column(String, nullable=True)  # comma-separated tags for first iteration
+    knowledge_point_ids = Column(Text, nullable=True)  # JSON array
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -142,6 +143,7 @@ class Flashcard(Base):
     back = Column(Text, nullable=False)
     source_text = Column(Text, nullable=True)
     tags = Column(String, nullable=True)  # comma-separated tags for first iteration
+    knowledge_point_ids = Column(Text, nullable=True)  # JSON array
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

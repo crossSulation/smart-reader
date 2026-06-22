@@ -16,6 +16,7 @@ import BareTitleBar from "../components/BareTitleBar";
 import { useKeyboardShortcuts, type ShortcutBinding } from "../hooks/useKeyboardShortcuts";
 import { useThemeContext } from "../contexts/ThemeContext";
 import type { Book } from "../types/Book";
+import type { KnowledgePointItem } from "../types/KnowledgeGraph";
 
 type LearningNote = AIPanelLearningNote;
 
@@ -52,6 +53,9 @@ function Reader() {
   const [editingNoteContent, setEditingNoteContent] = useState("");
   const [editingNoteTagsInput, setEditingNoteTagsInput] = useState("");
   const [savingEditedNoteId, setSavingEditedNoteId] = useState<number | null>(null);
+  const [knowledgePoints, setKnowledgePoints] = useState<KnowledgePointItem[]>([]);
+  const [knowledgePointsLoading, setKnowledgePointsLoading] = useState(false);
+  const [selectedKpIds, setSelectedKpIds] = useState<number[]>([]);
   const [currentPdfPage, setCurrentPdfPage] = useState(1);
   const [pdfTotalPages, setPdfTotalPages] = useState(0);
   const [epubProgress, setEpubProgress] = useState(0);
@@ -92,7 +96,7 @@ function Reader() {
     setPrefillReferenceTerm(clean.slice(0, 200));
   }, []);
 
-  const createNoteFromSelection = async () => {
+  const createNoteFromSelection = async (kpIds: number[] = []) => {
     if (!selectedExcerpt.trim() || !activeBookIdForAi) return;
 
     setSavingNote(true);
@@ -103,19 +107,24 @@ function Reader() {
         .map((tag) => tag.trim())
         .filter(Boolean);
 
+      const body: Record<string, unknown> = {
+        book_id: Number(activeBookIdForAi),
+        content: selectedExcerpt,
+        source_text: selectedExcerpt,
+        page: activeFileType === "pdf" ? currentPdfPage : null,
+        tags,
+      };
+      if (kpIds.length > 0) {
+        body.knowledge_point_ids = kpIds;
+      }
+
       const res = await fetch("/api/learning/notes", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
-        body: JSON.stringify({
-          book_id: Number(activeBookIdForAi),
-          content: selectedExcerpt,
-          source_text: selectedExcerpt,
-          page: activeFileType === "pdf" ? currentPdfPage : null,
-          tags,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
@@ -124,6 +133,7 @@ function Reader() {
       }
 
       setLearningStatus("Saved as note.");
+      setSelectedKpIds([]);
       if (activeBookIdForAi) {
         const refreshRes = await fetch(`/api/learning/notes?book_id=${encodeURIComponent(activeBookIdForAi)}&limit=20`, {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
@@ -224,7 +234,7 @@ function Reader() {
     }
   };
 
-  const createFlashcardFromSelection = async () => {
+  const createFlashcardFromSelection = async (kpIds: number[] = []) => {
     if (!selectedExcerpt.trim() || !activeBookIdForAi) return;
 
     setSavingFlashcard(true);
@@ -235,19 +245,24 @@ function Reader() {
         .map((tag) => tag.trim())
         .filter(Boolean);
 
+      const body: Record<string, unknown> = {
+        book_id: Number(activeBookIdForAi),
+        front: selectedExcerpt,
+        back: "",
+        source_text: selectedExcerpt,
+        tags,
+      };
+      if (kpIds.length > 0) {
+        body.knowledge_point_ids = kpIds;
+      }
+
       const res = await fetch("/api/learning/flashcards", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
-        body: JSON.stringify({
-          book_id: Number(activeBookIdForAi),
-          front: selectedExcerpt,
-          back: "",
-          source_text: selectedExcerpt,
-          tags,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
@@ -256,6 +271,7 @@ function Reader() {
       }
 
       setLearningStatus("Created flashcard. Review it on the Review page.");
+      setSelectedKpIds([]);
     } catch (err) {
       setLearningStatus(err instanceof Error ? err.message : "Failed to create flashcard.");
     } finally {
@@ -626,6 +642,36 @@ function Reader() {
     };
 
     fetchNotes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBookIdForAi]);
+
+  useEffect(() => {
+    if (!activeBookIdForAi) {
+      setKnowledgePoints([]);
+      return;
+    }
+
+    const fetchKnowledgePoints = async () => {
+      setKnowledgePointsLoading(true);
+      try {
+        const params = new URLSearchParams();
+        params.set("book_id", activeBookIdForAi);
+        params.set("limit", "50");
+        const res = await fetch(`/api/knowledge/points?${params}`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        });
+        if (res.ok) {
+          const data: KnowledgePointItem[] = await res.json();
+          setKnowledgePoints(Array.isArray(data) ? data : []);
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        setKnowledgePointsLoading(false);
+      }
+    };
+
+    fetchKnowledgePoints();
   }, [activeBookIdForAi]);
 
   if (loading) {
@@ -773,8 +819,6 @@ function Reader() {
               selectedExcerpt={selectedExcerpt}
               learningTagsInput={learningTagsInput}
               onLearningTagsInputChange={setLearningTagsInput}
-              onCreateNoteFromSelection={createNoteFromSelection}
-              onCreateFlashcardFromSelection={createFlashcardFromSelection}
               onClearSelectedExcerpt={() => setSelectedExcerpt("")}
               onExplainSelection={onExplainSelection}
               learningStatus={learningStatus}
@@ -797,6 +841,12 @@ function Reader() {
               onDeleteNote={handleDeleteNote}
               onJumpTarget={handleJumpTarget}
               prefillReferenceTerm={prefillReferenceTerm}
+              knowledgePoints={knowledgePoints}
+              knowledgePointsLoading={knowledgePointsLoading}
+              selectedKpIds={selectedKpIds}
+              onSelectedKpIdsChange={setSelectedKpIds}
+              onCreateNoteFromSelectionWithKp={createNoteFromSelection}
+              onCreateFlashcardFromSelectionWithKp={createFlashcardFromSelection}
             />
           </aside>
         </div>
@@ -918,8 +968,6 @@ function Reader() {
                   selectedExcerpt={selectedExcerpt}
                   learningTagsInput={learningTagsInput}
                   onLearningTagsInputChange={setLearningTagsInput}
-                  onCreateNoteFromSelection={createNoteFromSelection}
-                  onCreateFlashcardFromSelection={createFlashcardFromSelection}
                   onClearSelectedExcerpt={() => setSelectedExcerpt("")}
                   onExplainSelection={onExplainSelection}
                   learningStatus={learningStatus}
@@ -942,6 +990,12 @@ function Reader() {
                   onDeleteNote={handleDeleteNote}
                   onJumpTarget={handleJumpTarget}
                   prefillReferenceTerm={prefillReferenceTerm}
+                  knowledgePoints={knowledgePoints}
+                  knowledgePointsLoading={knowledgePointsLoading}
+                  selectedKpIds={selectedKpIds}
+                  onSelectedKpIdsChange={setSelectedKpIds}
+                  onCreateNoteFromSelectionWithKp={createNoteFromSelection}
+                  onCreateFlashcardFromSelectionWithKp={createFlashcardFromSelection}
                 />
               </div>
             </div>

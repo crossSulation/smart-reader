@@ -874,7 +874,7 @@ Ship a reliable "real smart reader" by improving:
 - Done When: User can navigate knowledge graph step by step with breadcrumb trail.
 
 #### W7-FE-02C: Reader-to-Graph Integration
-- [ ] Implement
+- [x] Implement
 - Scope:
   - In Reader, show "Related Knowledge" chip/panel showing knowledge points mentioned in current page
   - Click a knowledge chip to open Knowledge Graph page scoped to that node
