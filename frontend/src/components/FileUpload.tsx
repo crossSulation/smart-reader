@@ -1,5 +1,5 @@
 // frontend/components/FileUpload.tsx
-import { useState, useRef, type ChangeEvent, type DragEvent } from "react";
+import { useState, useRef, useEffect, useCallback, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { CloudUploadOutlined, InsertDriveFileOutlined, CloseOutlined } from "@mui/icons-material";
@@ -18,6 +18,8 @@ export default function FileUpload({ onUploadComplete, onClose }: FileUploadProp
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const dragCounterRef = useRef(0);
   const allowedExtensions = [".pdf", ".epub", ".md", ".markdown"];
 
   const isAllowedFile = (file: File) => {
@@ -80,29 +82,64 @@ export default function FileUpload({ onUploadComplete, onClose }: FileUploadProp
     if (file) uploadFile(file);
   };
 
-  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+  const onNativeDragEnter = useCallback((e: DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current += 1;
+    if (dragCounterRef.current === 1) {
+      setDragOver(true);
+    }
+  }, []);
+
+  const onNativeDragOver = useCallback((e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const onNativeDragLeave = useCallback((e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0;
+      setDragOver(false);
+    }
+  }, []);
+
+  const onNativeDrop = useCallback((e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
     setDragOver(false);
-    const file = e.dataTransfer.files?.[0];
+    const file = e.dataTransfer?.files?.[0];
     if (file) uploadFile(file);
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setDragOver(true);
-  };
+  useEffect(() => {
+    const el = backdropRef.current;
+    if (!el) return;
 
-  const handleDragLeave = () => setDragOver(false);
+    el.addEventListener("dragenter", onNativeDragEnter);
+    el.addEventListener("dragover", onNativeDragOver);
+    el.addEventListener("dragleave", onNativeDragLeave);
+    el.addEventListener("drop", onNativeDrop);
+
+    return () => {
+      el.removeEventListener("dragenter", onNativeDragEnter);
+      el.removeEventListener("dragover", onNativeDragOver);
+      el.removeEventListener("dragleave", onNativeDragLeave);
+      el.removeEventListener("drop", onNativeDrop);
+    };
+  }, [onNativeDragEnter, onNativeDragOver, onNativeDragLeave, onNativeDrop]);
 
   return (
-    /* Backdrop */
     <div
+      ref={backdropRef}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      {/* Modal card */}
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-800">
             {t("fileUpload.title", "Upload Book")}
@@ -117,14 +154,9 @@ export default function FileUpload({ onUploadComplete, onClose }: FileUploadProp
           </button>
         </div>
 
-        {/* Body */}
         <div className="px-6 py-6 space-y-5">
-          {/* Drop zone */}
           <div
             onClick={() => !uploading && inputRef.current?.click()}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
             className={`
               flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed
               py-10 cursor-pointer transition-colors select-none
@@ -153,7 +185,6 @@ export default function FileUpload({ onUploadComplete, onClose }: FileUploadProp
             className="hidden"
           />
 
-          {/* Selected file info */}
           {selectedFile && (
             <div className="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
               <InsertDriveFileOutlined className="text-gray-400 flex-shrink-0" fontSize="small" />
@@ -164,7 +195,6 @@ export default function FileUpload({ onUploadComplete, onClose }: FileUploadProp
             </div>
           )}
 
-          {/* Progress */}
           {uploading && (
             <div className="space-y-1">
               <div className="flex justify-between text-xs text-gray-500">
@@ -180,13 +210,11 @@ export default function FileUpload({ onUploadComplete, onClose }: FileUploadProp
             </div>
           )}
 
-          {/* Error */}
           {error && (
             <p className="text-sm text-red-500 text-center">{error}</p>
           )}
         </div>
 
-        {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
           <button
             onClick={onClose}

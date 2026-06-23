@@ -170,5 +170,12 @@
     "contradicts": "Contradicts",
     "extends": "Extends",
     "noResults": "No knowledge points found. Try expanding your search?"
+  },
+  "fileUpload": {
+    "title": "Upload Book",
+    "dropHint": "Drag and drop your e-book file here, or click to select a file.",
+    "supportedFormats": "Supported formats: PDF, EPUB, DOC, DOCX",
+    "uploading": "Uploading...",
+    "uploadSuccess": "Upload successful!"
   }
 }

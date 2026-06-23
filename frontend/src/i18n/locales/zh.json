@@ -171,5 +171,12 @@
     "contradicts": "矛盾",
     "extends": "扩展",
     "noResults": "未找到知识点。尝试扩大搜索范围？"
+  },
+  "fileUpload": {
+    "title": "上传书籍",
+    "dropHint": "将电子书文件拖放到此处，或点击选择文件。",
+    "supportedFormats": "支持的格式：PDF, EPUB, DOC, DOCX",
+    "uploading": "上传中...",
+    "uploadSuccess": "上传成功！"
   }
 }
