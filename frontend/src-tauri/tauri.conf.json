@@ -2,17 +2,17 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Smart Reader",
   "version": "0.1.0",
-  "identifier": "com.smartreader.desktop",
+  "identifier": "com.smartreader.app",
   "build": {
     "beforeDevCommand": {
       "cwd": "..",
-      "script": "npm run dev"
+      "script": "npm run dev -- --host 0.0.0.0"
     },
     "beforeBuildCommand": {
       "cwd": "..",
       "script": "npm run build"
     },
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://192.168.9.170:1420",
     "frontendDist": "../dist"
   },
   "app": {
@@ -33,6 +33,15 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all"
+    "targets": "all",
+    "android": {
+      "minSdkVersion": 26
+    },
+    "iOS": {
+      "minimumSystemVersion": "13.0"
+    }
+  },
+  "plugins": {
+    "sqlx": {}
   }
 }

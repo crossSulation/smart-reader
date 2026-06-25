@@ -22,6 +22,7 @@ export default defineConfig(() => ({
     }
   ],
   server: {
+    host: "0.0.0.0",
     port: 1420,
     strictPort: true,
     watch: {
@@ -29,7 +30,7 @@ export default defineConfig(() => ({
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:8000', // 后端地址
+        target: 'http://localhost:8000',
         changeOrigin: true
       }
     }
