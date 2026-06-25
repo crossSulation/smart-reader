@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Outlet, Link, useNavigate } from 'react-router-dom';
-import { AppBar, Toolbar, Typography, Button, Box } from '@mui/material';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Outlet, Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { AppBar, Toolbar, Typography, Box, IconButton, Tooltip, InputBase } from '@mui/material';
+import { SearchOutlined, AssignmentOutlined, HubOutlined, SettingsOutlined, PersonOutlined, LogoutOutlined, ImportContactsOutlined } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
 import { ThemeToggleButton } from './components/ThemeToggle';
@@ -9,7 +10,18 @@ import CustomTitleBar from './components/CustomTitleBar';
 const Layout: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [isDesktop, setIsDesktop] = useState(false);
+  const [searchValue, setSearchValue] = useState(searchParams.get('q') || '');
+
+  const handleSearch = useCallback(() => {
+    const q = searchValue.trim();
+    if (q) {
+      navigate(`/library?q=${encodeURIComponent(q)}`);
+    } else {
+      navigate('/library');
+    }
+  }, [searchValue, navigate]);
 
   useEffect(() => {
     const fetchIsDesktop = async () => {
@@ -30,29 +42,61 @@ const Layout: React.FC = () => {
       {!isDesktop ? (
         <AppBar position="static">
           <Toolbar>
-            <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-              <Link to="/library" style={{ textDecoration: 'none', color: 'inherit' }}>
-                {t('common.appName')}
-              </Link>
-            </Typography>
+            <Tooltip title={t('common.appName')}>
+                <IconButton color="inherit" component={Link} to="/library" sx={{ mr: 1 }}>
+                  <ImportContactsOutlined />
+                </IconButton>
+              </Tooltip>
+              <Typography variant="h6" component="div" sx={{ flexGrow: 1, display: { xs: 'none', sm: 'block' } }}>
+                <Link to="/library" style={{ textDecoration: 'none', color: 'inherit' }}>
+                  {t('common.appName')}
+                </Link>
+              </Typography>
 
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <Button color="inherit" component={Link} to="/review">
-                {t('common.review', 'Review')}
-              </Button>
-              <Button color="inherit" component={Link} to="/knowledge">
-                {t('common.knowledge')}
-              </Button>
-              <Button color="inherit" component={Link} to="/settings">
-                {t('common.settings')}
-              </Button>
-              <Button color="inherit" component={Link} to="/profile">
-                {t('common.profile')}
-              </Button>
+              <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: 'rgba(255,255,255,0.15)', borderRadius: 1, px: 1.5, py: 0.5, mr: 1, flex: { xs: 1, sm: 'unset' }, maxWidth: 320 }}>
+                <SearchOutlined sx={{ color: 'rgba(255,255,255,0.6)', mr: 1 }} fontSize="small" />
+                <InputBase
+                  placeholder={t('common.search', 'Search books...')}
+                  value={searchValue}
+                  onChange={(e) => setSearchValue(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
+                  sx={{ color: 'inherit', fontSize: 14, width: '100%' }}
+                  inputProps={{ 'aria-label': 'search' }}
+                />
+                {searchValue && (
+                  <IconButton size="small" sx={{ color: 'rgba(255,255,255,0.6)' }} onClick={() => { setSearchValue(''); navigate('/library'); }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                  </IconButton>
+                )}
+              </Box>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Tooltip title={t('common.review', 'Review')}>
+                <IconButton color="inherit" component={Link} to="/review">
+                  <AssignmentOutlined />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title={t('common.knowledge', 'Knowledge')}>
+                <IconButton color="inherit" component={Link} to="/knowledge">
+                  <HubOutlined />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title={t('common.settings')}>
+                <IconButton color="inherit" component={Link} to="/settings">
+                  <SettingsOutlined />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title={t('common.profile')}>
+                <IconButton color="inherit" component={Link} to="/profile">
+                  <PersonOutlined />
+                </IconButton>
+              </Tooltip>
               <ThemeToggleButton />
-              <Button color="inherit" onClick={handleLogout}>
-                {t('common.logout')}
-              </Button>
+              <Tooltip title={t('common.logout')}>
+                <IconButton color="inherit" onClick={handleLogout}>
+                  <LogoutOutlined />
+                </IconButton>
+              </Tooltip>
             </Box>
           </Toolbar>
         </AppBar>

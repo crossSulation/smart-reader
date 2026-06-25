@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from 'react-i18next';
-import { SearchOutlined, SortOutlined, GridViewOutlined, ViewListOutlined } from '@mui/icons-material';
+import { SortOutlined, GridViewOutlined, ViewListOutlined } from '@mui/icons-material';
 import BookCard from "../components/BookCard";
 import FileUpload from "../components/FileUpload";
 import type { Book } from "../types/Book";
@@ -13,8 +13,9 @@ type SortOrder = 'asc' | 'desc';
 function Library() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [books, setBooks] = useState<Book[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
+  const searchQuery = searchParams.get('q') || '';
   const [sortBy, setSortBy] = useState<SortOption>('title');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [showUpload, setShowUpload] = useState(false);
@@ -160,29 +161,14 @@ function Library() {
         </button>
       </div>
 
-      {/* Search + Sort toolbar — single row directly above the book gallery */}
+      {/* Sort + View mode toolbar */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        {/* Search */}
-        <div className="flex items-center gap-2 flex-1 min-w-[180px] max-w-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus-within:ring-2 focus-within:ring-blue-500">
-          <SearchOutlined className="text-gray-400 text-base" fontSize="small" />
-          <input
-            type="text"
-            placeholder={t('common.search')}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1 outline-none bg-transparent text-gray-800 text-sm"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="text-gray-400 hover:text-gray-600 leading-none"
-              aria-label="clear-search"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-
+        {searchQuery && (
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            {t('library.searchResults', { count: filteredBooks.length, query: searchQuery })}
+          </div>
+        )}
+        <div className="flex-1" />
         {/* Sort */}
         <div className="flex items-center gap-2">
           <SortOutlined className="text-gray-400" fontSize="small" />
@@ -240,7 +226,7 @@ function Library() {
       {filteredBooks.length > 0 ? (
         <>
           {searchQuery && (
-            <div className="mb-4 text-sm text-gray-600">
+            <div className="mb-4 text-sm text-gray-600 dark:text-gray-400">
               Found {filteredBooks.length} result{filteredBooks.length !== 1 ? 's' : ''} for "{searchQuery}"
             </div>
           )}
@@ -261,7 +247,7 @@ function Library() {
           <div className="text-center">
             <p className="text-gray-600 mb-4">No books found matching "{searchQuery}"</p>
             <button
-              onClick={() => setSearchQuery("")}
+              onClick={() => navigate('/library')}
               className="text-blue-600 hover:underline"
             >
               Clear search

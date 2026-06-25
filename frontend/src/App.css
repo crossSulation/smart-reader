@@ -47,11 +47,15 @@
 /* Custom Titlebar (Tauri desktop) */
 .titlebar {
   height: 36px;
-  background: #1976d2;
+  background: #0d9488;
   user-select: none;
   display: grid;
   grid-template-columns: 1fr auto;
   flex-shrink: 0;
+}
+
+.dark .titlebar {
+  background: #0f766e;
 }
 
 .titlebar-left {
@@ -70,6 +74,76 @@
   white-space: nowrap;
 }
 
+.titlebar-brand-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 0 10px;
+  color: rgba(255, 255, 255, 0.9);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.titlebar-brand-icon:hover {
+  color: #ffffff;
+}
+
+.titlebar-search {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  margin: 0 8px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  gap: 6px;
+}
+
+.titlebar-search:focus-within {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.titlebar-search-icon {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.titlebar-search-input {
+  width: 140px;
+  border: none;
+  outline: none;
+  background: none;
+  color: #ffffff;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.titlebar-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.titlebar-search-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  color: rgba(0, 0, 0, 0.5);
+  font-size: 10px;
+  cursor: pointer;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.titlebar-search-clear:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
 .titlebar-nav {
   display: flex;
   align-items: center;
@@ -82,8 +156,8 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  min-width: 72px;
-  padding: 0 14px;
+  min-width: 42px;
+  padding: 0 12px;
   color: rgba(255, 255, 255, 0.85);
   font-size: 13px;
   text-decoration: none;
@@ -93,11 +167,11 @@
   font-family: inherit;
   white-space: nowrap;
   transition: background-color 0.15s;
+  gap: 4px;
 }
 
 .titlebar-nav-item:hover {
   background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
 }
 
 .titlebar-nav-item.active {

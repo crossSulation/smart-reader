@@ -16,12 +16,12 @@ function MuiThemeWrapper({ children }: { children: React.ReactNode }) {
           mode: resolved,
           ...(resolved === "dark"
             ? {
-                primary: { main: "#90caf9" },
+                primary: { main: "#4dd0c1" },
                 secondary: { main: "#f48fb1" },
                 background: { default: "#121212", paper: "#1e1e1e" },
               }
             : {
-                primary: { main: "#1976d2" },
+                primary: { main: "#0d9488" },
                 secondary: { main: "#e57373" },
                 background: { default: "#f5f5f5", paper: "#ffffff" },
               }),
