@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from 'react-i18next';
-import { SortOutlined, GridViewOutlined, ViewListOutlined } from '@mui/icons-material';
+import { SortOutlined, GridViewOutlined, ViewListOutlined, ArrowForwardOutlined } from '@mui/icons-material';
 import BookCard from "../components/BookCard";
 import FileUpload from "../components/FileUpload";
 import type { Book } from "../types/Book";
@@ -9,6 +9,16 @@ import NoBooks from "../components/NoBooks";
 
 type SortOption = 'title' | 'author' | 'current_page' | 'date_added';
 type SortOrder = 'asc' | 'desc';
+
+type SearchResultItem = {
+  book_id: number;
+  title: string;
+  author: string | null;
+  file_type: string | null;
+  score: number;
+  snippet: string;
+  chunk_page: number | null;
+};
 
 function Library() {
   const { t } = useTranslation();
@@ -21,6 +31,8 @@ function Library() {
   const [showUpload, setShowUpload] = useState(false);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [searchResults, setSearchResults] = useState<SearchResultItem[] | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
   const hasFetchedRef = useRef(false);
 
   const fetchBooks = useCallback(async () => {
@@ -56,21 +68,48 @@ function Library() {
     fetchBooks();
   }, [fetchBooks]);
 
-  // Filter and sort books
+  // Semantic search via API
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults(null);
+      return;
+    }
+
+    const doSearch = async () => {
+      setSearchLoading(true);
+      try {
+        const token = localStorage.getItem("token");
+        const params = new URLSearchParams();
+        params.set("q", searchQuery.trim());
+        params.set("top_k", "20");
+        const res = await fetch(`/api/books/search?${params}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.ok) {
+          const data: SearchResultItem[] = await res.json();
+          setSearchResults(data);
+        } else {
+          setSearchResults([]);
+        }
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    };
+
+    doSearch();
+  }, [searchQuery]);
+
+  // Filter and sort books (only when not in semantic search mode)
   const filteredBooks = useMemo(() => {
     let result = books;
 
-    // Filter by search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter((book) => {
-        const title = book.title?.toLowerCase() || "";
-        const author = book.author?.toLowerCase() || "";
-        return title.includes(query) || author.includes(query);
-      });
+    // Only client-side filter when not using search API
+    if (!searchQuery.trim()) {
+      // No additional filtering needed
     }
 
-    // Sort books
     result = [...result].sort((a, b) => {
       let aValue: any;
       let bValue: any;
@@ -89,7 +128,6 @@ function Library() {
           bValue = b.current_page || 0;
           break;
         case 'date_added':
-          // Assuming books have a created_at or similar field, fallback to id for now
           aValue = a.id || '';
           bValue = b.id || '';
           break;
@@ -103,7 +141,9 @@ function Library() {
     });
 
     return result;
-  }, [books, searchQuery, sortBy, sortOrder]);
+  }, [books, sortBy, sortOrder]);
+
+  const isSearchMode = !!searchQuery.trim();
 
   if (loading) return <div className="flex-1 flex items-center justify-center">加载中...</div>;
 
@@ -161,42 +201,48 @@ function Library() {
         </button>
       </div>
 
-      {/* Sort + View mode toolbar */}
+      {/* Toolbar */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        {searchQuery && (
+        {isSearchMode && (
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            {t('library.searchResults', { count: filteredBooks.length, query: searchQuery })}
+            {searchLoading
+              ? "Searching..."
+              : searchResults
+                ? `Found ${searchResults.length} result${searchResults.length !== 1 ? 's' : ''} for "${searchQuery}"`
+                : ""}
           </div>
         )}
         <div className="flex-1" />
-        {/* Sort */}
-        <div className="flex items-center gap-2">
-          <SortOutlined className="text-gray-400" fontSize="small" />
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortOption)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="title">{t('library.sortBy.title')}</option>
-            <option value="author">{t('library.sortBy.author')}</option>
-            <option value="current_page">{t('library.sortBy.progress')}</option>
-            <option value="date_added">{t('library.sortBy.dateAdded')}</option>
-          </select>
-          <button
-            onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-            className="w-9 h-9 flex items-center justify-center border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-            aria-label="toggle-sort-order"
-            title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
-          >
-            {sortOrder === 'asc' ? '↑' : '↓'}
-          </button>
-        </div>
+        {/* Sort — hidden during search */}
+        {!isSearchMode && (
+          <div className="flex items-center gap-2">
+            <SortOutlined className="text-gray-400" fontSize="small" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200"
+            >
+              <option value="title">{t('library.sortBy.title')}</option>
+              <option value="author">{t('library.sortBy.author')}</option>
+              <option value="current_page">{t('library.sortBy.progress')}</option>
+              <option value="date_added">{t('library.sortBy.dateAdded')}</option>
+            </select>
+            <button
+              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+              className="w-9 h-9 flex items-center justify-center border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300"
+              aria-label="toggle-sort-order"
+              title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+            >
+              {sortOrder === 'asc' ? '↑' : '↓'}
+            </button>
+          </div>
+        )}
 
         {/* View mode toggle */}
-        <div className="flex items-center rounded-lg border border-gray-300 bg-white overflow-hidden">
+        <div className="flex items-center rounded-lg border border-gray-300 bg-white overflow-hidden dark:border-gray-600 dark:bg-gray-800">
           <button
             onClick={() => setViewMode('grid')}
-            className={`p-2 transition ${viewMode === 'grid' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:bg-gray-50'}`}
+            className={`p-2 transition ${viewMode === 'grid' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
             aria-label="grid-view"
             title="Grid"
           >
@@ -204,7 +250,7 @@ function Library() {
           </button>
           <button
             onClick={() => setViewMode('list')}
-            className={`p-2 transition ${viewMode === 'list' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:bg-gray-50'}`}
+            className={`p-2 transition ${viewMode === 'list' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
             aria-label="list-view"
             title="List"
           >
@@ -223,13 +269,47 @@ function Library() {
         />
       )}
 
-      {filteredBooks.length > 0 ? (
-        <>
-          {searchQuery && (
-            <div className="mb-4 text-sm text-gray-600 dark:text-gray-400">
-              Found {filteredBooks.length} result{filteredBooks.length !== 1 ? 's' : ''} for "{searchQuery}"
+      {isSearchMode ? (
+        searchLoading ? (
+          <div className="flex justify-center items-center h-64 text-gray-500">Searching...</div>
+        ) : searchResults && searchResults.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            {searchResults.map((r) => (
+              <div
+                key={r.book_id}
+                onClick={() => navigate(`/reader/${r.book_id}`)}
+                className="flex items-start gap-4 rounded-lg border border-gray-200 bg-white p-4 cursor-pointer hover:shadow-md transition dark:border-gray-700 dark:bg-gray-900"
+              >
+                <div className="h-14 w-10 shrink-0 rounded bg-gray-100 flex items-center justify-center dark:bg-gray-800">
+                  <span className="text-lg">📚</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-semibold text-sm text-gray-900 dark:text-gray-100">{r.title}</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">{r.snippet}</p>
+                  <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
+                    <span>Score: {(r.score * 100).toFixed(0)}%</span>
+                    {r.chunk_page != null && <span>· p.{r.chunk_page}</span>}
+                  </div>
+                </div>
+                <ArrowForwardOutlined className="shrink-0 mt-3 text-gray-300" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex justify-center items-center h-64">
+            <div className="text-center">
+              <p className="text-gray-600 mb-4">No results found for "{searchQuery}"</p>
+              <button
+                onClick={() => navigate('/library')}
+                className="text-blue-600 hover:underline"
+              >
+                Clear search
+              </button>
             </div>
-          )}
+          </div>
+        )
+      ) : filteredBooks.length > 0 ? (
+        <>
           {viewMode === 'grid' ? (
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
               {filteredBooks.map((book) => <BookCard key={book.id} book={book} />)}
@@ -245,13 +325,7 @@ function Library() {
       ) : (
         <div className="flex justify-center items-center h-64">
           <div className="text-center">
-            <p className="text-gray-600 mb-4">No books found matching "{searchQuery}"</p>
-            <button
-              onClick={() => navigate('/library')}
-              className="text-blue-600 hover:underline"
-            >
-              Clear search
-            </button>
+            <p className="text-gray-600 mb-4 dark:text-gray-400">No books found</p>
           </div>
         </div>
       )}

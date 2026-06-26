@@ -1,12 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel, model_validator
 import logging
 
 from app.database import get_db
+from app.models import DocumentChunk
 from app.schemas import Book, BookCreate
 from app.services.file_service import FileService
+from app.config import get_settings
 from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/books", tags=["books"])
@@ -29,6 +31,16 @@ class UpdateProgressRequest(BaseModel):
 
 class AddNotesRequest(BaseModel):
     notes: str
+
+
+class BookSearchResult(BaseModel):
+    book_id: int
+    title: str
+    author: Optional[str] = None
+    file_type: Optional[str] = None
+    score: float
+    snippet: str
+    chunk_page: Optional[int] = None
 
 
 def _normalize_file_type(file_type: str | None) -> str | None:
@@ -120,6 +132,90 @@ async def get_reading_stats(user: dict = Depends(get_current_user), db: Session 
     file_service = FileService(db)
     stats = file_service.get_user_reading_stats(user['id'])
     return stats
+
+
+@router.get("/search", response_model=List[BookSearchResult])
+def search_books(
+    q: str = Query(..., min_length=1),
+    top_k: int = Query(10, ge=1, le=50),
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Semantic search across all user books. Returns matched books with snippets."""
+    from app.services.embedding_service import embed_single, search_chunks
+
+    file_service = FileService(db)
+    books = file_service.get_user_books(user["id"])
+
+    if not books:
+        return []
+
+    book_ids = [b.id for b in books]
+    settings_obj = get_settings()
+
+    rows = (
+        db.query(DocumentChunk)
+        .filter(
+            DocumentChunk.book_id.in_(book_ids),
+            DocumentChunk.embedding.isnot(None),
+        )
+        .all()
+    )
+
+    if not rows:
+        q_lower = q.lower()
+        results = []
+        for b in books:
+            title_match = q_lower in (b.title or "").lower()
+            author_match = q_lower in (b.author or "").lower()
+            if title_match or author_match:
+                results.append(BookSearchResult(
+                    book_id=b.id,
+                    title=b.title,
+                    author=b.author,
+                    file_type=b.file_type,
+                    score=1.0 if title_match else 0.5,
+                    snippet=b.title or "",
+                ))
+        results.sort(key=lambda x: x.score, reverse=True)
+        return results[:top_k]
+
+    try:
+        query_vector = embed_single(q, settings_obj.EMBEDDING_MODEL)
+    except Exception:
+        return []
+
+    candidates = [(c.id, c.embedding) for c in rows]
+    top = search_chunks(query_vector, candidates, top_k=max(top_k * 3, 20))
+    top_ids = {chunk_id: score for chunk_id, score in top}
+
+    chunk_map = {c.id: c for c in rows}
+    book_hits = {}
+    for cid, score in top:
+        if cid not in chunk_map:
+            continue
+        chunk = chunk_map[cid]
+        bid = chunk.book_id
+        if bid not in book_hits or score > book_hits[bid][0]:
+            snippet = (chunk.text or "")[:200]
+            book_hits[bid] = (score, snippet, chunk.page_start)
+
+    results = []
+    for b in books:
+        if b.id in book_hits:
+            score, snippet, page = book_hits[b.id]
+            results.append(BookSearchResult(
+                book_id=b.id,
+                title=b.title,
+                author=b.author,
+                file_type=b.file_type,
+                score=round(score, 4),
+                snippet=snippet,
+                chunk_page=page,
+            ))
+
+    results.sort(key=lambda x: x.score, reverse=True)
+    return results[:top_k]
 
 
 @router.delete("/{book_id}")

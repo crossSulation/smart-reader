@@ -5,9 +5,9 @@ import SettingsBrightnessIcon from '@mui/icons-material/SettingsBrightness';
 import { useThemeContext, type ThemeMode } from '../contexts/ThemeContext';
 
 const iconMap: Record<ThemeMode, React.ReactElement> = {
-  light: <LightModeIcon fontSize="small" />,
-  dark: <DarkModeIcon fontSize="small" />,
-  system: <SettingsBrightnessIcon fontSize="small" />,
+  light: <LightModeIcon fontSize="small" color="inherit" />,
+  dark: <DarkModeIcon fontSize="small" color="inherit" />,
+  system: <SettingsBrightnessIcon fontSize="small" color="inherit" />,
 };
 
 const labelMap: Record<ThemeMode, string> = {
@@ -32,9 +32,9 @@ export function ThemeSegmentedToggle() {
   const { mode, setThemeMode } = useThemeContext();
 
   const options: { key: ThemeMode; icon: React.ReactElement; label: string }[] = [
-    { key: 'light', icon: <LightModeIcon fontSize="small" />, label: 'Light' },
-    { key: 'system', icon: <SettingsBrightnessIcon fontSize="small" />, label: 'System' },
-    { key: 'dark', icon: <DarkModeIcon fontSize="small" />, label: 'Dark' },
+    { key: 'light', icon: <LightModeIcon fontSize="small" color="inherit" />, label: 'Light' },
+    { key: 'system', icon: <SettingsBrightnessIcon fontSize="small" color="inherit" />, label: 'System' },
+    { key: 'dark', icon: <DarkModeIcon fontSize="small" color="inherit" />, label: 'Dark' },
   ];
 
   return (
