@@ -2,6 +2,7 @@ import { AutoAwesomeOutlined, HubOutlined } from "@mui/icons-material";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import BookAgentChat from "./BookAgentChat";
+import SelectionPopup from "./SelectionPopup";
 import type { KnowledgePointItem } from "../types/KnowledgeGraph";
 
 export type AIPanelLearningNote = {
@@ -21,10 +22,12 @@ type AIPanelProps = {
   onLearningTagsInputChange: (value: string) => void;
   onClearSelectedExcerpt: () => void;
   onExplainSelection: (text: string) => void;
+  onTranslateSelection?: (text: string, targetLang: string) => void;
   learningStatus: string | null;
   savingNote: boolean;
   savingFlashcard: boolean;
   activeBookIdForAi: string | null;
+  currentPage: number;
   notesLoading: boolean;
   notesError: string | null;
   notes: AIPanelLearningNote[];
@@ -47,6 +50,8 @@ type AIPanelProps = {
   onSelectedKpIdsChange: (ids: number[]) => void;
   onCreateNoteFromSelectionWithKp: (kpIds: number[]) => void;
   onCreateFlashcardFromSelectionWithKp: (kpIds: number[]) => void;
+  onPrefillConsumed?: () => void;
+  isMobile?: boolean;
 };
 
 const parseTagsInput = (raw: string): string[] =>
@@ -62,10 +67,12 @@ export default function AIPanel({
   onLearningTagsInputChange,
   onClearSelectedExcerpt,
   onExplainSelection,
+  onTranslateSelection,
   learningStatus,
   savingNote,
   savingFlashcard,
   activeBookIdForAi,
+  currentPage,
   notesLoading,
   notesError,
   notes,
@@ -88,11 +95,21 @@ export default function AIPanel({
   onSelectedKpIdsChange,
   onCreateNoteFromSelectionWithKp,
   onCreateFlashcardFromSelectionWithKp,
+  onPrefillConsumed,
+  isMobile = false,
 }: AIPanelProps) {
   const navigate = useNavigate();
   const [showRecentNotes, setShowRecentNotes] = useState(false);
   const [showKnowledge, setShowKnowledge] = useState(false);
   const [selectedNoteForChat, setSelectedNoteForChat] = useState<AIPanelLearningNote | null>(null);
+
+  const buildKnowledgeUrl = (kpId?: number) => {
+    const params = new URLSearchParams();
+    if (kpId) params.set("kp_id", String(kpId));
+    if (activeBookIdForAi) params.set("book_id", activeBookIdForAi);
+    if (currentPage > 0) params.set("page", String(currentPage));
+    return "/knowledge?" + params.toString();
+  };
 
   useEffect(() => {
     setShowRecentNotes(false);
@@ -111,115 +128,23 @@ export default function AIPanel({
 
       <div className="flex min-h-0 flex-1 flex-col p-4">
         {selectedExcerpt && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div
-              className="w-full max-w-md rounded-lg border border-blue-200 bg-white p-4 shadow-lg dark:border-blue-800 dark:bg-gray-900"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-400">Selected Text</h3>
-                <button
-                  type="button"
-                  onClick={onClearSelectedExcerpt}
-                  className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
-                  aria-label="Close"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <p className="mb-4 max-h-32 overflow-y-auto rounded border border-blue-100 bg-blue-50 p-2 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-200">
-                {selectedExcerpt}
-              </p>
-
-              <div className="mb-3">
-                <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Tags (comma-separated)</label>
-                <input
-                  type="text"
-                  value={learningTagsInput}
-                  onChange={(e) => onLearningTagsInputChange(e.target.value)}
-                  placeholder="topic,question,todo"
-                  className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:placeholder:text-gray-500"
-                />
-              </div>
-
-              <div className="mb-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    onExplainSelection(selectedExcerpt);
-                    onClearSelectedExcerpt();
-                  }}
-                  disabled={!activeBookIdForAi}
-                  className="w-full rounded bg-purple-600 px-3 py-2 text-xs font-medium text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-purple-500 dark:hover:bg-purple-600"
-                >
-                  Explain
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onCreateNoteFromSelectionWithKp(selectedKpIds);
-                  }}
-                  disabled={!activeBookIdForAi || savingNote || savingFlashcard}
-                  className="flex-1 rounded border border-blue-300 bg-white px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-blue-700 dark:bg-gray-800 dark:text-blue-400 dark:hover:bg-blue-900/30"
-                >
-                  {savingNote ? "Saving..." : "Save as note"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onCreateFlashcardFromSelectionWithKp(selectedKpIds);
-                  }}
-                  disabled={!activeBookIdForAi || savingNote || savingFlashcard}
-                  className="flex-1 rounded border border-blue-600 bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-500 dark:hover:bg-blue-600"
-                >
-                  {savingFlashcard ? "Creating..." : "Create card"}
-                </button>
-              </div>
-
-              {knowledgePoints.length > 0 && (
-                <div className="mb-3 rounded border border-gray-100 bg-gray-50 p-2 dark:border-gray-700 dark:bg-gray-800">
-                  <div className="mb-1.5 flex items-center gap-1 text-[10px] font-medium text-gray-500 dark:text-gray-400">
-                    <HubOutlined sx={{ fontSize: 12 }} />
-                    Link to Knowledge Points
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {knowledgePoints.slice(0, 8).map((kp) => {
-                      const isSelected = selectedKpIds.includes(kp.id);
-                      return (
-                        <button
-                          key={kp.id}
-                          type="button"
-                          onClick={() => {
-                            if (isSelected) {
-                              onSelectedKpIdsChange(selectedKpIds.filter((id) => id !== kp.id));
-                            } else {
-                              onSelectedKpIdsChange([...selectedKpIds, kp.id]);
-                            }
-                          }}
-                          className={`truncate rounded px-1.5 py-0.5 text-[10px] transition ${
-                            isSelected
-                              ? "bg-blue-100 text-blue-700 ring-1 ring-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:ring-blue-700"
-                              : "bg-white text-gray-600 hover:bg-blue-50 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-blue-900/20"
-                          }`}
-                          title={kp.label}
-                        >
-                          {kp.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {learningStatus && (
-                <div className="mb-2 text-xs text-gray-600 dark:text-gray-400">{learningStatus}</div>
-              )}
-              {!activeBookIdForAi && (
-                <div className="text-xs text-amber-700 dark:text-amber-400">Upload/index must complete before saving learning items.</div>
-              )}
-            </div>
-          </div>
+          <SelectionPopup
+            selectedExcerpt={selectedExcerpt}
+            learningTagsInput={learningTagsInput}
+            onLearningTagsInputChange={onLearningTagsInputChange}
+            onClose={onClearSelectedExcerpt}
+            onExplain={onExplainSelection}
+            onTranslate={onTranslateSelection || (() => {})}
+            activeBookIdForAi={activeBookIdForAi}
+            savingNote={savingNote}
+            savingFlashcard={savingFlashcard}
+            knowledgePoints={knowledgePoints}
+            selectedKpIds={selectedKpIds}
+            onSelectedKpIdsChange={onSelectedKpIdsChange}
+            onCreateNoteFromSelection={onCreateNoteFromSelectionWithKp}
+            onCreateFlashcardFromSelection={onCreateFlashcardFromSelectionWithKp}
+            learningStatus={learningStatus}
+          />
         )}
 
         {!activeBookIdForAi ? (
@@ -251,6 +176,7 @@ export default function AIPanel({
               >
                 Recent Notes
               </button>
+              {!isMobile && (
               <button
                 type="button"
                 onClick={() => { setShowKnowledge(true); setShowRecentNotes(false); }}
@@ -263,6 +189,7 @@ export default function AIPanel({
                 <HubOutlined sx={{ fontSize: 14 }} className="mr-1" />
                 Knowledge
               </button>
+              )}
             </div>
 
             {!showRecentNotes && !showKnowledge ? (
@@ -274,6 +201,7 @@ export default function AIPanel({
                   onJumpToPage={onJumpTarget}
                   fileType={fileType}
                   onRequestShowNotes={() => { setShowRecentNotes(true); setShowKnowledge(false); }}
+                  onSeedConsumed={onPrefillConsumed}
                   selectedNote={selectedNoteForChat}
                 />
               </div>
@@ -285,7 +213,7 @@ export default function AIPanel({
                   </span>
                   <button
                     type="button"
-                    onClick={() => navigate("/knowledge" + (activeBookIdForAi ? `?book_id=${activeBookIdForAi}` : ""))}
+                    onClick={() => navigate(buildKnowledgeUrl())}
                     className="rounded px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
                   >
                     Open Graph &rarr;
@@ -305,7 +233,7 @@ export default function AIPanel({
                       <button
                         key={kp.id}
                         type="button"
-                        onClick={() => navigate(`/knowledge?kp_id=${kp.id}` + (activeBookIdForAi ? `&book_id=${activeBookIdForAi}` : ""))}
+                        onClick={() => navigate(buildKnowledgeUrl(kp.id))}
                         className="flex w-full items-center gap-2 rounded border border-gray-100 bg-gray-50 px-2.5 py-2 text-left transition hover:bg-blue-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-blue-900/20"
                       >
                         <HubOutlined sx={{ fontSize: 14 }} className="shrink-0 text-blue-500" />
@@ -412,7 +340,7 @@ export default function AIPanel({
                                   className="flex cursor-pointer items-center gap-1 rounded bg-purple-100 px-1.5 py-0.5 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    navigate(`/knowledge?kp_id=${kpId}` + (activeBookIdForAi ? `&book_id=${activeBookIdForAi}` : ""));
+                                    navigate(buildKnowledgeUrl(kpId));
                                   }}
                                   title={`Knowledge: ${kp.label}`}
                                 >

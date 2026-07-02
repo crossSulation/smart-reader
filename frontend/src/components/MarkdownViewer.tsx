@@ -50,6 +50,7 @@ function MermaidBlock({ chart }: MermaidBlockProps) {
   const [error, setError] = useState<string | null>(null);
   const [svg, setSvg] = useState("");
   const [isRendering, setIsRendering] = useState(false);
+  const [popupOpen, setPopupOpen] = useState(false);
 
   useEffect(() => {
     let isCancelled = false;
@@ -100,14 +101,46 @@ function MermaidBlock({ chart }: MermaidBlockProps) {
   }
 
   return (
-    <div className="overflow-x-auto rounded border bg-white p-2 dark:border-gray-700 dark:bg-gray-800">
-      {isRendering && !svg ? (
-        <div className="rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-500">
-          Rendering Mermaid diagram...
+    <>
+      <div
+        className="overflow-x-auto rounded border bg-white p-2 select-none dark:border-gray-700 dark:bg-gray-800"
+        onDoubleClick={() => { if (svg) setPopupOpen(true); }}
+      >
+        {isRendering && !svg ? (
+          <div className="rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-500">
+            Rendering Mermaid diagram...
+          </div>
+        ) : null}
+        {svg ? (
+          <div
+            className="cursor-pointer"
+            title="Double-click to enlarge"
+            dangerouslySetInnerHTML={{ __html: svg }}
+          />
+        ) : null}
+      </div>
+
+      {popupOpen && svg && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setPopupOpen(false)}>
+          <div
+            className="relative h-[85vh] w-[85vw] select-none overflow-auto rounded-lg border bg-white p-4 shadow-2xl dark:border-gray-700 dark:bg-gray-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setPopupOpen(false)}
+              className="absolute right-3 top-3 z-10 rounded bg-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+            >
+              Close
+            </button>
+            <div
+              className="flex items-center justify-center"
+              dangerouslySetInnerHTML={{ __html: svg }}
+            />
+          </div>
         </div>
-      ) : null}
-      {svg ? <div dangerouslySetInnerHTML={{ __html: svg }} /> : null}
-    </div>
+      )}
+    </>
   );
 }
 
@@ -180,6 +213,8 @@ const MarkdownViewer = memo(forwardRef<MarkdownViewerHandle, MarkdownViewerProps
   const [tocItems, setTocItems] = useState<TocItem[]>([]);
   const [activeSectionIndex, setActiveSectionIndex] = useState(0);
   const contentRef = useRef<HTMLDivElement>(null);
+  const [showLoader, setShowLoader] = useState(true);
+  const loaderStartRef = useRef(Date.now());
 
   const handleContentMouseUp = useCallback(() => {
     if (!onTextSelected) return;
@@ -224,6 +259,17 @@ const MarkdownViewer = memo(forwardRef<MarkdownViewerHandle, MarkdownViewerProps
 
     void fetchMarkdown();
   }, [fileUrl]);
+
+  useEffect(() => {
+    if (!loading) {
+      const elapsed = Date.now() - loaderStartRef.current;
+      if (elapsed < 800) {
+        const timer = setTimeout(() => setShowLoader(false), 800 - elapsed);
+        return () => clearTimeout(timer);
+      }
+      setShowLoader(false);
+    }
+  }, [loading]);
 
   useEffect(() => {
     const fetchToc = async () => {
@@ -496,8 +542,22 @@ const MarkdownViewer = memo(forwardRef<MarkdownViewerHandle, MarkdownViewerProps
     );
   }, [content, headingBuckets, viewerInstanceId]);
 
-  if (loading) {
-    return <div className="py-8 text-center text-gray-500 dark:text-gray-400">Loading markdown...</div>;
+  if (showLoader) {
+    return (
+      <div className="flex min-h-[320px] flex-col items-center justify-center">
+        <div className="book-loader flex items-center" style={{ width: 72, height: 96 }}>
+          <div className="book-spine" />
+          <div className="relative flex-1" style={{ height: "100%" }}>
+            <div className="page" />
+            <div className="page" />
+            <div className="page" />
+            <div className="page" />
+            <div className="page" />
+          </div>
+        </div>
+        <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading markdown...</p>
+      </div>
+    );
   }
 
   if (error) {

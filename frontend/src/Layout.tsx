@@ -11,6 +11,7 @@ const Layout: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const [isNativeDesktop, setIsNativeDesktop] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const [searchValue, setSearchValue] = useState(searchParams.get('q') || '');
 
@@ -24,11 +25,17 @@ const Layout: React.FC = () => {
   }, [searchValue, navigate]);
 
   useEffect(() => {
-    const fetchIsDesktop = async () => {
-      const result = await invoke<boolean>('is_desktop');
-      setIsDesktop(result);
-    };
-    fetchIsDesktop();
+    invoke<boolean>('is_desktop')
+      .then((result) => { if (result) setIsNativeDesktop(true); })
+      .catch(() => { /* not in Tauri */ });
+  }, []);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 1024px)");
+    setIsDesktop(mediaQuery.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mediaQuery.addEventListener("change", handler);
+    return () => mediaQuery.removeEventListener("change", handler);
   }, []);
 
   const handleLogout = () => {
@@ -39,7 +46,7 @@ const Layout: React.FC = () => {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-      {!isDesktop ? (
+      {!isNativeDesktop ? (
         <AppBar position="static">
           <Toolbar>
             <Tooltip title={t('common.appName')}>
@@ -76,11 +83,13 @@ const Layout: React.FC = () => {
                   <AssignmentOutlined />
                 </IconButton>
               </Tooltip>
+              {isDesktop && (
               <Tooltip title={t('common.knowledge', 'Knowledge')}>
                 <IconButton color="inherit" component={Link} to="/knowledge">
                   <HubOutlined />
                 </IconButton>
               </Tooltip>
+              )}
               <Tooltip title={t('common.settings')}>
                 <IconButton color="inherit" component={Link} to="/settings">
                   <SettingsOutlined />

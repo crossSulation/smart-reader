@@ -31,6 +31,7 @@ type BookAgentChatProps = {
   onJumpToPage?: (page: number) => void;
   fileType?: "pdf" | "epub" | "markdown";
   onRequestShowNotes?: () => void;
+  onSeedConsumed?: () => void;
   selectedNote?: {
     id: number;
     content: string;
@@ -216,6 +217,7 @@ export default function BookAgentChat({
   onJumpToPage,
   fileType = "pdf",
   onRequestShowNotes,
+  onSeedConsumed,
   selectedNote = null,
 }: BookAgentChatProps) {
   const [message, setMessage] = useState("");
@@ -341,9 +343,10 @@ export default function BookAgentChat({
         if (sendMessageRef.current && autoSentSeedRef.current === seedPrompt) {
           sendMessageRef.current(trimmed);
         }
+        onSeedConsumed?.();
       }, 100);
     }
-  }, [seedPrompt]);
+  }, [seedPrompt, onSeedConsumed]);
 
   useEffect(() => {
     const el = scrollContainerRef.current;

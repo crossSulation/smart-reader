@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { ArrowBack, LocalOfferOutlined, SettingsOutlined, UploadFileOutlined, ViewSidebarOutlined } from "@mui/icons-material";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { ArrowBack, AutoAwesomeOutlined, LocalOfferOutlined, SettingsOutlined, UploadFileOutlined, ViewSidebarOutlined } from "@mui/icons-material";
 import {
   Dialog, DialogTitle, DialogContent, Slider, FormControl,
   InputLabel, Select, MenuItem, Switch, FormControlLabel, IconButton,
@@ -34,6 +34,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 function Reader() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [book, setBook] = useState<Book | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -88,12 +89,12 @@ function Reader() {
   const markdownViewerRef = useRef<MarkdownViewerHandle | null>(null);
   const localFileInputRef = useRef<HTMLInputElement>(null);
   const previousLocalUrlRef = useRef<string | null>(null);
+  const [showMobilePanel, setShowMobilePanel] = useState(false);
 
   const handleTextSelected = useCallback((text: string) => {
     const clean = text.trim().replace(/\s+/g, " ");
     if (!clean) return;
     setSelectedExcerpt(clean.slice(0, 400));
-    setPrefillReferenceTerm(clean.slice(0, 200));
   }, []);
 
   const createNoteFromSelection = async (kpIds: number[] = []) => {
@@ -494,6 +495,11 @@ function Reader() {
     setPrefillReferenceTerm(`Explain the following text: ${text}`);
   };
 
+  const handleTranslateSelection = (text: string, targetLang: string) => {
+    const langName = targetLang === "zh" ? "Simplified Chinese" : "English";
+    setPrefillReferenceTerm(`Translate the following text to ${langName}: ${text}`);
+  };
+
   const handlePanelDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     aiPanelDragRef.current = { startX: e.clientX, startWidth: aiPanelWidth };
@@ -674,6 +680,25 @@ function Reader() {
     fetchKnowledgePoints();
   }, [activeBookIdForAi]);
 
+  useEffect(() => {
+    const page = searchParams.get("page");
+    if (page) {
+      const pageNum = Number(page);
+      if (!isNaN(pageNum) && pageNum > 0) {
+        if (activeFileType === "markdown") {
+          setMarkdownJumpSection(pageNum);
+        } else {
+          setJumpToPage(pageNum);
+        }
+      }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const currentPage =
+    activeFileType === "pdf" ? currentPdfPage :
+    activeFileType === "epub" ? Math.round(epubProgress) :
+    activeMarkdownSectionIndex;
+
   if (loading) {
     return (
       <div className="h-screen overflow-hidden flex flex-col">
@@ -736,7 +761,7 @@ function Reader() {
         fileUrlOverride={localFile?.type === "epub" ? localFile.url : undefined}
         onTextSelected={handleTextSelected}
         onProgressChange={setEpubProgress}
-        showSidebar={isDesktop}
+        showSidebar={true}
       />
     );
 
@@ -811,44 +836,70 @@ function Reader() {
 
       <div className="flex-1 min-h-0">
       {!isDesktop ? (
-        <div className="flex h-full flex-col overflow-y-auto">
-          <div className="min-w-0" style={readerContentStyle}>{renderReaderContent()}</div>
-          <aside className="border-t border-gray-200 bg-white overflow-hidden flex flex-col min-h-[28rem] dark:border-gray-700 dark:bg-gray-900">
-            <AIPanel
-              fileType={activeFileType}
-              selectedExcerpt={selectedExcerpt}
-              learningTagsInput={learningTagsInput}
-              onLearningTagsInputChange={setLearningTagsInput}
-              onClearSelectedExcerpt={() => setSelectedExcerpt("")}
-              onExplainSelection={onExplainSelection}
-              learningStatus={learningStatus}
-              savingNote={savingNote}
-              savingFlashcard={savingFlashcard}
-              activeBookIdForAi={activeBookIdForAi}
-              notesLoading={notesLoading}
-              notesError={notesError}
-              notes={notes}
-              editingNoteId={editingNoteId}
-              editingNoteContent={editingNoteContent}
-              onEditingNoteContentChange={setEditingNoteContent}
-              editingNoteTagsInput={editingNoteTagsInput}
-              onEditingNoteTagsInputChange={setEditingNoteTagsInput}
-              savingEditedNoteId={savingEditedNoteId}
-              deletingNoteId={deletingNoteId}
-              onStartEditNote={startEditNote}
-              onCancelEditNote={cancelEditNote}
-              onSaveEditedNote={saveEditedNote}
-              onDeleteNote={handleDeleteNote}
-              onJumpTarget={handleJumpTarget}
-              prefillReferenceTerm={prefillReferenceTerm}
-              knowledgePoints={knowledgePoints}
-              knowledgePointsLoading={knowledgePointsLoading}
-              selectedKpIds={selectedKpIds}
-              onSelectedKpIdsChange={setSelectedKpIds}
-              onCreateNoteFromSelectionWithKp={createNoteFromSelection}
-              onCreateFlashcardFromSelectionWithKp={createFlashcardFromSelection}
-            />
-          </aside>
+        <div className="relative flex h-full flex-col overflow-hidden">
+          <div className="min-w-0 flex-1 overflow-y-auto" style={readerContentStyle}>{renderReaderContent()}</div>
+
+          {!showMobilePanel && (
+            <button
+              type="button"
+              onClick={() => setShowMobilePanel(true)}
+              className="fixed bottom-6 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg transition hover:bg-blue-700 active:scale-95"
+              aria-label="Open AI Panel"
+            >
+              <AutoAwesomeOutlined fontSize="small" />
+            </button>
+          )}
+
+          {showMobilePanel && (
+            <div className="fixed inset-0 z-40">
+              <div
+                className="absolute inset-0 bg-black/30"
+                onClick={() => setShowMobilePanel(false)}
+              />
+              <div className="absolute bottom-0 right-0 top-0 w-[88vw] max-w-md animate-slide-in-right overflow-hidden border-l border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-900">
+                <div className="flex h-full flex-col">
+                  <AIPanel
+                    fileType={activeFileType}
+                    selectedExcerpt={selectedExcerpt}
+                    learningTagsInput={learningTagsInput}
+                    onLearningTagsInputChange={setLearningTagsInput}
+                    onClearSelectedExcerpt={() => setSelectedExcerpt("")}
+                    onExplainSelection={onExplainSelection}
+                    onTranslateSelection={handleTranslateSelection}
+                    learningStatus={learningStatus}
+                    savingNote={savingNote}
+                    savingFlashcard={savingFlashcard}
+                    activeBookIdForAi={activeBookIdForAi}
+                    currentPage={currentPage}
+                    notesLoading={notesLoading}
+                    notesError={notesError}
+                    notes={notes}
+                    editingNoteId={editingNoteId}
+                    editingNoteContent={editingNoteContent}
+                    onEditingNoteContentChange={setEditingNoteContent}
+                    editingNoteTagsInput={editingNoteTagsInput}
+                    onEditingNoteTagsInputChange={setEditingNoteTagsInput}
+                    savingEditedNoteId={savingEditedNoteId}
+                    deletingNoteId={deletingNoteId}
+                    onStartEditNote={startEditNote}
+                    onCancelEditNote={cancelEditNote}
+                    onSaveEditedNote={saveEditedNote}
+                    onDeleteNote={handleDeleteNote}
+                    onJumpTarget={handleJumpTarget}
+                    prefillReferenceTerm={prefillReferenceTerm}
+                    knowledgePoints={knowledgePoints}
+                    knowledgePointsLoading={knowledgePointsLoading}
+                    selectedKpIds={selectedKpIds}
+                    onSelectedKpIdsChange={setSelectedKpIds}
+                    onCreateNoteFromSelectionWithKp={createNoteFromSelection}
+                    onCreateFlashcardFromSelectionWithKp={createFlashcardFromSelection}
+                    onPrefillConsumed={() => { setPrefillReferenceTerm(""); }}
+                    isMobile
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="flex h-full">
@@ -970,10 +1021,12 @@ function Reader() {
                   onLearningTagsInputChange={setLearningTagsInput}
                   onClearSelectedExcerpt={() => setSelectedExcerpt("")}
                   onExplainSelection={onExplainSelection}
+                  onTranslateSelection={handleTranslateSelection}
                   learningStatus={learningStatus}
                   savingNote={savingNote}
                   savingFlashcard={savingFlashcard}
                   activeBookIdForAi={activeBookIdForAi}
+                  currentPage={currentPage}
                   notesLoading={notesLoading}
                   notesError={notesError}
                   notes={notes}
@@ -996,6 +1049,7 @@ function Reader() {
                   onSelectedKpIdsChange={setSelectedKpIds}
                   onCreateNoteFromSelectionWithKp={createNoteFromSelection}
                   onCreateFlashcardFromSelectionWithKp={createFlashcardFromSelection}
+                  onPrefillConsumed={() => { setPrefillReferenceTerm(""); }}
                 />
               </div>
             </div>

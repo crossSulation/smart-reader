@@ -55,6 +55,8 @@ export default function PDFViewer({
   const [fileUrl, setFileUrl] = useState("");
   const [isAnimating, setIsAnimating] = useState(false);
   const [animationDirection, setAnimationDirection] = useState<"next" | "previous">("next");
+  const [showLoader, setShowLoader] = useState(true);
+  const loaderStartRef = useRef(Date.now());
   const [pageWidth, setPageWidth] = useState(0);
   const currentPageRef = useRef<number>(1);
   const lastSavedPageRef = useRef<number | null>(null);
@@ -203,6 +205,12 @@ export default function PDFViewer({
     onTotalPagesChange?.(numPages);
     const initial = Math.min(Math.max(initPage, 1), numPages);
     setPageNumber(initial);
+    const elapsed = Date.now() - loaderStartRef.current;
+    if (elapsed < 800) {
+      setTimeout(() => setShowLoader(false), 800 - elapsed);
+    } else {
+      setShowLoader(false);
+    }
   }
 
   const activeToolRef = useRef(activeTool);
@@ -349,6 +357,21 @@ export default function PDFViewer({
             cursor: activeTool !== 'none' ? 'text' : 'auto',
           }}
         >
+          {showLoader || !fileObject ? (
+            <div className="flex min-h-[320px] flex-col items-center justify-center">
+              <div className="book-loader flex items-center" style={{ width: 72, height: 96 }}>
+                <div className="book-spine" />
+                <div className="relative flex-1" style={{ height: "100%" }}>
+                  <div className="page" />
+                  <div className="page" />
+                  <div className="page" />
+                  <div className="page" />
+                  <div className="page" />
+                </div>
+              </div>
+              <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading document...</p>
+            </div>
+          ) : (
           <Document
             file={fileObject}
             onLoadSuccess={onDocumentLoadSuccess}
@@ -399,6 +422,7 @@ export default function PDFViewer({
               </div>
             </div>
           </Document>
+          )}
         </div>
     </div>
   );

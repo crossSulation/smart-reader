@@ -82,19 +82,33 @@ export default function KnowledgeGraphCanvas({
       if (!running) return;
       const current = new Map(nodesRef.current);
       const arr = Array.from(current.values());
+      const maxLinks = Math.max(1, ...arr.map((n) => n.link_count));
 
       for (let i = 0; i < arr.length; i++) {
         for (let j = i + 1; j < arr.length; j++) {
           const dx = arr[j].x - arr[i].x;
           const dy = arr[j].y - arr[i].y;
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const force = 800 / (dist * dist);
-          const fx = (dx / dist) * force;
-          const fy = (dy / dist) * force;
-          arr[i].vx -= fx;
-          arr[i].vy -= fy;
-          arr[j].vx += fx;
-          arr[j].vy += fy;
+          const ri = 8 + (arr[i].link_count / Math.max(maxLinks, 1)) * 18;
+          const rj = 8 + (arr[j].link_count / Math.max(maxLinks, 1)) * 18;
+          const minDist = ri + rj + 48;
+          if (dist < minDist) {
+            const force = (minDist - dist) * 0.5;
+            const fx = (dx / dist) * force;
+            const fy = (dy / dist) * force;
+            arr[i].vx -= fx;
+            arr[i].vy -= fy;
+            arr[j].vx += fx;
+            arr[j].vy += fy;
+          } else {
+            const force = 600 / (dist * dist);
+            const fx = (dx / dist) * force;
+            const fy = (dy / dist) * force;
+            arr[i].vx -= fx;
+            arr[i].vy -= fy;
+            arr[j].vx += fx;
+            arr[j].vy += fy;
+          }
         }
       }
 
@@ -105,7 +119,7 @@ export default function KnowledgeGraphCanvas({
         const dx = targetNode.x - s.x;
         const dy = targetNode.y - s.y;
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        const force = (dist - 120) * 0.005;
+        const force = (dist - 180) * 0.003;
         const fx = (dx / dist) * force;
         const fy = (dy / dist) * force;
         s.vx += fx;
@@ -117,6 +131,8 @@ export default function KnowledgeGraphCanvas({
       const cx = 400;
       const cy = 280;
       arr.forEach((n) => {
+        const ri = 8 + (n.link_count / Math.max(maxLinks, 1)) * 18;
+        const margin = ri + 20;
         const dx = cx - n.x;
         const dy = cy - n.y;
         n.vx += dx * 0.001;
@@ -125,8 +141,8 @@ export default function KnowledgeGraphCanvas({
         n.vy *= 0.85;
         n.x += n.vx;
         n.y += n.vy;
-        n.x = Math.max(20, Math.min(780, n.x));
-        n.y = Math.max(20, Math.min(540, n.y));
+        n.x = Math.max(margin, Math.min(800 - margin, n.x));
+        n.y = Math.max(margin, Math.min(560 - margin, n.y));
       });
 
       nodesRef.current = current;

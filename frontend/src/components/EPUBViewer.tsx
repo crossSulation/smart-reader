@@ -104,12 +104,14 @@ export default function EPUBViewer({
   jumpToHref,
   onTextSelected,
   onProgressChange,
-  showSidebar = false,
+  showSidebar: _showSidebar,
 }: EPUBViewerProps) {
   const { t } = useTranslation();
   const viewerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showLoader, setShowLoader] = useState(true);
+  const loaderStartRef = useRef(Date.now());
   const [navItems, setNavItems] = useState<EPUBNavItem[]>([]);
   const [activeHref, setActiveHref] = useState<string | null>(null);
   const bookRef = useRef<any>(null);
@@ -126,6 +128,7 @@ export default function EPUBViewer({
   });
   const activeToolRef = useRef(activeTool);
   const activeColorRef = useRef(activeColor);
+  const [mobileTocOpen, setMobileTocOpen] = useState(false);
   const annotationsRef = useRef(annotations);
   const readingThemeRef = useRef(readingTheme);
 
@@ -138,6 +141,17 @@ export default function EPUBViewer({
   useEffect(() => { activeColorRef.current = activeColor; }, [activeColor]);
   useEffect(() => { annotationsRef.current = annotations; }, [annotations]);
   useEffect(() => { readingThemeRef.current = readingTheme; localStorage.setItem('epub-reading-theme', readingTheme); }, [readingTheme]);
+
+  useEffect(() => {
+    if (!loading) {
+      const elapsed = Date.now() - loaderStartRef.current;
+      if (elapsed < 800) {
+        const timer = setTimeout(() => setShowLoader(false), 800 - elapsed);
+        return () => clearTimeout(timer);
+      }
+      setShowLoader(false);
+    }
+  }, [loading]);
 
   useEffect(() => {
     if (activeTool === 'highlight') {
@@ -500,26 +514,35 @@ export default function EPUBViewer({
 
   return (
     <div className="flex h-full w-full">
-      {showSidebar && navItems.length > 0 && (
-        <aside className="hidden h-full w-56 shrink-0 overflow-y-auto border-r border-gray-200 bg-gray-50 lg:block dark:border-gray-700 dark:bg-gray-800">
-          {navContent}
-        </aside>
+      {navItems.length > 0 && (
+        <>
+          <aside className="hidden h-full w-56 shrink-0 overflow-y-auto border-r border-gray-200 bg-gray-50 lg:block dark:border-gray-700 dark:bg-gray-800">
+            {navContent}
+          </aside>
+
+          <div className="lg:hidden">
+            <button
+              type="button"
+              onClick={() => setMobileTocOpen(true)}
+              className="fixed bottom-20 left-4 z-40 flex h-10 w-10 items-center justify-center rounded-full bg-white text-gray-600 shadow-lg transition hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              aria-label="Open Contents"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            </button>
+
+            {mobileTocOpen && (
+              <div className="fixed inset-0 z-50">
+                <div className="absolute inset-0 bg-black/30" onClick={() => setMobileTocOpen(false)} />
+                <aside className="absolute bottom-0 left-0 top-0 w-[80vw] max-w-xs animate-slide-in-right overflow-y-auto border-r border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-900">
+                  {navContent}
+                </aside>
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       <div className="flex min-w-0 flex-1 flex-col items-center px-4 md:px-8">
-        {!showSidebar && navItems.length > 0 && (
-          <div className="w-full border-b border-gray-200 bg-gray-50 p-2 dark:border-gray-700 dark:bg-gray-800">
-            <details>
-              <summary className="cursor-pointer px-2 py-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                Contents
-              </summary>
-              <nav className="mt-1 max-h-48 overflow-y-auto space-y-0.5">
-                <NavTree items={navItems} depth={0} activeHref={activeHref} onNavigate={handleNavigate} />
-              </nav>
-            </details>
-          </div>
-        )}
-
         {/* Toolbar row: annotation tools + reading theme */}
         <div className="mb-3 mt-4 flex w-full flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -619,9 +642,19 @@ export default function EPUBViewer({
               <span className="text-xs text-gray-500 dark:text-gray-400">Failed to load EPUB file</span>
             </div>
           )}
-          {!error && loading && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-white/80 dark:bg-gray-800/80">
-              <span className="text-sm text-gray-500 dark:text-gray-400">Loading EPUB...</span>
+          {!error && showLoader && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-lg bg-white/80 dark:bg-gray-800/80">
+              <div className="book-loader flex items-center" style={{ width: 72, height: 96 }}>
+                <div className="book-spine" />
+                <div className="relative flex-1" style={{ height: "100%" }}>
+                  <div className="page" />
+                  <div className="page" />
+                  <div className="page" />
+                  <div className="page" />
+                  <div className="page" />
+                </div>
+              </div>
+              <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading EPUB...</p>
             </div>
           )}
           <div

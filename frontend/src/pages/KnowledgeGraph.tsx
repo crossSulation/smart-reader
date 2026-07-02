@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import KnowledgeGraphCanvas from "../components/KnowledgeGraphCanvas";
 import KnowledgeList from "../components/KnowledgeList";
@@ -11,9 +11,17 @@ type PanelMode = "list" | "detail" | "none";
 export default function KnowledgeGraphPage() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      navigate("/library", { replace: true });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const urlKpId = searchParams.get("kp_id");
   const urlBookId = searchParams.get("book_id");
+  const urlPage = searchParams.get("page");
   const initialKpId = urlKpId ? Number(urlKpId) : null;
   const initialBookId = urlBookId ? Number(urlBookId) : null;
 
@@ -149,6 +157,14 @@ export default function KnowledgeGraphPage() {
           )}
         </div>
         <div className="flex gap-2">
+          {bookId && (
+            <button
+              onClick={() => navigate(`/reader/${bookId}${urlPage ? `?page=${urlPage}` : ""}`)}
+              className="rounded border border-gray-300 px-3 py-1 text-xs text-blue-600 hover:bg-blue-50 dark:border-gray-600 dark:text-blue-400 dark:hover:bg-blue-900/20"
+            >
+              &larr; Return to Reading
+            </button>
+          )}
           <button
             onClick={() => { setSelectedNodeId(null); loadGraph(); setRightPanel("none"); setSearchParams({}, { replace: true }); }}
             className="rounded border border-gray-300 px-3 py-1 text-xs hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800 dark:text-gray-300"
