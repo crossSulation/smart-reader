@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo, type ChangeEvent } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowBack, AutoAwesomeOutlined, LocalOfferOutlined, SettingsOutlined, UploadFileOutlined, ViewSidebarOutlined } from "@mui/icons-material";
 import {
@@ -10,7 +10,7 @@ import { Document, Page, pdfjs } from "react-pdf";
 import { invoke } from "@tauri-apps/api/core";
 import MarkdownViewer, { type MarkdownSidebarEntry, type MarkdownViewerHandle } from "../components/MarkdownViewer";
 import PDFViewer from "../components/PDFViewer";
-import EPUBViewer from "../components/EPUBViewer";
+import EPUBViewer, { type EPUBViewerHandle } from "../components/EPUBViewer";
 import AIPanel, { type AIPanelLearningNote } from "../components/AIPanel";
 import BareTitleBar from "../components/BareTitleBar";
 import { useKeyboardShortcuts, type ShortcutBinding } from "../hooks/useKeyboardShortcuts";
@@ -87,6 +87,7 @@ function Reader() {
   const aiPanelDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const thumbnailRefs = useRef<(HTMLDivElement | null)[]>([]);
   const markdownViewerRef = useRef<MarkdownViewerHandle | null>(null);
+  const epubViewerRef = useRef<EPUBViewerHandle | null>(null);
   const localFileInputRef = useRef<HTMLInputElement>(null);
   const previousLocalUrlRef = useRef<string | null>(null);
   const [showMobilePanel, setShowMobilePanel] = useState(false);
@@ -478,14 +479,54 @@ function Reader() {
     }
   }, [activeFileType, currentPdfPage, pdfTotalPages, epubProgress, book?.current_page, book?.total_pages, localFile]);
 
-  const thumbnailFile = localFile && activeFileType === "pdf"
-    ? localFile.url
-    : book?.file_url
-      ? {
-          url: book.file_url,
-          httpHeaders: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        }
-      : null;
+  const thumbnailFile = useMemo(() => {
+    if (localFile && activeFileType === "pdf") return localFile.url;
+    if (book?.file_url) {
+      return {
+        url: book.file_url,
+        httpHeaders: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      };
+    }
+    return null;
+  }, [localFile?.url, activeFileType, book?.file_url]);
+
+  const thumbnails = useMemo(() => {
+    if (!thumbnailFile || pdfTotalPages <= 0) return null;
+    return (
+      <Document file={thumbnailFile} loading="">
+        {Array.from({ length: pdfTotalPages }, (_, i) => i + 1).map((page) => (
+          <div
+            key={page}
+            ref={(el) => { thumbnailRefs.current[page - 1] = el; }}
+            data-page={page}
+            onClick={() => setJumpToPage(page)}
+            className="m-1 cursor-pointer rounded border-2 border-transparent transition-colors hover:border-blue-300"
+          >
+            <Page
+              pageNumber={page}
+              width={88}
+              renderTextLayer={false}
+              renderAnnotationLayer={false}
+            />
+            <div className="py-0.5 text-center text-xs text-gray-500">{page}</div>
+          </div>
+        ))}
+      </Document>
+    );
+  }, [thumbnailFile, pdfTotalPages]);
+
+  useEffect(() => {
+    if (activeFileType !== "pdf") return;
+    const current = thumbnailRefs.current[currentPdfPage - 1];
+    if (!current) return;
+    current.parentElement?.querySelectorAll("[data-page]").forEach((el) => {
+      el.classList.remove("border-blue-500", "bg-blue-50");
+      el.classList.add("border-transparent");
+    });
+    current.classList.remove("border-transparent");
+    current.classList.add("border-blue-500", "bg-blue-50");
+    current.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [currentPdfPage, activeFileType]);
 
   const onOpenSetting = () => {
     setSettingsOpen(true);
@@ -544,19 +585,31 @@ function Reader() {
   const shortcutBindings: ShortcutBinding[] = [
     {
       key: 'ArrowRight',
-      handler: () => activeFileType === 'pdf' && setJumpToPage(currentPdfPage + 1),
+      handler: () => {
+        if (activeFileType === 'pdf') setJumpToPage(currentPdfPage + 1);
+        else if (activeFileType === 'epub') epubViewerRef.current?.next();
+      },
     },
     {
       key: 'j',
-      handler: () => activeFileType === 'pdf' && setJumpToPage(currentPdfPage + 1),
+      handler: () => {
+        if (activeFileType === 'pdf') setJumpToPage(currentPdfPage + 1);
+        else if (activeFileType === 'epub') epubViewerRef.current?.next();
+      },
     },
     {
       key: 'ArrowLeft',
-      handler: () => activeFileType === 'pdf' && setJumpToPage(currentPdfPage - 1),
+      handler: () => {
+        if (activeFileType === 'pdf') setJumpToPage(currentPdfPage - 1);
+        else if (activeFileType === 'epub') epubViewerRef.current?.prev();
+      },
     },
     {
       key: 'k',
-      handler: () => activeFileType === 'pdf' && setJumpToPage(currentPdfPage - 1),
+      handler: () => {
+        if (activeFileType === 'pdf') setJumpToPage(currentPdfPage - 1);
+        else if (activeFileType === 'epub') epubViewerRef.current?.prev();
+      },
     },
     {
       key: 'f',
@@ -607,11 +660,6 @@ function Reader() {
     const initialPage = localFile ? 1 : Math.max(1, book?.current_page ?? 1);
     setCurrentPdfPage(initialPage);
   }, [book, activeFileType, localFile]);
-
-  useEffect(() => {
-    if (activeFileType !== "pdf") return;
-    thumbnailRefs.current[currentPdfPage - 1]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [currentPdfPage, activeFileType]);
 
   useEffect(() => {
     if (activeFileType !== "markdown") {
@@ -757,6 +805,7 @@ function Reader() {
       ) : null
     ) : (
       <EPUBViewer
+        ref={epubViewerRef}
         bookId={localFile ? undefined : id!}
         fileUrlOverride={localFile?.type === "epub" ? localFile.url : undefined}
         onTextSelected={handleTextSelected}
@@ -939,32 +988,7 @@ function Reader() {
               <aside className="h-full w-40 shrink-0 overflow-y-auto border-r border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800">
                 {leftPanelTab === "navigation" ? (
                   activeFileType === "pdf" ? (
-                    thumbnailFile && pdfTotalPages > 0 && (
-                      <Document file={thumbnailFile} loading="">
-                        {Array.from({ length: pdfTotalPages }, (_, i) => i + 1).map((page) => (
-                          <div
-                            key={page}
-                            ref={(el) => {
-                              thumbnailRefs.current[page - 1] = el;
-                            }}
-                            onClick={() => setJumpToPage(page)}
-                            className={`m-1 cursor-pointer rounded border-2 transition-colors ${
-                              currentPdfPage === page
-                                ? "border-blue-500 bg-blue-50"
-                                : "border-transparent hover:border-blue-300"
-                            }`}
-                          >
-                            <Page
-                              pageNumber={page}
-                              width={88}
-                              renderTextLayer={false}
-                              renderAnnotationLayer={false}
-                            />
-                            <div className="py-0.5 text-center text-xs text-gray-500">{page}</div>
-                          </div>
-                        ))}
-                      </Document>
-                    )
+                    thumbnails
                   ) : markdownSidebarEntries.length > 0 ? (
                     <div className="p-2">
                       <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Contents</div>

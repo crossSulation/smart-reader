@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState, useCallback, useMemo, type TouchEvent } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useEffect, useRef, useState, useCallback, useMemo, forwardRef, useImperativeHandle, type TouchEvent } from 'react';
 import { fetchWithCache } from '../utils/fileCache';
 import Rendition from 'epubjs/types/rendition';
 import View from 'epubjs/types/managers/view';
@@ -98,15 +97,19 @@ function NavTree({
   );
 }
 
-export default function EPUBViewer({
+export type EPUBViewerHandle = {
+  next: () => void;
+  prev: () => void;
+};
+
+const EPUBViewer = forwardRef<EPUBViewerHandle, EPUBViewerProps>(function EPUBViewer({
   bookId,
   fileUrlOverride,
   jumpToHref,
   onTextSelected,
   onProgressChange,
   showSidebar: _showSidebar,
-}: EPUBViewerProps) {
-  const { t } = useTranslation();
+}, ref) {
   const viewerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -431,6 +434,11 @@ export default function EPUBViewer({
     renditionRef.current?.next();
   }, []);
 
+  useImperativeHandle(ref, () => ({
+    next: handleNext,
+    prev: handlePrevious,
+  }), [handleNext, handlePrevious]);
+
   const handleNavigate = useCallback((href: string) => {
     if (renditionRef.current) {
       renditionRef.current.display(href);
@@ -616,26 +624,27 @@ export default function EPUBViewer({
           </div>
         </div>
 
-        <div className="mb-4 flex gap-4">
+        <div className="relative group w-full flex-1" style={{ minHeight: '400px' }}>
           <button
+            type="button"
             onClick={handlePrevious}
-            className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 transition dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200"
+            className="absolute left-0 top-0 z-10 flex h-full w-16 items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+            aria-label="Previous page"
           >
-            {t('pdfViewer.previous')}
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/80 shadow-md transition-shadow hover:shadow-lg dark:bg-gray-800/80">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-600 dark:text-gray-300"><polyline points="15 18 9 12 15 6"/></svg>
+            </span>
           </button>
           <button
+            type="button"
             onClick={handleNext}
-            className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 transition dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200"
+            className="absolute right-0 top-0 z-10 flex h-full w-16 items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+            aria-label="Next page"
           >
-            {t('pdfViewer.next')}
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/80 shadow-md transition-shadow hover:shadow-lg dark:bg-gray-800/80">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-600 dark:text-gray-300"><polyline points="9 18 15 12 9 6"/></svg>
+            </span>
           </button>
-        </div>
-
-        <div className="mb-2 text-sm text-gray-500 text-center dark:text-gray-400">
-          {t('pdfViewer.swipeHint')}
-        </div>
-
-        <div className="relative w-full flex-1" style={{ minHeight: '400px' }}>
           {error && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-lg bg-white/90 dark:bg-gray-800/90">
               <span className="text-sm text-red-600 dark:text-red-400">{error}</span>
@@ -674,4 +683,6 @@ export default function EPUBViewer({
       </div>
     </div>
   );
-}
+});
+
+export default EPUBViewer;

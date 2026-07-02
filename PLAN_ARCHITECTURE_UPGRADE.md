@@ -160,14 +160,51 @@ frontend/                          backend/
 **目标：** 实现 CapabilityScanner、Scheduler、ConfidenceGate、OfflineQueue，连接 Provider 层。
 
 #### P2-01: CapabilityScanner（启动时能力探测）
+
+能力探测分两层——后端探测服务端能力，前端探测浏览器能力并通过 API 上报。
+
+**P2-01A: Backend CapabilityScanner**
 - **文件：** `backend/app/middleware/capability_scanner.py` (新建)
-- **职责：**
-  - 检测运行环境：Desktop (Tauri) vs Browser vs Pure Web
+- **职责（仅探测后端可达的能力）：**
+  - 检测运行模式：Desktop（Tauri sidecar 模式）vs Web（纯 HTTP 模式）
   - 探测：Ollama 可用性 (`GET localhost:11434/api/tags`)
-  - 探测：本地模型状态（Transformers.js / ONNX）
-  - 探测：WebGPU 可用性标志
-  - 输出 `RuntimeCapabilities` 数据类
+  - 探测：本地 Embedding / Reranker 服务端口
+  - 探测：SQLite 可用（Tauri 环境下由 Rust 插件提供）
+  - 输出 `BackendRuntimeCapabilities` 数据类（仅含后端能力）
 - **集成：** 在 FastAPI `startup` 事件中触发扫描，结果缓存供 Scheduler 使用
+
+**P2-01B: 前端能力上报**
+- **文件：** `frontend/src/utils/capabilities.ts` (新建)
+- **职责（浏览器端能力，后端无法直接探测）：**
+  - `navigator.gpu` → WebGPU 可用性
+  - `window.__TAURI__` → 是否运行在 Tauri Desktop 中
+  - IndexedDB 可用性（浏览器）
+  - Transformers.js 模型缓存状态（IndexedDB/SQLite 中是否存在）
+  - ONNX Runtime Web 是否加载成功
+  - `navigator.onLine` → 网络连通性
+  - 输出 `FrontendCapabilities` 对象
+- **上报机制：**
+  - 应用启动时通过 `POST /api/capabilities/report` 上报前端能力
+  - 后端将前端能力与自身探测结果合并为完整的 `RuntimeCapabilities`
+  - 网络状态变化 (`online`/`offline` 事件) 时增量更新
+
+**合并后的 RuntimeCapabilities** 示例：
+```python
+@dataclass
+class RuntimeCapabilities:
+    # 后端探测
+    is_desktop_app: bool          # Tauri sidecar 模式
+    ollama_available: bool        # localhost:11434
+    local_embed_available: bool   # 本地 embed 服务
+    local_rerank_available: bool  # 本地 rerank 服务
+    storage_type: str             # "sqlite" | "none"
+
+    # 前端上报
+    webgpu_available: bool        # navigator.gpu
+    transformers_model_cached: bool  # 模型已下载到本地
+    onnx_available: bool          # ONNX Runtime Web 加载成功
+    is_online: bool               # navigator.onLine
+```
 
 #### P2-02: Scheduler（任务感知路由）
 - **文件：** `backend/app/middleware/scheduler.py` (新建)

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, useCallback, useMemo, type TouchEvent } fr
 import { Document, Page, pdfjs } from "react-pdf";
 import 'react-pdf/dist/Page/TextLayer.css';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
-import { useTranslation } from 'react-i18next';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -49,14 +48,18 @@ export default function PDFViewer({
   onPageChange,
   onTotalPagesChange,
 }: PDFViewerProps) {
-  const { t } = useTranslation();
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState(1);
   const [fileUrl, setFileUrl] = useState("");
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [animationDirection, setAnimationDirection] = useState<"next" | "previous">("next");
   const [showLoader, setShowLoader] = useState(true);
   const loaderStartRef = useRef(Date.now());
+  const [pageLoading, setPageLoading] = useState(false);
+  const currentPageLoadingRef = useRef(false);
+
+  const pdfOptions = useMemo(() => ({
+    useWorkerFetch: true,
+    isEvalSupported: false,
+  }), []);
   const [pageWidth, setPageWidth] = useState(0);
   const currentPageRef = useRef<number>(1);
   const lastSavedPageRef = useRef<number | null>(null);
@@ -123,19 +126,16 @@ export default function PDFViewer({
   };
 
   const pageNumberRef = useRef(pageNumber);
-  const isAnimatingRef = useRef(isAnimating);
   const numPagesRef = useRef(numPages);
 
   useEffect(() => { pageNumberRef.current = pageNumber; }, [pageNumber]);
-  useEffect(() => { isAnimatingRef.current = isAnimating; }, [isAnimating]);
   useEffect(() => { numPagesRef.current = numPages; }, [numPages]);
 
   const handlePageChange = useCallback((newPage: number) => {
-    if (newPage >= 1 && newPage <= numPagesRef.current && newPage !== pageNumberRef.current && !isAnimatingRef.current) {
-      setAnimationDirection(newPage > pageNumberRef.current ? "next" : "previous");
-      setIsAnimating(true);
+    if (newPage >= 1 && newPage <= numPagesRef.current && newPage !== pageNumberRef.current) {
+      setPageLoading(true);
+      currentPageLoadingRef.current = true;
       setPageNumber(newPage);
-      setTimeout(() => setIsAnimating(false), 300);
     }
   }, []);
 
@@ -146,7 +146,7 @@ export default function PDFViewer({
   }, []);
 
   const handleTouchEnd = useCallback((e: TouchEvent) => {
-    if (!touchStartX.current || isAnimatingRef.current) return;
+    if (!touchStartX.current) return;
 
     const touchEndX = e.changedTouches[0].clientX;
     const touchEndY = e.changedTouches[0].clientY;
@@ -322,42 +322,42 @@ export default function PDFViewer({
           >🗑 Clear page</button>
         </div>
 
-        <div className="mb-4 flex gap-4 items-center">
-          <button
-            onClick={() => handlePageChange(pageNumber - 1)}
-            disabled={pageNumber <= 1 || isAnimating}
-            className="px-4 py-2 bg-gray-200 rounded disabled:opacity-50 hover:bg-gray-300 transition dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
-          >
-            {t('pdfViewer.previous')}
-          </button>
-          <span className="px-4 py-2 dark:text-gray-300">
-            {t('pdfViewer.page')} {pageNumber} {t('pdfViewer.of')} {numPages || "?"}
-          </span>
-          <button
-            onClick={() => handlePageChange(pageNumber + 1)}
-            disabled={pageNumber >= numPages || isAnimating}
-            className="px-4 py-2 bg-gray-200 rounded disabled:opacity-50 hover:bg-gray-300 transition dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
-          >
-            {t('pdfViewer.next')}
-          </button>
-        </div>
-
-        <div className="mb-2 text-sm text-gray-500 text-center dark:text-gray-400">
-          {t('pdfViewer.swipeHint')}
-        </div>
-
         <div
+          className="relative group w-full border shadow-lg rounded-lg overflow-hidden dark:border-gray-700"
           ref={viewerRef}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
-          className="w-full border shadow-lg rounded-lg overflow-hidden dark:border-gray-700"
           style={{
             touchAction: 'pan-y',
             userSelect: 'text',
             cursor: activeTool !== 'none' ? 'text' : 'auto',
           }}
         >
-          {showLoader || !fileObject ? (
+          {pageNumber > 1 && (
+            <button
+              type="button"
+              onClick={() => handlePageChange(pageNumber - 1)}
+              className="absolute left-0 top-0 z-10 flex h-full w-16 items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              aria-label="Previous page"
+            >
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/80 shadow-md transition-shadow hover:shadow-lg dark:bg-gray-800/80">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-600 dark:text-gray-300"><polyline points="15 18 9 12 15 6"/></svg>
+              </span>
+            </button>
+          )}
+          {pageNumber < numPages && (
+            <button
+              type="button"
+              onClick={() => handlePageChange(pageNumber + 1)}
+              className="absolute right-0 top-0 z-10 flex h-full w-16 items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              aria-label="Next page"
+            >
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/80 shadow-md transition-shadow hover:shadow-lg dark:bg-gray-800/80">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-600 dark:text-gray-300"><polyline points="9 18 15 12 9 6"/></svg>
+              </span>
+            </button>
+          )}
+          {!fileObject ? (
             <div className="flex min-h-[320px] flex-col items-center justify-center">
               <div className="book-loader flex items-center" style={{ width: 72, height: 96 }}>
                 <div className="book-spine" />
@@ -375,15 +375,41 @@ export default function PDFViewer({
           <Document
             file={fileObject}
             onLoadSuccess={onDocumentLoadSuccess}
+            options={pdfOptions}
             className="border shadow-lg"
           >
+            {showLoader && (
+              <div className="flex min-h-[320px] flex-col items-center justify-center">
+                <div className="book-loader flex items-center" style={{ width: 72, height: 96 }}>
+                  <div className="book-spine" />
+                  <div className="relative flex-1" style={{ height: "100%" }}>
+                    <div className="page" />
+                    <div className="page" />
+                    <div className="page" />
+                    <div className="page" />
+                    <div className="page" />
+                  </div>
+                </div>
+                <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading document...</p>
+              </div>
+            )}
+            {!showLoader && (
             <div ref={pageContainerRef} className="relative dark:[&_canvas]:brightness-90 dark:[&_canvas]:invert dark:[&_canvas]:hue-rotate-180">
+              {pageLoading && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 dark:bg-gray-800/70">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Loading page {pageNumber}...</span>
+                  </div>
+                </div>
+              )}
               <Page
                 pageNumber={pageNumber}
                 width={pageWidth || Math.floor(window.innerWidth * 0.8)}
-                renderTextLayer={true}
+                renderTextLayer={!pageLoading}
                 renderAnnotationLayer={false}
-                className={`pdf-page ${isAnimating ? `animating animating-${animationDirection}` : ''}`}
+                onRenderSuccess={() => { setPageLoading(false); currentPageLoadingRef.current = false; }}
+                className="pdf-page"
               />
               {/* Annotation overlay — percentages are relative to pageContainerRef */}
               <div className="pointer-events-none absolute inset-0" style={{ zIndex: 4 }}>
@@ -421,6 +447,7 @@ export default function PDFViewer({
                   )}
               </div>
             </div>
+            )}
           </Document>
           )}
         </div>
