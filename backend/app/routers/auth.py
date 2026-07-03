@@ -133,6 +133,9 @@ def register(user_create: UserCreate, db: Session = Depends(get_db)):
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
+
+    from app.services.credit_service import grant_free_credits
+    grant_free_credits(db, db_user.id, commit=True)
     
     # 创建访问令牌
     access_token = AuthService.create_access_token(

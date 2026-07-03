@@ -4,6 +4,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useTranslation } from 'react-i18next';
 import { ImportContactsOutlined, AssignmentOutlined, HubOutlined, SettingsOutlined, PersonOutlined, SearchOutlined } from '@mui/icons-material';
 import { ThemeToggleButton } from './ThemeToggle';
+import CreditIndicator from './CreditIndicator';
 
 const CustomTitleBar: React.FC = () => {
   const { t } = useTranslation();
@@ -91,6 +92,7 @@ const CustomTitleBar: React.FC = () => {
             >✕</button>
           )}
         </div>
+        <CreditIndicator />
         <nav className="titlebar-nav">
           <Link to="/review" className="titlebar-nav-item" title={t('common.review', 'Review')}>
             <AssignmentOutlined sx={{ fontSize: 18 }} />

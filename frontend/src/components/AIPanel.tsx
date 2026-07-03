@@ -102,6 +102,8 @@ export default function AIPanel({
   const [showRecentNotes, setShowRecentNotes] = useState(false);
   const [showKnowledge, setShowKnowledge] = useState(false);
   const [selectedNoteForChat, setSelectedNoteForChat] = useState<AIPanelLearningNote | null>(null);
+  const [creditStatus, setCreditStatus] = useState<"ok" | "low" | "exhausted" | null>(null);
+  const [creditBalance, setCreditBalance] = useState<number>(0);
 
   const buildKnowledgeUrl = (kpId?: number) => {
     const params = new URLSearchParams();
@@ -117,6 +119,25 @@ export default function AIPanel({
     setSelectedNoteForChat(null);
   }, [activeBookIdForAi]);
 
+  useEffect(() => {
+    const checkCredits = async () => {
+      try {
+        const res = await fetch("/api/billing/stats", {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setCreditBalance(data.balance || 0);
+          const headerStatus = res.headers.get("X-Credit-Status");
+          setCreditStatus((headerStatus as "ok" | "low" | "exhausted") || "ok");
+        }
+      } catch { /* ignore */ }
+    };
+    checkCredits();
+    const interval = setInterval(checkCredits, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <>
       <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800">
@@ -125,6 +146,19 @@ export default function AIPanel({
           <span>AI Panel</span>
         </div>
       </div>
+
+      {creditStatus === "exhausted" && (
+        <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-400">
+          Credits exhausted. Cloud AI features are disabled.{" "}
+          <a href="/billing" className="underline">Purchase credits</a> or switch to local mode.
+        </div>
+      )}
+      {creditStatus === "low" && creditBalance > 0 && (
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+          Credits running low ({creditBalance.toLocaleString()} remaining).{" "}
+          <a href="/billing" className="underline">Purchase more</a> to continue using cloud AI.
+        </div>
+      )}
 
       <div className="flex min-h-0 flex-1 flex-col p-4">
         {selectedExcerpt && (
@@ -202,6 +236,7 @@ export default function AIPanel({
                   fileType={fileType}
                   onRequestShowNotes={() => { setShowRecentNotes(true); setShowKnowledge(false); }}
                   onSeedConsumed={onPrefillConsumed}
+                  currentPage={currentPage}
                   selectedNote={selectedNoteForChat}
                 />
               </div>

@@ -5,6 +5,7 @@ import { SearchOutlined, AssignmentOutlined, HubOutlined, SettingsOutlined, Pers
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
 import { ThemeToggleButton } from './components/ThemeToggle';
+import CreditIndicator from './components/CreditIndicator';
 import CustomTitleBar from './components/CustomTitleBar';
 
 const Layout: React.FC = () => {
@@ -77,6 +78,7 @@ const Layout: React.FC = () => {
                 )}
               </Box>
 
+            <CreditIndicator />
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               <Tooltip title={t('common.review', 'Review')}>
                 <IconButton color="inherit" component={Link} to="/review">

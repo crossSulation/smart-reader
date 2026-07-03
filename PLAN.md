@@ -11,6 +11,8 @@
 | **Week 3: Learning Workflow** | 🟢 Complete | 6/6 tasks done (notes/flashcards/review flow + tags + validation) |
 | **Week 4: Personalization** | 🟢 Complete | 5/5 tasks done (profile + adaptive QA + eval/release checks) |
 | **Week 5: Reading Experience** | 🟢 Complete | 11/11 tasks done - Dark mode + Keyboard shortcuts + Explain selection |
+| **Week 7: Knowledge Graph** | 🟡 Partial | Backend & UI complete, graph visualization ongoing |
+| **Week 8: Token Billing & Credits** | 🟢 Complete | 13/13 tasks — Token tracking, credit engine, billing middleware, frontend UI all done |
 
 ### Additional Features Completed (Not in Original Plan)
 - [x] Local file upload with background sync to backend (Reader.tsx)
@@ -1112,3 +1114,335 @@ Ship a reliable "real smart reader" by improving:
 8. W5-FE-03B (agent integration)
 9. W5-BE-03A (optional backend context enhancement)
 10. Final validation: dark mode + shortcuts + explain smoke test
+
+---
+
+## Week 8: Token Billing & Credit System
+
+**Target:** Track cloud AI token consumption, implement credit point billing, gate cloud features behind credits
+**Start Date:** Week 8
+
+| Milestone | Status | Progress |
+|-----------|--------|----------|
+| **Backend Token Tracking** | 🟢 Complete | 4/4 tasks done |
+| **Credit Point Engine** | 🟢 Complete | 3/3 tasks done |
+| **Billing API & Middleware** | 🟢 Complete | 3/3 tasks done |
+| **Frontend Credit UI** | 🟢 Complete | 3/3 tasks done |
+
+### Objectives
+- Count prompt + completion tokens for every cloud AI call (QA, summary, agent, knowledge extraction)
+- Maintain per-user credit point balance; 1 credit = N tokens consumed
+- Cloud AI calls check credit balance before execution; insufficient credits → graceful rejection
+- Display real-time credit balance and consumption history to users
+- Provide free monthly credit allowance + paid credit pack purchase flow
+- Local-only mode always free; credits only consumed for cloud API calls
+
+---
+
+### W8-01: Backend Token Tracking
+
+#### W8-BE-01A: Token Counting Middleware
+- [x] Implement
+- Scope:
+  - Add token counting to every LLM API call (embedding, generation, rerank, agent tools)
+  - Use `tiktoken` or provider-returned `usage` field to get accurate token counts
+  - Log `{ user_id, interaction_id, capability, provider, model, prompt_tokens, completion_tokens, total_tokens }` to `token_usage_logs` table
+  - Handle streaming responses — accumulate tokens from SSE chunks
+- Files (likely):
+  - `backend/app/services/token_counter.py` (new)
+  - `backend/app/services/llm_service.py` (add token counting)
+  - `backend/app/services/langchain_agent_service.py` (add token counting)
+- Output: Every cloud AI call records exact token consumption.
+- Done When: `token_usage_logs` table populated for all AI endpoints.
+
+#### W8-BE-01B: Token Usage Model & Migration
+- [x] Implement
+- Scope:
+  - Define `token_usage_logs` table:
+    ```
+    id, user_id FK, interaction_id FK (nullable),
+    capability TEXT (qa|summary|agent|knowledge_extraction|embedding|rerank),
+    provider TEXT (openai|anthropic|local|…),
+    model TEXT,
+    prompt_tokens INTEGER,
+    completion_tokens INTEGER,
+    total_tokens INTEGER,
+    credit_cost DECIMAL(10,4),
+    created_at TIMESTAMP
+    ```
+  - Add `credits` and `monthly_credits_reset_at` columns to `users` table
+  - Alembic migration
+- Files (likely):
+  - `backend/app/models.py`
+  - `backend/alembic/versions/` (new migration)
+- Output: Database schema supports credit tracking.
+- Done When: Migration runs successfully, tables created.
+
+#### W8-BE-01C: Token Usage Aggregation API
+- [x] Implement
+- Scope:
+  - `GET /api/billing/usage?period=day|week|month` — aggregated consumption by capability
+  - `GET /api/billing/usage/history?limit=&offset=` — detailed log list
+  - Response includes: `total_tokens`, `total_cost`, `by_capability: {qa: N, agent: N, …}`
+- Files (likely):
+  - `backend/app/routers/billing.py` (new)
+  - `backend/app/schemas.py` (billing schemas)
+- Output: Users can inspect their token consumption.
+- Done When: API returns accurate aggregated data.
+
+#### W8-BE-01D: Token Consumption Dashboard Stats
+- [x] Implement
+- Scope:
+  - `GET /api/billing/stats` — current balance, monthly usage, projected monthly cost
+  - Daily cron job (or scheduled task) to reset monthly counters per user
+- Files (likely):
+  - `backend/app/routers/billing.py`
+- Output: Single endpoint providing billing overview.
+- Done When: Stats match real consumption data.
+
+---
+
+### W8-02: Credit Point Engine
+
+#### W8-BE-02A: Credit Calculation & Deduction
+- [x] Implement
+- Scope:
+  - Define pricing constants:
+    - `CREDITS_PER_TOKEN = 1` (1 credit = 1 token, configurable)
+    - Model multipliers: `gpt-4 = 3x`, `gpt-3.5 = 1x`, `claude = 2x`, etc.
+  - On each `token_usage_logs` insert, calculate `credit_cost = total_tokens * model_multiplier / CREDITS_PER_TOKEN`
+  - Atomic deduction: `UPDATE users SET credits = credits - cost WHERE id = ? AND credits >= cost`
+  - If balance insufficient, block the AI call before token consumption → return HTTP 402
+  - Transaction rollback on deduction failure
+- Files (likely):
+  - `backend/app/services/credit_service.py` (new)
+  - `backend/app/services/token_counter.py`
+- Output: Credit balance is deducted inline with each cloud API call.
+- Done When: Cloud AI calls fail gracefully when balance is 0.
+
+#### W8-BE-02B: Free Credit Allowance
+- [x] Implement
+- Scope:
+  - New users receive `FREE_MONTHLY_CREDITS` (e.g., 1,000,000) on registration
+  - Monthly reset: on `monthly_credits_reset_at` date, refill to `FREE_MONTHLY_CREDITS`
+  - Unused credits do NOT roll over (simple monthly reset)
+  - Configurable via env vars: `FREE_MONTHLY_CREDITS`, `RESET_DAY_OF_MONTH`
+- Files (likely):
+  - `backend/app/services/credit_service.py`
+  - `backend/app/routers/auth.py` (registration hook)
+- Output: Every user gets free monthly quota.
+- Done When: New user sees non-zero credit balance on first login.
+
+#### W8-BE-02C: Paid Credit Pack Purchase
+- [x] Implement
+- Scope:
+  - Define SKU table: `credit_packs(id, name, credits, price_cents, is_active)`
+  - `POST /api/billing/purchase` — deduct real payment (stub for now), add credits
+  - `GET /api/billing/packs` — list available credit packs
+  - `GET /api/billing/transactions` — credit transaction history (free refill, purchase, consumption)
+  - Later integrate with Stripe/Paddle for real payment — keep interface abstract
+- Files (likely):
+  - `backend/app/routers/billing.py`
+  - `backend/app/services/credit_service.py`
+  - `backend/app/models.py` (credit_packs, credit_transactions tables)
+- Output: Purchase flow skeleton ready for payment gateway integration.
+- Done When: API returns pack list and accept purchase requests.
+
+---
+
+### W8-03: Billing Middleware & Guard
+
+#### W8-BE-03A: Cloud Call Credit Gate
+- [x] Implement
+- Scope:
+  - FastAPI middleware / dependency that intercepts all AI calls with `provider=cloud`
+  - Checks `user.credits > 0` before allowing the call
+  - If credits exhausted → return `402 Payment Required` with `{ "message": "Insufficient credits", "balance": 0, "required_credits": N }`
+  - Integration point in Scheduler (Phase 2) — when routing to Cloud, credit gate runs first
+  - Does NOT apply to local/Ollama calls
+- Files (likely):
+  - `backend/app/middleware/credit_gate.py` (new)
+  - `backend/app/routers/ai.py` (add dependency)
+- Output: Cloud AI calls are gated by credit balance.
+- Done When: 402 returned when balance is 0, local calls unaffected.
+
+#### W8-BE-03B: Credit Exhaustion Notification
+- [x] Implement
+- Scope:
+  - When balance drops below threshold (e.g., 10,000 credits), return warning header `X-Credit-Warning: low`
+  - When balance reaches 0, return `X-Credit-Status: exhausted`
+  - Frontend reads headers to show appropriate UI (banner, modal)
+- Files (likely):
+  - `backend/app/middleware/credit_gate.py`
+- Output: User gets advance warning before hitting 0.
+- Done When: Response headers reflect current credit status.
+
+#### W8-BE-03C: Usage-Based Recommendation
+- [x] Implement
+- Scope:
+  - Periodically analyze user consumption patterns
+  - If user consistently exceeds free tier, suggest purchasing relevant pack
+  - Simple MVP: if usage > 80% of free tier within first 2 weeks, flag for recommendation
+- Files (likely):
+  - `backend/app/services/credit_service.py`
+  - `backend/app/routers/billing.py`
+- Output: Smart upsell trigger.
+- Done When: `GET /api/billing/recommendation` returns pack suggestion.
+
+---
+
+### W8-04: Frontend Credit UI
+
+#### W8-FE-04A: Credit Balance Display
+- [x] Implement
+- Scope:
+  - Show credit balance in AppBar / Layout header (icon + remaining count)
+  - Click to expand dropdown: balance, monthly usage bar, link to billing page
+  - Color coding: green (>50% remaining), yellow (10-50%), red (<10%)
+  - Real-time update after each AI call (polling or WebSocket)
+- Files (likely):
+  - `frontend/src/components/CreditIndicator.tsx` (new)
+  - `frontend/src/Layout.tsx` (add to header)
+- Output: User always sees remaining credits.
+- Done When: Balance visible in header, updates after AI calls.
+
+#### W8-FE-04B: Billing Page
+- [x] Implement
+- Scope:
+  - New route `/billing`
+  - Shows: current balance, monthly usage chart (by capability), transaction history table
+  - Available credit packs with purchase button
+  - Token consumption graph (daily/weekly breakdown)
+  - Export usage CSV
+- Files (likely):
+  - `frontend/src/pages/Billing.tsx` (new)
+  - `frontend/src/routers/index.tsx` (add route)
+  - `frontend/src/Layout.tsx` (add nav link)
+- Output: Full billing management page.
+- Done When: User can view usage history and purchase credits.
+
+#### W8-FE-04C: Low Credit Warning & Gating
+- [x] Implement
+- Scope:
+  - When `X-Credit-Warning: low` header received → show amber banner in AI panel: "Credits running low"
+  - When `X-Credit-Status: exhausted` or HTTP 402 → show red banner + link to billing page
+  - Disable cloud-only features in UI (gray out buttons, show tooltip "Insufficient credits")
+  - Privacy/Local mode always available regardless of credit balance
+- Files (likely):
+  - `frontend/src/components/AIPanel.tsx` (credit warning banner)
+  - `frontend/src/components/BookAgentChat.tsx` (disable cloud actions)
+- Output: User cannot waste credits unknowingly or hit dead-end without guidance.
+- Done When: 402 gracefully handled with clear UI feedback.
+
+---
+
+### Acceptance Criteria (Week 8)
+
+- [ ] Every cloud AI call records prompt_tokens + completion_tokens in `token_usage_logs`
+- [ ] Credit balance is atomically deducted on each cloud call
+- [ ] HTTP 402 returned when balance is 0; local/Ollama calls unaffected
+- [ ] New users receive free monthly credits on registration
+- [ ] Monthly credit reset functions correctly (no rollover)
+- [ ] Credit balance visible in Layout header, updates in real-time
+- [ ] Billing page shows usage history, consumption charts, and pack purchase options
+- [ ] Low credit warning banner appears when balance drops below threshold
+- [ ] Exhausted credit state disables cloud features with clear recovery path
+- [ ] Credit packs purchasable via API (payment gateway stub)
+
+---
+
+### Data Model Changes
+
+```sql
+-- New tables
+CREATE TABLE token_usage_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    interaction_id INTEGER REFERENCES ai_interactions(id),
+    capability TEXT NOT NULL,       -- qa|summary|agent|knowledge_extraction|embedding|rerank
+    provider TEXT NOT NULL,         -- openai|anthropic|local
+    model TEXT,
+    prompt_tokens INTEGER DEFAULT 0,
+    completion_tokens INTEGER DEFAULT 0,
+    total_tokens INTEGER DEFAULT 0,
+    credit_cost DECIMAL(10,4) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE credit_transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    type TEXT NOT NULL,             -- consumption|refill|purchase|admin_grant
+    amount DECIMAL(10,4) NOT NULL,  -- positive = credit in, negative = credit out
+    balance_after DECIMAL(10,4) NOT NULL,
+    reference_type TEXT,            -- token_usage|monthly_refill|credit_pack
+    reference_id INTEGER,
+    note TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE credit_packs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    credits INTEGER NOT NULL,
+    price_cents INTEGER NOT NULL,
+    is_active BOOLEAN DEFAULT 1,
+    sort_order INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Modified tables
+ALTER TABLE users ADD COLUMN credits DECIMAL(12,4) DEFAULT 0;
+ALTER TABLE users ADD COLUMN monthly_credits_reset_at TIMESTAMP;
+```
+
+---
+
+### New API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/billing/stats` | Current balance, monthly usage summary |
+| `GET` | `/api/billing/usage?period=day\|week\|month` | Aggregated token consumption |
+| `GET` | `/api/billing/usage/history?limit=&offset=` | Detail log of token usage |
+| `GET` | `/api/billing/packs` | Available credit packs for purchase |
+| `POST` | `/api/billing/purchase` | Purchase a credit pack (requires `pack_id`) |
+| `GET` | `/api/billing/transactions?limit=&offset=` | Credit transaction history |
+| `GET` | `/api/billing/recommendation` | Suggested pack based on usage pattern |
+
+### Response Headers (all AI endpoints)
+
+| Header | Values | Meaning |
+|--------|--------|---------|
+| `X-Credit-Balance` | number | Remaining credits after this call |
+| `X-Credit-Cost` | number | Credits consumed by this call |
+| `X-Credit-Status` | `ok` \| `low` \| `exhausted` | Current credit health |
+
+---
+
+### Key Design Decisions
+
+- **Local always free** — Ollama / Transformers.js / ONNX calls consume 0 credits. The credit system only gates cloud API usage. This reinforces the privacy-first value proposition.
+- **Atomic deduction** — credit check + deduction is a single DB transaction. Prevents race conditions where two concurrent calls both pass balance check.
+- **Credit pack as stub** — initial implementation uses API-only purchase (no real payment). Stripe/Paddle integration is a future task; the `credit_packs` table and purchase API provide the interface.
+- **No credit rollover** — unused monthly free credits expire at reset. Simple and predictable for both users and server costs.
+- **Token counting from provider** — prefer `usage.prompt_tokens` / `usage.completion_tokens` from API response (OpenAI, Anthropic). Fallback to `tiktoken` estimate if provider doesn't return usage.
+
+---
+
+### Suggested Execution Order
+
+1. W8-BE-01B (data model + migration)
+2. W8-BE-01A (token counting middleware)
+3. W8-BE-02A (credit calculation & deduction)
+4. W8-BE-03A (cloud call credit gate)
+5. W8-BE-01C + W8-BE-01D (usage API)
+6. W8-BE-02B (free credit allowance)
+7. W8-FE-04A (credit balance display)
+8. W8-BE-03B (warning headers)
+9. W8-FE-04C (low credit warning & gating)
+10. W8-FE-04B (billing page)
+11. W8-BE-02C (credit pack purchase API)
+12. W8-BE-03C (usage recommendation)
+13. Final validation: end-to-end token tracking → credit deduction → UI feedback
+

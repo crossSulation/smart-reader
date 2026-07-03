@@ -7,7 +7,7 @@ from typing import List, Dict
 from sqlalchemy.orm import Session
 
 from app.models import KnowledgePoint, DocumentChunk
-from app.services.llm_service import complete
+from app.services.llm_service import complete_and_log
 from app.config import get_settings
 
 
@@ -88,7 +88,7 @@ def extract_knowledge_points_from_chunks(
 
         text = chunk.text[:2000]
         settings = get_settings()
-        raw = complete(text, EXTRACTION_SYSTEM, settings)
+        raw = complete_and_log(text, EXTRACTION_SYSTEM, settings, db, user_id, "knowledge_extraction")
         extracted = _parse_llm_json(raw)
         new_kps = _deduplicate_kps(existing_labels, extracted)
 

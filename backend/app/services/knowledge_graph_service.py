@@ -9,7 +9,7 @@ from typing import List, Dict, Tuple
 from sqlalchemy.orm import Session
 
 from app.models import KnowledgePoint, KnowledgeLink, DocumentChunk
-from app.services.llm_service import complete
+from app.services.llm_service import complete_and_log
 from app.config import get_settings
 
 
@@ -110,7 +110,7 @@ def infer_relationships(
             "target_desc": tgt_kp.description or "",
         })
         settings = get_settings()
-        raw = complete(prompt, RELATION_SYSTEM, settings)
+        raw = complete_and_log(prompt, RELATION_SYSTEM, settings, db, user_id, "knowledge_extraction")
         result = _parse_llm_relation_json(raw)
 
         related = result.get("related", False)

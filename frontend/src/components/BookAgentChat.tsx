@@ -22,6 +22,8 @@ type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  agentSteps: AgentStep[]; // save the agent steps at the time of this message
+  insights: ToolInsight[]; // save the insights at the time of this message
 };
 
 type BookAgentChatProps = {
@@ -32,6 +34,7 @@ type BookAgentChatProps = {
   fileType?: "pdf" | "epub" | "markdown";
   onRequestShowNotes?: () => void;
   onSeedConsumed?: () => void;
+  currentPage?: number;
   selectedNote?: {
     id: number;
     content: string;
@@ -218,6 +221,7 @@ export default function BookAgentChat({
   fileType = "pdf",
   onRequestShowNotes,
   onSeedConsumed,
+  currentPage,
   selectedNote = null,
 }: BookAgentChatProps) {
   const [message, setMessage] = useState("");
@@ -227,7 +231,7 @@ export default function BookAgentChat({
   const [error, setError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string>(createSessionId);
   const [allowedTools, setAllowedTools] = useState<AgentToolName[]>(ALL_AGENT_TOOLS);
-  const [insights, setInsights] = useState<ToolInsight[]>([]);
+  const [, setInsights] = useState<ToolInsight[]>([]);
   const [savedSessions, setSavedSessions] = useState<PersistedAgentSession[]>([]);
   const [loadedStorageKey, setLoadedStorageKey] = useState<string | null>(null);
 
@@ -272,12 +276,16 @@ export default function BookAgentChat({
       setChat(currentSession.chat);
       setSessionId(currentSession.sessionId);
       setAllowedTools(currentSession.allowedTools);
+      setAgentSteps(currentSession.chat.flatMap((item) => item.agentSteps));
+      setInsights(currentSession.chat.flatMap((item) => item.insights));
     } catch {
       const fallback = buildEmptySession();
       setSavedSessions([fallback]);
       setChat([]);
       setSessionId(fallback.sessionId);
       setAllowedTools(ALL_AGENT_TOOLS);
+      setAgentSteps([]);
+      setInsights([]);
     }
 
     setAgentSteps([]);
@@ -370,7 +378,7 @@ export default function BookAgentChat({
 
     setChat((prev) => [
       ...prev,
-      { id: createId("user-note"), role: "user", content: bubble },
+      { id: createId("user-note"), role: "user", content: bubble, agentSteps: [], insights: [] },
     ]);
   }, [selectedNote]);
 
@@ -384,13 +392,18 @@ export default function BookAgentChat({
     });
   };
 
-  const pushStep = (tool: AgentToolName, phase: "start" | "end") => {
+  const pushStep = (assistantId: string, tool: AgentToolName, phase: "start" | "end") => {
     const next: AgentStep = {
       id: createId(`step-${tool}`),
       tool,
       phase,
     };
     setAgentSteps((prev) => [...prev, next].slice(-20));
+    setChat((prev) => {
+      return prev.map((item) =>
+        item.id === assistantId ? { ...item, agentSteps: [...item.agentSteps, next] } : item
+      );
+    });
   };
 
   const isShowNotesIntent = (text: string): boolean => {
@@ -536,8 +549,8 @@ export default function BookAgentChat({
     setInsights([]);
     setChat((prev) => [
       ...prev,
-      { id: userId, role: "user", content: clean },
-      { id: assistantId, role: "assistant", content: "" },
+      { id: userId, role: "user", content: clean, agentSteps: [], insights: [] },
+      { id: assistantId, role: "assistant", content: "", agentSteps: [], insights: [] },
     ]);
     setMessage("");
 
@@ -554,6 +567,7 @@ export default function BookAgentChat({
         allowed_tools: allowedTools,
         document_type: fileType,
         top_k: 5,
+        current_page: currentPage,
       };
 
       const res = await fetch(`/api/books/${bookId}/agent/stream`, {
@@ -614,15 +628,20 @@ export default function BookAgentChat({
           }
 
           if (eventPayload.type === "tool_start" && eventPayload.tool) {
-            pushStep(eventPayload.tool, "start");
+            pushStep(assistantId, eventPayload.tool, "start");
             continue;
           }
 
           if (eventPayload.type === "tool_end" && eventPayload.tool) {
-            pushStep(eventPayload.tool, "end");
+            pushStep(assistantId, eventPayload.tool, "end");
             const insight = buildInsight(eventPayload.tool, eventPayload.observation);
             if (insight) {
               setInsights((prev) => [...prev, insight]);
+              setChat((prev) =>
+                prev.map((item) =>
+                  item.id === assistantId ? { ...item, insights: [...item.insights, insight] } : item,
+                ),
+              );
             }
             continue;
           }
@@ -706,6 +725,172 @@ export default function BookAgentChat({
     ].join("\n");
   };
 
+  const AgentStepsDisplay = ({ steps }: { steps: AgentStep[] }) => {
+    const [open, setOpen] = useState(false);
+    if (!steps || steps.length === 0) return null;
+
+    const btn = (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mb-2 inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Tool steps ({steps.length})
+      </button>
+    );
+
+    return (
+      <>
+        {btn}
+        {open && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setOpen(false)}>
+            <div
+              className="max-h-[70vh] w-[480px] max-w-[90vw] overflow-y-auto rounded-lg border bg-white p-4 shadow-2xl dark:border-gray-700 dark:bg-gray-900"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">Tool timeline</p>
+                <button type="button" onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">✕</button>
+              </div>
+              <div className="space-y-1.5">
+                {steps.map((step, index) => (
+                  <div key={step.id} className="flex items-center gap-2 rounded bg-gray-50 px-2 py-1 text-xs dark:bg-gray-800">
+                    <span className={`inline-block h-2 w-2 rounded-full ${step.phase === "start" ? "bg-amber-500" : "bg-emerald-500"}`} />
+                    <span className="font-medium text-gray-700 dark:text-gray-200">{step.tool}</span>
+                    <span className="text-gray-500 dark:text-gray-400">{step.phase === "start" ? "started" : "finished"}</span>
+                    <span className="ml-auto text-[10px] text-gray-400 dark:text-gray-500">#{index + 1}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  };
+
+  const ToolInsightsDisplay = ({ insights }: { insights: ToolInsight[] }) => {
+    const [open, setOpen] = useState(false);
+    if (!insights || insights.length === 0) return null;
+
+    const totalItems = insights.reduce((sum, i) => sum + i.items.length, 0);
+
+    const btn = (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mb-2 inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Evidence ({totalItems})
+      </button>
+    );
+
+    return (
+      <>
+        {btn}
+        {open && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setOpen(false)}>
+            <div
+              className="max-h-[70vh] w-[560px] max-w-[92vw] overflow-y-auto rounded-lg border bg-white p-4 shadow-2xl dark:border-gray-700 dark:bg-gray-900"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">Evidence ({totalItems})</p>
+                <button type="button" onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">✕</button>
+              </div>
+              {insights.map((insight, idx) => (
+                <div key={`${insight.kind}-${idx}`} className="mb-2 rounded border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                  {insight.kind === "search" && (
+                    <>
+                      <p className="mb-1 font-semibold text-gray-600 dark:text-gray-300">Search evidence</p>
+                      <ul className="space-y-1">
+                        {insight.items.map((item, itemIdx) => (
+                          <li key={`search-${idx}-${itemIdx}`} className="rounded border border-gray-200 bg-white px-2 py-1 dark:border-gray-500 dark:bg-gray-800">
+                            <p className="line-clamp-2">{item.text}</p>
+                            <div className="mt-1 flex items-center justify-between">
+                              <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                                {item.page !== null ? `Page ${item.page}` : "No page"}
+                                {item.score !== null ? ` · ${(item.score * 100).toFixed(1)}%` : ""}
+                              </span>
+                              {item.page !== null && onJumpToPage && (
+                                <button type="button" onClick={() => onJumpToPage(item.page as number)} className="text-[11px] text-blue-600 hover:underline dark:text-blue-400">Go</button>
+                              )}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {insight.kind === "read" && (
+                    <>
+                      <p className="mb-1 font-semibold text-gray-600 dark:text-gray-300">Read excerpts</p>
+                      <ul className="space-y-1">
+                        {insight.items.map((item, itemIdx) => (
+                          <li key={`read-${idx}-${itemIdx}`} className="rounded border border-gray-200 bg-white px-2 py-1 dark:border-gray-500 dark:bg-gray-800">
+                            <p className="line-clamp-2">{item.text}</p>
+                            {item.page !== null && onJumpToPage && (
+                              <button type="button" onClick={() => onJumpToPage(item.page as number)} className="mt-1 text-[11px] text-blue-600 hover:underline dark:text-blue-400">Jump to page {item.page}</button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {insight.kind === "web_search" && (
+                    <>
+                      <p className="mb-1 font-semibold text-gray-600 dark:text-gray-300">Web references</p>
+                      <ul className="space-y-1">
+                        {insight.items.map((item, itemIdx) => (
+                          <li key={`web-${idx}-${itemIdx}`} className="rounded border border-gray-200 bg-white px-2 py-1 dark:border-gray-500 dark:bg-gray-800">
+                            <a href={item.url} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline dark:text-blue-400">{item.title}</a>
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400">{item.source}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {insight.kind === "quiz" && (
+                    <>
+                      <p className="mb-1 font-semibold text-gray-600 dark:text-gray-300">Quiz preview</p>
+                      <ul className="space-y-1">
+                        {insight.items.map((item, itemIdx) => (
+                          <li key={`quiz-${idx}-${itemIdx}`} className="rounded border border-gray-200 bg-white px-2 py-1 dark:border-gray-500 dark:bg-gray-800">
+                            <p className="font-medium">Q: {item.question}</p>
+                            <p className="text-gray-600 dark:text-gray-400">A: {item.answer}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {insight.kind === "list_notes" && (
+                    <>
+                      <p className="mb-1 font-semibold text-gray-600 dark:text-gray-300">Notes list</p>
+                      <ul className="space-y-1">
+                        {insight.items.map((item, itemIdx) => (
+                          <li key={`notes-${idx}-${itemIdx}`} className="rounded border border-gray-200 bg-white px-2 py-1 dark:border-gray-500 dark:bg-gray-800">
+                            <p className="line-clamp-2">{item.content}</p>
+                            <div className="mt-1 flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400">
+                              {item.page !== null ? <span>Page {item.page}</span> : <span>No page</span>}
+                              {item.tags.map((tag) => (
+                                <span key={`${itemIdx}-${tag}`} className="rounded bg-blue-100 px-1 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">#{tag}</span>
+                              ))}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </>
+    );
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col rounded border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
       <div className="mb-2 flex items-center justify-between">
@@ -742,11 +927,10 @@ export default function BookAgentChat({
               key={tool}
               type="button"
               onClick={() => toggleTool(tool)}
-              className={`rounded border px-2 py-1 text-[11px] ${
-                enabled
-                  ? "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-300"
-                  : "border-gray-300 bg-white text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400"
-              }`}
+              className={`rounded border px-2 py-1 text-[11px] ${enabled
+                ? "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-300"
+                : "border-gray-300 bg-white text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                }`}
             >
               {enabled ? "On" : "Off"} {tool}
             </button>
@@ -763,12 +947,13 @@ export default function BookAgentChat({
           chat.map((item) => (
             <div
               key={item.id}
-              className={`rounded px-2 py-1.5 text-sm ${
-                item.role === "user" ? "ml-6 bg-blue-600 text-white" : "mr-6 bg-white text-gray-800 dark:bg-gray-700 dark:text-gray-200"
-              }`}
+              className={`rounded px-2 py-1.5 text-sm ${item.role === "user" ? "ml-6 bg-blue-600 text-white" : "mr-6 bg-white text-gray-800 dark:bg-gray-700 dark:text-gray-200"
+                }`}
             >
               {item.role === "assistant" ? (
-                <div className="space-y-2">
+                 <div className="space-y-2">
+                  <AgentStepsDisplay steps={item.agentSteps} />
+                  <ToolInsightsDisplay insights={item.insights} />
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm, remarkMath]}
                     rehypePlugins={[rehypeKatex]}
@@ -829,124 +1014,6 @@ export default function BookAgentChat({
           ))
         )}
 
-        {agentSteps.length > 0 && (
-          <div className="rounded border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
-            <p className="mb-1 font-semibold text-gray-700 dark:text-gray-200">Tool timeline</p>
-            <div className="space-y-1">
-              {agentSteps.map((step, index) => (
-                <div key={step.id} className="flex items-center gap-2">
-                  <span className={`inline-block h-2 w-2 rounded-full ${step.phase === "start" ? "bg-amber-500" : "bg-emerald-500"}`} />
-                  <span className="font-medium text-gray-700 dark:text-gray-200">{step.tool}</span>
-                  <span>{step.phase === "start" ? "started" : "finished"}</span>
-                  <span className="ml-auto text-[10px] text-gray-400 dark:text-gray-500">#{index + 1}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {insights.map((insight, idx) => (
-          <div key={`${insight.kind}-${idx}`} className="rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
-            {insight.kind === "search" && (
-              <>
-                <p className="mb-1 font-semibold text-gray-600 dark:text-gray-300">Search evidence</p>
-                <ul className="space-y-1">
-                  {insight.items.map((item, itemIdx) => (
-                    <li key={`search-${idx}-${itemIdx}`} className="rounded border border-gray-100 bg-gray-50 px-2 py-1 dark:border-gray-600 dark:bg-gray-700">
-                      <p className="line-clamp-2">{item.text}</p>
-                      <div className="mt-1 flex items-center justify-between">
-                        <span className="text-[11px] text-gray-500 dark:text-gray-400">
-                          {item.page !== null ? `Page ${item.page}` : "No page"}
-                          {item.score !== null ? ` · ${(item.score * 100).toFixed(1)}%` : ""}
-                        </span>
-                        {item.page !== null && onJumpToPage && (
-                          <button
-                            type="button"
-                            onClick={() => onJumpToPage(item.page as number)}
-                            className="text-[11px] text-blue-600 hover:underline dark:text-blue-400"
-                          >
-                            Go
-                          </button>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-
-            {insight.kind === "read" && (
-              <>
-                <p className="mb-1 font-semibold text-gray-600 dark:text-gray-300">Read excerpts</p>
-                <ul className="space-y-1">
-                  {insight.items.map((item, itemIdx) => (
-                    <li key={`read-${idx}-${itemIdx}`} className="rounded border border-gray-100 bg-gray-50 px-2 py-1 dark:border-gray-600 dark:bg-gray-700">
-                      <p className="line-clamp-2">{item.text}</p>
-                      {item.page !== null && onJumpToPage && (
-                        <button
-                          type="button"
-                          onClick={() => onJumpToPage(item.page as number)}
-                          className="mt-1 text-[11px] text-blue-600 hover:underline dark:text-blue-400"
-                        >
-                          Jump to page {item.page}
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-
-            {insight.kind === "web_search" && (
-              <>
-                <p className="mb-1 font-semibold text-gray-600 dark:text-gray-300">Web references</p>
-                <ul className="space-y-1">
-                  {insight.items.map((item, itemIdx) => (
-                    <li key={`web-${idx}-${itemIdx}`} className="rounded border border-gray-100 bg-gray-50 px-2 py-1 dark:border-gray-600 dark:bg-gray-700">
-                      <a href={item.url} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline dark:text-blue-400">
-                        {item.title}
-                      </a>
-                      <p className="text-[11px] text-gray-500 dark:text-gray-400">{item.source}</p>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-
-            {insight.kind === "quiz" && (
-              <>
-                <p className="mb-1 font-semibold text-gray-600 dark:text-gray-300">Quiz preview</p>
-                <ul className="space-y-1">
-                  {insight.items.map((item, itemIdx) => (
-                    <li key={`quiz-${idx}-${itemIdx}`} className="rounded border border-gray-100 bg-gray-50 px-2 py-1 dark:border-gray-600 dark:bg-gray-700">
-                      <p className="font-medium">Q: {item.question}</p>
-                      <p className="text-gray-600 dark:text-gray-400">A: {item.answer}</p>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-
-            {insight.kind === "list_notes" && (
-              <>
-                <p className="mb-1 font-semibold text-gray-600 dark:text-gray-300">Notes list</p>
-                <ul className="space-y-1">
-                  {insight.items.map((item, itemIdx) => (
-                    <li key={`notes-${idx}-${itemIdx}`} className="rounded border border-gray-100 bg-gray-50 px-2 py-1 dark:border-gray-600 dark:bg-gray-700">
-                      <p className="line-clamp-2">{item.content}</p>
-                      <div className="mt-1 flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400">
-                        {item.page !== null ? <span>Page {item.page}</span> : <span>No page</span>}
-                        {item.tags.map((tag) => (
-                          <span key={`${itemIdx}-${tag}`} className="rounded bg-blue-100 px-1 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">#{tag}</span>
-                        ))}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </div>
-        ))}
       </div>
 
       <div className="mt-3 border-t border-gray-100 pt-3 dark:border-gray-700">

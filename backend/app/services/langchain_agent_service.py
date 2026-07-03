@@ -7,7 +7,7 @@ from app.config import get_settings
 from app.models import AIInteraction, DocumentChunk, Note
 from app.schemas import AgentRequest, SearchResult
 from app.services.embedding_service import embed_single
-from app.services.llm_service import complete
+from app.services.llm_service import complete_and_log
 from app.services.retrieval_service import retrieve_hybrid
 from app.services.reranker_service import rerank_candidates
 from app.services.web_reference_service import fetch_web_references
@@ -158,8 +158,8 @@ def _build_agent_executor(
 
     @tool("read")
     def read_tool(query: str = "") -> str:
-        """Read relevant book excerpts. Input: query text to focus reading."""
-        excerpts = _run_read_tool(book_id, query, payload.top_k, db)
+        """Read book content at a specific location. Input: a page number ('42' or 'page 42'), a section name ('Chapter 3'), or leave empty to read the beginning of the book. Use this when you need to read a known section — do NOT use for semantic search; use the search tool for keyword/concept queries instead."""
+        excerpts = _run_read_tool(book_id, query, payload.top_k, payload.current_page, db)
         return json.dumps({"excerpts": excerpts, "count": len(excerpts)}, ensure_ascii=False)
 
     @tool("search")
@@ -222,7 +222,7 @@ def _build_agent_executor(
     @tool("quiz")
     def quiz_tool(topic: str = "") -> str:
         """Generate quiz questions from book content. Input: topic or prompt."""
-        quiz_payload = _run_quiz_tool(book_id, topic or payload.message, payload.quiz_count, db)
+        quiz_payload = _run_quiz_tool(book_id, user_id, topic or payload.message, payload.quiz_count, db)
         return json.dumps(quiz_payload, ensure_ascii=False)
 
     @tool("list_notes")
@@ -353,27 +353,81 @@ def _run_search_tool(book_id: int, query: str, top_k: int, db: Session) -> list[
     ]
 
 
-def _run_read_tool(book_id: int, query: str, top_k: int, db: Session) -> list[dict[str, Any]]:
-    if query.strip():
-        hits = _run_search_tool(book_id, query, top_k, db)
-        return [
-            {
-                "chunk_id": item.chunk_id,
-                "page_start": item.page_start,
-                "section_path": item.section_path,
-                "text": item.text,
-                "score": item.score,
-            }
-            for item in hits
-        ]
+def _run_read_tool(
+    book_id: int,
+    query: str,
+    top_k: int,
+    current_page: int | None,
+    db: Session,
+) -> list[dict[str, Any]]:
+    """Read book content around the user's current page.
+    - If current_page is provided, read chunks around that page (±2 pages) first
+    - If query specifies a page number or section name, read from that location
+    - Falls back to reading the first N chunks if neither is available."""
+    import re
+    cleaned = (query or "").strip()
+    page_match = None
+    section_like: str | None = None
 
-    rows = (
-        db.query(DocumentChunk)
-        .filter(DocumentChunk.book_id == book_id)
-        .order_by(DocumentChunk.chunk_index)
-        .limit(max(1, min(top_k, 20)))
-        .all()
-    )
+    if cleaned:
+        m = re.search(r'\bpage\s*(\d+)\b', cleaned, re.IGNORECASE)
+        if not m:
+            m = re.search(r'\b(\d+)\s*(?:page|p\b)', cleaned, re.IGNORECASE)
+        if not m:
+            m = re.search(r'^(\d+)$', cleaned)
+        if m:
+            page_match = int(m.group(1))
+        else:
+            section_like = cleaned
+
+    rows = []
+
+    if page_match is not None:
+        rows = (
+            db.query(DocumentChunk)
+            .filter(DocumentChunk.book_id == book_id, DocumentChunk.page_start == page_match)
+            .order_by(DocumentChunk.chunk_index)
+            .limit(max(1, min(top_k, 20)))
+            .all()
+        )
+        if not rows:
+            rows = (
+                db.query(DocumentChunk)
+                .filter(DocumentChunk.book_id == book_id)
+                .filter(DocumentChunk.page_start >= page_match - 2, DocumentChunk.page_end <= page_match + 2)
+                .order_by(DocumentChunk.chunk_index)
+                .limit(max(1, min(top_k, 20)))
+                .all()
+            )
+    elif section_like:
+        rows = (
+            db.query(DocumentChunk)
+            .filter(DocumentChunk.book_id == book_id, DocumentChunk.section_path.ilike(f"%{section_like}%"))
+            .order_by(DocumentChunk.chunk_index)
+            .limit(max(1, min(top_k, 20)))
+            .all()
+        )
+    elif current_page is not None:
+        rows = (
+            db.query(DocumentChunk)
+            .filter(DocumentChunk.book_id == book_id)
+            .filter(
+                DocumentChunk.page_start >= current_page - 2,
+                DocumentChunk.page_start <= current_page + 2,
+            )
+            .order_by(DocumentChunk.chunk_index)
+            .limit(max(1, min(top_k, 20)))
+            .all()
+        )
+
+    if not rows:
+        rows = (
+            db.query(DocumentChunk)
+            .filter(DocumentChunk.book_id == book_id)
+            .order_by(DocumentChunk.chunk_index)
+            .limit(max(1, min(top_k, 20)))
+            .all()
+        )
 
     return [
         {
@@ -381,13 +435,13 @@ def _run_read_tool(book_id: int, query: str, top_k: int, db: Session) -> list[di
             "page_start": row.page_start,
             "section_path": row.section_path,
             "text": row.text,
-            "score": 0.0,
+            "score": 1.0,
         }
         for row in rows
     ]
 
 
-def _run_quiz_tool(book_id: int, prompt: str, quiz_count: int, db: Session) -> dict[str, Any]:
+def _run_quiz_tool(book_id: int, user_id: int, prompt: str, quiz_count: int, db: Session) -> dict[str, Any]:
     settings = get_settings()
     hits = _run_search_tool(book_id, prompt, max(quiz_count, 3), db)
     context = [item.text for item in hits[:10]]
@@ -411,7 +465,7 @@ def _run_quiz_tool(book_id: int, prompt: str, quiz_count: int, db: Session) -> d
         "Each question must have one concise answer.\n\n"
         + "\n\n---\n\n".join(context)
     )
-    raw = complete(quiz_user, quiz_system, settings)
+    raw = complete_and_log(quiz_user, quiz_system, settings, db, user_id, "agent")
 
     try:
         text = raw.strip()
@@ -558,6 +612,26 @@ async def stream_langchain_book_agent(
         provider=provider_label,
         db=db,
     )
+
+    # Estimate token usage from accumulated output
+    try:
+        estimated_prompt = len(payload.message) // 4
+        estimated_completion = len(final_output) // 4
+        from app.services.token_counter import log_token_usage
+        log_token_usage(
+            db=db,
+            user_id=user_id,
+            capability="agent",
+            provider=provider_label,
+            model="",
+            prompt_tokens=max(1, estimated_prompt),
+            completion_tokens=max(1, estimated_completion),
+        )
+    except ValueError:
+        pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Failed to log streaming agent tokens: %s", e)
 
     yield {
         "type": "final",

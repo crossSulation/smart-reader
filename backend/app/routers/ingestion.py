@@ -35,7 +35,7 @@ from app.schemas import (
 from app.routers.auth import get_current_user
 from app.services.file_service import FileService
 from app.config import get_settings
-from app.services.llm_service import build_qa_prompt, build_summary_prompt, complete
+from app.services.llm_service import build_qa_prompt, build_summary_prompt, complete_and_log
 from app.services.web_reference_service import fetch_web_references
 
 router = APIRouter(prefix="/books", tags=["ingestion"])
@@ -365,7 +365,7 @@ def ask_book(
         explanation_level=explanation_level,
     )
     try:
-        answer = complete(user_prompt, system_prompt, settings)
+        answer = complete_and_log(user_prompt, system_prompt, settings, db, user["id"], "qa")
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -417,7 +417,7 @@ def get_book_summary(
     context_texts = _truncate_context([row.text for row in rows])
     system_prompt, user_prompt = build_summary_prompt(context_texts, book.title)
     try:
-        summary = complete(user_prompt, system_prompt, settings)
+        summary = complete_and_log(user_prompt, system_prompt, settings, db, user["id"], "summary")
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

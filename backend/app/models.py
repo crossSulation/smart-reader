@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Float
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Float, DECIMAL
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -15,6 +15,8 @@ class User(Base):
     study_goal = Column(String, nullable=True)
     weak_topics = Column(Text, nullable=True)  # comma-separated weak topics
     frequently_reviewed_tags = Column(Text, nullable=True)  # comma-separated tags
+    credits = Column(DECIMAL(precision=12, scale=4), default=0, nullable=False)
+    monthly_credits_reset_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -199,3 +201,45 @@ class KnowledgeLink(Base):
 
     source = relationship("KnowledgePoint", foreign_keys=[source_kp_id], back_populates="outgoing_links")
     target = relationship("KnowledgePoint", foreign_keys=[target_kp_id], back_populates="incoming_links")
+
+
+class TokenUsageLog(Base):
+    __tablename__ = "token_usage_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    interaction_id = Column(Integer, ForeignKey("ai_interactions.id"), nullable=True, index=True)
+    capability = Column(String, nullable=False)   # qa|summary|agent|knowledge_extraction|embedding|rerank
+    provider = Column(String, nullable=False)      # openai|anthropic|ollama|mock
+    model = Column(String, nullable=True)
+    prompt_tokens = Column(Integer, default=0)
+    completion_tokens = Column(Integer, default=0)
+    total_tokens = Column(Integer, default=0)
+    credit_cost = Column(DECIMAL(precision=10, scale=4), default=0, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class CreditTransaction(Base):
+    __tablename__ = "credit_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    type = Column(String, nullable=False)          # consumption|refill|purchase|admin_grant
+    amount = Column(DECIMAL(precision=12, scale=4), nullable=False)
+    balance_after = Column(DECIMAL(precision=12, scale=4), nullable=False)
+    reference_type = Column(String, nullable=True)  # token_usage|monthly_refill|credit_pack
+    reference_id = Column(Integer, nullable=True)
+    note = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class CreditPack(Base):
+    __tablename__ = "credit_packs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    credits = Column(Integer, nullable=False)
+    price_cents = Column(Integer, nullable=False)
+    is_active = Column(Integer, default=1)
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

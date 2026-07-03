@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "llama3"
     LLM_MAX_TOKENS: int = 512
     LLM_TEMPERATURE: float = 0.3
+    # Billing / Credits
+    FREE_MONTHLY_CREDITS: int = 1000000
+    CREDIT_RESET_DAY: int = 1
 
 
 class DevelopmentSettings(Settings):

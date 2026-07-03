@@ -7,6 +7,7 @@ import Profile from '../pages/Profile'
 import Review from '../pages/Review'
 import Settings from '../pages/Settings'
 import KnowledgeGraph from '../pages/KnowledgeGraph'
+import Billing from '../pages/Billing'
 import Layout from '../Layout'
 import PublicLayout from '../components/PublicLayout'
 import ProtectedRoute from '../components/ProtectedRouter'
@@ -33,6 +34,7 @@ function RouterContainer() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/review" element={<Review />} />
           <Route path="/knowledge" element={<KnowledgeGraph />} />
+          <Route path="/billing" element={<Billing />} />
         </Route>
 
         {/* Protected routes without Layout (no titlebar) */}

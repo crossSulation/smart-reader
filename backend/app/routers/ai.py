@@ -7,7 +7,7 @@ import json
 import logging
 from typing import List, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
@@ -36,11 +36,13 @@ from app.services.llm_service import (
     build_qa_prompt,
     build_summary_prompt,
     complete,
+    complete_and_log,
 )
 from app.services.retrieval_service import retrieve_hybrid, clear_retriever
 from app.services.reranker_service import rerank_candidates
 from app.services.web_reference_service import fetch_web_references
 from app.services.langchain_agent_service import run_langchain_book_agent, stream_langchain_book_agent
+from app.services.credit_gate import check_credit_gate, get_credit_response_headers
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/books", tags=["ai"])
@@ -246,6 +248,7 @@ def ask_book(
     body: QARequest,
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
+    credit_status: dict = Depends(check_credit_gate),
 ):
     """
     Retrieval-Augmented Generation (RAG) Q&A over a book's indexed content.
@@ -345,7 +348,7 @@ def ask_book(
             explanation_level=explanation_level,
         )
         try:
-            answer = complete(user_prompt, system, settings)
+            answer = complete_and_log(user_prompt, system, settings, db, user["id"], "qa")
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
     
@@ -437,7 +440,7 @@ def get_book_summary(
         template=normalized_template,
     )
     try:
-        summary_raw = complete(user_prompt, system, settings)
+        summary_raw = complete_and_log(user_prompt, system, settings, db, user["id"], "summary")
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

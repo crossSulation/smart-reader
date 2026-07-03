@@ -186,6 +186,7 @@ class AgentRequest(BaseModel):
     term: Optional[str] = None
     note_content: Optional[str] = None
     page: Optional[int] = None
+    current_page: Optional[int] = None
     tags: List[str] = []
     quiz_count: int = 3
 
