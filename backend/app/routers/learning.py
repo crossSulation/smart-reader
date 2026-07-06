@@ -78,6 +78,7 @@ def create_note(
 def list_notes(
     book_id: int | None = Query(None),
     limit: int = Query(30, ge=1, le=200),
+    tag: str | None = Query(None),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -86,6 +87,9 @@ def list_notes(
     if book_id is not None:
         _get_book_or_404(book_id, user["id"], db)
         query = query.filter(Note.book_id == book_id)
+
+    if tag:
+        query = query.filter(Note.tags.like(f"%{tag}%"))
 
     rows = query.order_by(Note.created_at.desc()).limit(limit).all()
 

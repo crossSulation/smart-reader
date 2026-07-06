@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 
 type ReviewRating = "again" | "hard" | "good" | "easy";
+type ReviewTab = "flashcards" | "notes";
 
 type DueReviewItem = {
   id: number;
@@ -15,6 +16,15 @@ type DueReviewItem = {
   flashcard_front: string;
   flashcard_back: string;
   book_id: number;
+};
+
+type NoteItem = {
+  id: number;
+  book_id: number;
+  content: string;
+  page: number | null;
+  tags: string[];
+  created_at: string;
 };
 
 const RATING_LABELS: Record<ReviewRating, string> = {
@@ -107,10 +117,14 @@ function FlashCard({
 
 function Review() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTopic = searchParams.get("topic") || null;
+  const [tab, setTab] = useState<ReviewTab>("flashcards");
   const [items, setItems] = useState<DueReviewItem[]>([]);
+  const [notes, setNotes] = useState<NoteItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [notesLoading, setNotesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<number | null>(null);
   const [flippedIds, setFlippedIds] = useState<Set<number>>(new Set());
@@ -155,6 +169,26 @@ function Review() {
     loadDueItems();
   }, [loadDueItems]);
 
+  const loadNotes = useCallback(async () => {
+    setNotesLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: "100" });
+      if (activeTopic) params.set("tag", activeTopic);
+      const res = await fetch(`/api/learning/notes?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      if (res.ok) {
+        const data: NoteItem[] = await res.json();
+        setNotes(Array.isArray(data) ? data : []);
+      }
+    } catch { /* ignore */ }
+    setNotesLoading(false);
+  }, [activeTopic]);
+
+  useEffect(() => {
+    if (tab === "notes") loadNotes();
+  }, [tab, loadNotes]);
+
   const rateItem = async (itemId: number, rating: ReviewRating) => {
     setSubmittingId(itemId);
     setError(null);
@@ -189,7 +223,33 @@ function Review() {
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-8">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">{t("review.title", "Daily Review")}</h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-bold text-gray-900">{t("review.title", "Review")}</h1>
+          <div className="flex rounded border border-gray-200 bg-gray-50 p-0.5 dark:border-gray-700 dark:bg-gray-800">
+            <button
+              type="button"
+              onClick={() => setTab("flashcards")}
+              className={`rounded px-3 py-1 text-xs font-medium transition ${
+                tab === "flashcards"
+                  ? "bg-white text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-400"
+                  : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              }`}
+            >
+              Flashcards
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab("notes")}
+              className={`rounded px-3 py-1 text-xs font-medium transition ${
+                tab === "notes"
+                  ? "bg-white text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-400"
+                  : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              }`}
+            >
+              Notes
+            </button>
+          </div>
+        </div>
         <div className="flex items-center gap-2">
           {activeTopic && (
             <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
@@ -223,18 +283,58 @@ function Review() {
         </div>
       )}
 
-      <div className="space-y-4">
-        {items.map((item) => (
-          <FlashCard
-            key={item.id}
-            item={item}
-            flipped={flippedIds.has(item.id)}
-            onFlip={() => toggleFlip(item.id)}
-            submitting={submittingId === item.id}
-            onRate={(rating) => rateItem(item.id, rating)}
-          />
-        ))}
-      </div>
+      {tab === "flashcards" && (
+        <div className="space-y-4">
+          {items.map((item) => (
+            <FlashCard
+              key={item.id}
+              item={item}
+              flipped={flippedIds.has(item.id)}
+              onFlip={() => toggleFlip(item.id)}
+              submitting={submittingId === item.id}
+              onRate={(rating) => rateItem(item.id, rating)}
+            />
+          ))}
+        </div>
+      )}
+
+      {tab === "notes" && (
+        <div className="space-y-3">
+          {notesLoading ? (
+            <div className="rounded border border-gray-200 bg-white p-4 text-sm text-gray-600">Loading notes...</div>
+          ) : notes.length === 0 ? (
+            <div className="rounded border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+              No notes yet. Save notes while reading and they will appear here.
+            </div>
+          ) : (
+            notes.map((note) => (
+              <div
+                key={note.id}
+                onClick={() => note.page != null && navigate(`/reader/${note.book_id}?page=${note.page}`)}
+                className={`rounded-lg border border-gray-200 bg-white p-4 shadow-sm ${note.page != null ? "cursor-pointer hover:shadow-md" : ""}`}
+              >
+                <p className="mb-2 whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200 line-clamp-3">{note.content}</p>
+                <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400">
+                  <span>Book #{note.book_id}</span>
+                  {note.page != null && <span>· Page {note.page}</span>}
+                  {note.created_at && (
+                    <span>· {new Date(note.created_at).toLocaleDateString()}</span>
+                  )}
+                  {note.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      onClick={(e) => { e.stopPropagation(); setSearchParams({ topic: tag }); }}
+                      className="cursor-pointer rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300"
+                    >
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }
