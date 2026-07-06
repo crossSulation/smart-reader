@@ -3,7 +3,45 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from fastapi.openapi.utils import get_openapi
 from app.routers import ai, auth, books, files, upload, ingestion, learning, personalization, knowledge, billing
+import logging
 import os
+from logging.handlers import RotatingFileHandler
+
+# ── Logging setup ──────────────────────────────────────────────
+from app.config import get_settings
+
+settings = get_settings()
+log_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
+
+root_logger = logging.getLogger()
+root_logger.setLevel(log_level)
+
+# Console handler
+console = logging.StreamHandler()
+console.setLevel(log_level)
+console.setFormatter(logging.Formatter("%(asctime)s  %(levelname)-8s  %(name)s  %(message)s"))
+root_logger.addHandler(console)
+
+# File handler — rotated, max 10 MB per file, keep 5 backups
+log_dir = "logs"
+os.makedirs(log_dir, exist_ok=True)
+file_handler = RotatingFileHandler(
+    os.path.join(log_dir, "app.log"),
+    maxBytes=10 * 1024 * 1024,
+    backupCount=5,
+    encoding="utf-8",
+)
+file_handler.setLevel(log_level)
+file_handler.setFormatter(logging.Formatter(
+    "%(asctime)s  %(levelname)-8s  %(name)s  [%(filename)s:%(lineno)d]  %(message)s"
+))
+root_logger.addHandler(file_handler)
+
+# Quiet noisy third-party loggers
+logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+# ──────────────────────────────────────────────────────────────
 
 app = FastAPI(
     title="Smart Reader API",
