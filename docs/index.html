@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Smart Reader — AI-powered Document Reader</title>
+  <link rel="stylesheet" href="styles.css" />
+  <meta name="description" content="Smart Reader — read PDF, EPUB and Markdown with an AI-driven knowledge graph and review tools." />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <h1 class="logo">Smart Reader</h1>
+      <nav>
+        <a href="#features">Features</a>
+        <a href="#quickstart">Quick start</a>
+        <a href="#contact">Contact</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container">
+        <h2>Read smarter. Learn faster.</h2>
+        <p>Smart Reader supports PDF, EPUB, and Markdown and uses AI to build a knowledge graph, generate summaries, and help you review key ideas.</p>
+        <div class="cta-row">
+          <a class="btn" href="#quickstart">Get started</a>
+          <a class="btn secondary" href="https://github.com/crossSulation/smart-reader" target="_blank" rel="noopener">View on GitHub</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" class="container features">
+      <h3>Key features</h3>
+      <ul class="feature-list">
+        <li>
+          <strong>Multi-format support</strong>
+          <p>Ingest PDF, EPUB and Markdown files with automatic text extraction.</p>
+        </li>
+        <li>
+          <strong>AI Knowledge Graph</strong>
+          <p>Extract entities and relationships across documents to visualize and explore concepts.</p>
+        </li>
+        <li>
+          <strong>Knowledge Review</strong>
+          <p>Auto-generated summaries, Q&A prompts, and spaced-recall helpers to aid learning.</p>
+        </li>
+      </ul>
+    </section>
+
+    <section id="quickstart" class="container quickstart">
+      <h3>Quick start</h3>
+      <p>Clone the repo and run the frontend and backend locally.</p>
+      <pre><code>git clone https://github.com/crossSulation/smart-reader.git
+cd smart-reader
+# frontend
+cd frontend && npm install && npm run dev
+# backend
+cd ../backend && python -m venv .venv && .venv/bin/activate && pip install -r requirements.txt
+# run backend (example)
+uvicorn app.main:app --reload --port 8000
+</code></pre>
+      <p>See the repository for exact directories and scripts; the commands above are examples and may need adjustment.</p>
+    </section>
+
+    <section id="contact" class="container contact">
+      <h3>Contact & Contribute</h3>
+      <p>Maintainer: crossSulation — open issues, pull requests, and feature ideas on the GitHub repo.</p>
+      <p><a href="https://github.com/crossSulation/smart-reader" target="_blank" rel="noopener">https://github.com/crossSulation/smart-reader</a></p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <small>© Smart Reader — AI-powered reading tools • Add a LICENSE file to specify terms.</small>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
