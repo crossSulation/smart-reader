@@ -1,10 +1,55 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
+from fastapi.openapi.utils import get_openapi
 from app.routers import ai, auth, books, files, upload, ingestion, learning, personalization, knowledge, billing
 import os
 
-app = FastAPI(title="Smart Reader API")
+app = FastAPI(
+    title="Smart Reader API",
+    description="""
+## Smart Reader Backend API
+
+AI-powered reading assistant with retrieval-augmented generation, knowledge graph, and spaced repetition.
+
+### Authentication
+Most endpoints require a Bearer JWT token. Obtain one via `POST /api/auth/login`.
+
+Click the **Authorize** button (🔒) and enter: `Bearer <your-token>`
+
+### Credit System
+Cloud AI calls consume credits. Each response includes `X-Credit-Balance` and `X-Credit-Status` headers.
+    """,
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    swagger_ui_parameters={"defaultModelsExpandDepth": -1},
+)
+
+# OpenAPI security scheme — adds Authorize button in Swagger UI
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    openapi_schema["components"]["securitySchemes"] = {
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "Enter your JWT token from POST /api/auth/login",
+        }
+    }
+    openapi_schema["security"] = [{"BearerAuth": []}]
+    app.openapi_schema = openapi_schema
+    return openapi_schema
+
+app.openapi = custom_openapi
 
 # CORS中间件
 app.add_middleware(
