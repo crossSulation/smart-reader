@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import random
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -319,9 +320,12 @@ def rate_review_item(
     }
     quality = quality_map[rating]
 
+    prev_interval = max(1, item.interval_days)
+
     if quality < 3:
+        # Post-lapse: keep a fraction of previous interval instead of resetting to 1
         item.reps = 0
-        item.interval_days = 1
+        item.interval_days = max(1, int(round(prev_interval * 0.3)))
     else:
         item.reps += 1
         if item.reps == 1:
@@ -331,13 +335,18 @@ def rate_review_item(
         else:
             item.interval_days = max(1, int(round(item.interval_days * item.ease_factor)))
 
-    new_ease = item.ease_factor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
-    item.ease_factor = max(1.3, round(new_ease, 2))
-
+    # Apply hard/easy multipliers to the final interval (after base calculation, not overwrite)
     if rating == "hard":
         item.interval_days = max(1, int(round(item.interval_days * 0.8)))
     elif rating == "easy":
         item.interval_days = max(1, int(round(item.interval_days * 1.3)))
+
+    # Fuzz factor: ±15% random jitter to avoid all cards due on the same day
+    item.interval_days = max(1, int(round(item.interval_days * random.uniform(0.85, 1.15))))
+
+    # Update ease factor (SM-2 formula)
+    new_ease = item.ease_factor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
+    item.ease_factor = max(1.3, round(new_ease, 2))
 
     item.last_rating = rating
     item.due_at = datetime.now(timezone.utc) + timedelta(days=item.interval_days)
