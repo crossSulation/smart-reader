@@ -253,6 +253,7 @@ def list_flashcards(
 def list_due_review_items(
     limit: int = Query(20, ge=1, le=200),
     tag: str | None = Query(None),
+    book_id: int | None = Query(None),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -266,6 +267,9 @@ def list_due_review_items(
 
     if tag:
         query = query.filter(Flashcard.tags.like(f"%{tag}%"))
+
+    if book_id is not None:
+        query = query.filter(Flashcard.book_id == book_id)
 
     rows = (
         query
