@@ -39,6 +39,8 @@ class Book(BookBase):
     notes: Optional[str] = None
     file_type: Optional[str] = None
     file_url: Optional[str] = None
+    indexed: bool = False
+    knowledge_count: int = 0
 
     class Config:
         from_attributes = True

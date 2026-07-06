@@ -1,11 +1,15 @@
 import { useNavigate } from 'react-router-dom';
-import type { MouseEvent } from 'react';
+import { useState, type MouseEvent } from 'react';
 import type { Book } from "../types/Book";
 import { useTranslation } from 'react-i18next';
+import { BoltOutlined, AutoAwesomeOutlined } from '@mui/icons-material';
 
 function BookCard({ book }: { book: Book }) {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const [kpCount, setKpCount] = useState(book.knowledge_count ?? 0);
+  const [extracting, setExtracting] = useState(false);
+  const indexed = book.indexed ?? false;
 
   const fileType = (book.file_type || "").toLowerCase();
   const isEpub = fileType.includes("epub") || book.title.toLowerCase().endsWith(".epub");
@@ -35,6 +39,24 @@ function BookCard({ book }: { book: Book }) {
     navigate(`/reader/${book.id}`);
   };
 
+  const handleExtractKnowledge = async (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    setExtracting(true);
+    try {
+      const res = await fetch(`/api/books/${book.id}/extract-knowledge`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setKpCount(data.knowledge_points_extracted);
+      }
+    } catch { /* ignore */ }
+    setExtracting(false);
+  };
+
+  const showExtractBtn = indexed && kpCount === 0;
+
   return (
     <div 
       onClick={() => navigate(`/reader/${book.id}`)}
@@ -52,7 +74,23 @@ function BookCard({ book }: { book: Book }) {
         )}
       </div>
       <div className="p-4">
-        <h3 className="font-semibold truncate text-gray-900 dark:text-gray-100">{book.title}</h3>
+        <div className="mb-2 flex items-center gap-2">
+          <h3 className="font-semibold truncate text-gray-900 dark:text-gray-100 flex-1">{book.title}</h3>
+          <div className="flex shrink-0 items-center gap-1">
+            {indexed && (
+              <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                <BoltOutlined sx={{ fontSize: 10 }} className="mr-0.5" />
+                Indexed
+              </span>
+            )}
+            {kpCount > 0 && (
+              <span className="rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                <AutoAwesomeOutlined sx={{ fontSize: 10 }} className="mr-0.5" />
+                {kpCount} KP
+              </span>
+            )}
+          </div>
+        </div>
         <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
           {book.author || "unknown"}
         </p>
@@ -62,10 +100,22 @@ function BookCard({ book }: { book: Book }) {
             <div>{t('bookCard.lastRead')}: {formattedLastRead}</div>
           )}
         </div>
+
+        {showExtractBtn && (
+          <button
+            type="button"
+            onClick={handleExtractKnowledge}
+            disabled={extracting}
+            className="mt-2 w-full rounded border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-60 dark:border-purple-700 dark:bg-purple-900/30 dark:text-purple-400 dark:hover:bg-purple-900/50"
+          >
+            {extracting ? "Extracting..." : "Extract Knowledge"}
+          </button>
+        )}
+
         <button
           type="button"
           onClick={handleContinueClick}
-          className="mt-4 w-full rounded bg-blue-600 text-white py-2 text-sm font-medium hover:bg-blue-700 transition"
+          className="mt-2 w-full rounded bg-blue-600 text-white py-2 text-sm font-medium hover:bg-blue-700 transition"
         >
           {t('bookCard.continueReading')}
         </button>

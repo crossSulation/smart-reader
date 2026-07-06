@@ -148,6 +148,9 @@ function Library() {
   if (loading) return <div className="flex-1 flex items-center justify-center">加载中...</div>;
 
   const BookListRow = ({ book }: { book: Book }) => {
+    const [kpCount, setKpCount] = useState(book.knowledge_count ?? 0);
+    const [extracting, setExtracting] = useState(false);
+    const [indexed] = useState(book.indexed ?? false);
     const fileType = (book.file_type || "").toLowerCase();
     const isEpub = fileType.includes("epub") || book.title.toLowerCase().endsWith(".epub");
     const isMarkdown = fileType.includes("markdown") || fileType === "md" ||
@@ -156,6 +159,22 @@ function Library() {
     const formattedLastRead = book.last_read_time
       ? new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(book.last_read_time))
       : null;
+
+    const handleExtractKnowledge = async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setExtracting(true);
+      try {
+        const res = await fetch(`/api/books/${book.id}/extract-knowledge`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setKpCount(data.knowledge_points_extracted);
+        }
+      } catch { /* ignore */ }
+      setExtracting(false);
+    };
 
     return (
       <div
@@ -170,20 +189,40 @@ function Library() {
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="font-semibold truncate text-sm text-gray-900 dark:text-gray-100">{book.title}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold truncate text-sm text-gray-900 dark:text-gray-100">{book.title}</h3>
+            {indexed && (
+              <span className="shrink-0 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300">Indexed</span>
+            )}
+            {kpCount > 0 && (
+              <span className="shrink-0 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">{kpCount} KP</span>
+            )}
+          </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{book.author || "unknown"}</p>
         </div>
-        <div className="hidden sm:block shrink-0 text-xs text-gray-500 dark:text-gray-400 min-w-[80px] text-right">
+        <div className="hidden sm:flex sm:flex-col sm:items-end shrink-0 text-xs text-gray-500 dark:text-gray-400 min-w-[80px]">
           <div>{t('bookCard.readingProgress')}: {progressText}</div>
           {formattedLastRead && <div>{formattedLastRead}</div>}
         </div>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); navigate(`/reader/${book.id}`); }}
-          className="shrink-0 rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition"
-        >
-          {t('bookCard.continueReading')}
-        </button>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          {indexed && kpCount === 0 && (
+            <button
+              type="button"
+              onClick={handleExtractKnowledge}
+              disabled={extracting}
+              className="rounded border border-purple-300 bg-purple-50 px-2 py-1 text-[10px] font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-60 dark:border-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+            >
+              {extracting ? "Extracting..." : "Extract KP"}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); navigate(`/reader/${book.id}`); }}
+            className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition"
+          >
+            {t('bookCard.continueReading')}
+          </button>
+        </div>
       </div>
     );
   };

@@ -329,25 +329,44 @@ def delete_link(
 
 @router.get("/stats", response_model=KnowledgeStatsResponse)
 def get_stats(
+    book_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    total_nodes = db.query(func.count(KnowledgePoint.id)).filter(
-        KnowledgePoint.user_id == user["id"]
-    ).scalar() or 0
+    base_query = db.query(KnowledgePoint).filter(KnowledgePoint.user_id == user["id"])
 
-    total_edges = db.query(func.count(KnowledgeLink.id)).join(
-        KnowledgePoint, KnowledgeLink.source_kp_id == KnowledgePoint.id
-    ).filter(KnowledgePoint.user_id == user["id"]).scalar() or 0
+    if book_id:
+        chunk_ids = {row[0] for row in db.query(DocumentChunk.id).filter(DocumentChunk.book_id == book_id).all()}
+        if not chunk_ids:
+            return KnowledgeStatsResponse(total_nodes=0, total_edges=0, density=0.0, entity_type_distribution={})
+        kp_ids = set()
+        for kp in base_query.all():
+            if set(_parse_json(kp.source_chunk_ids)) & chunk_ids:
+                kp_ids.add(kp.id)
+        if not kp_ids:
+            return KnowledgeStatsResponse(total_nodes=0, total_edges=0, density=0.0, entity_type_distribution={})
+        total_nodes = len(kp_ids)
+        total_edges = db.query(func.count(KnowledgeLink.id)).filter(
+            KnowledgeLink.source_kp_id.in_(kp_ids) & KnowledgeLink.target_kp_id.in_(kp_ids)
+        ).scalar() or 0
+        dist = {}
+        for row in db.query(KnowledgePoint.entity_type, func.count(KnowledgePoint.id)).filter(
+            KnowledgePoint.id.in_(kp_ids)
+        ).group_by(KnowledgePoint.entity_type).all():
+            dist[row[0]] = row[1]
+    else:
+        total_nodes = base_query.count()
+        total_edges = db.query(func.count(KnowledgeLink.id)).join(
+            KnowledgePoint, KnowledgeLink.source_kp_id == KnowledgePoint.id
+        ).filter(KnowledgePoint.user_id == user["id"]).scalar() or 0
+        dist = {}
+        for row in base_query.with_entities(
+            KnowledgePoint.entity_type, func.count(KnowledgePoint.id)
+        ).group_by(KnowledgePoint.entity_type).all():
+            dist[row[0]] = row[1]
 
     max_possible = total_nodes * (total_nodes - 1) if total_nodes > 1 else 1
     density = round(total_edges / max_possible, 4)
-
-    dist = {}
-    for row in db.query(KnowledgePoint.entity_type, func.count(KnowledgePoint.id)).filter(
-        KnowledgePoint.user_id == user["id"]
-    ).group_by(KnowledgePoint.entity_type).all():
-        dist[row[0]] = row[1]
 
     return KnowledgeStatsResponse(
         total_nodes=total_nodes,

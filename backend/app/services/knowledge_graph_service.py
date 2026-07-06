@@ -4,8 +4,8 @@ Handles relationship inference between knowledge points.
 """
 import json
 import re
-from collections import defaultdict
-from typing import List, Dict, Tuple
+import math
+from typing import List
 from sqlalchemy.orm import Session
 
 from app.models import KnowledgePoint, KnowledgeLink, DocumentChunk
@@ -43,19 +43,33 @@ def _parse_llm_relation_json(raw: str) -> dict:
         return {"related": False, "confidence": 0.0}
 
 
-def _cooccurrence_weight(
-    source_chunks: List[int],
-    target_chunks: List[int],
-) -> float:
-    """Calculate Jaccard similarity of source chunk sets."""
-    if not source_chunks or not target_chunks:
+def _cosine_similarity(a: List[float], b: List[float]) -> float:
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(y * y for y in b))
+    if na == 0 or nb == 0:
         return 0.0
-    s = set(source_chunks)
-    t = set(target_chunks)
-    intersection = len(s & t)
-    if intersection == 0:
-        return 0.0
-    return intersection / len(s | t)
+    return dot / (na * nb)
+
+
+def _embed_kp_texts(kps: List[KnowledgePoint]) -> List[List[float]]:
+    """Embed label + description for each knowledge point.
+    Falls back to zero vectors if embedding fails."""
+    texts = []
+    for kp in kps:
+        parts = [kp.label]
+        if kp.description:
+            parts.append(kp.description)
+        texts.append(" ".join(parts))
+
+    try:
+        from app.services.embedding_service import embed_texts
+        from app.config import get_settings
+        settings = get_settings()
+        return embed_texts(texts, settings.EMBEDDING_MODEL)
+    except Exception:
+        # Fallback: zero vectors — pairs will rank by label overlap
+        return [[0.0] * 10 for _ in texts]
 
 
 def infer_relationships(
@@ -65,8 +79,8 @@ def infer_relationships(
     min_confidence: float = 0.5,
 ) -> int:
     """
-    Use LLM to infer relationships between knowledge points that co-occur in
-    the same or related chunks. Also uses co-occurrence as a signal.
+    Use embedding similarity to find the most semantically related knowledge
+    point pairs, then use LLM to infer relationship types and validity.
 
     Returns number of new links created.
     """
@@ -83,26 +97,25 @@ def infer_relationships(
         existing_links.add((link.source_kp_id, link.target_kp_id))
         existing_links.add((link.target_kp_id, link.source_kp_id))
 
-    kp_chunks = {}
-    for kp in kps:
-        try:
-            kp_chunks[kp.id] = set(json.loads(kp.source_chunk_ids or "[]"))
-        except (json.JSONDecodeError, TypeError):
-            kp_chunks[kp.id] = set()
-
+    # Embed all KP texts and compute pairwise cosine similarity
+    vectors = _embed_kp_texts(kps)
     pairs = []
+    all_zero = all(sum(v) == 0 for v in vectors)
     for i in range(len(kps)):
         for j in range(i + 1, len(kps)):
             if (kps[i].id, kps[j].id) in existing_links:
                 continue
-            cooc = _cooccurrence_weight(kp_chunks.get(kps[i].id, set()), kp_chunks.get(kps[j].id, set()))
-            pairs.append((kps[i], kps[j], cooc))
+            if all_zero:
+                sim = _label_overlap_score(kps[i].label, kps[j].label)
+            else:
+                sim = _cosine_similarity(vectors[i], vectors[j])
+            pairs.append((kps[i], kps[j], sim))
 
     pairs.sort(key=lambda x: -x[2])
     pairs = pairs[:max_pairs]
 
     count = 0
-    for src_kp, tgt_kp, cooc in pairs:
+    for src_kp, tgt_kp, sim in pairs:
         prompt = json.dumps({
             "source": src_kp.label,
             "target": tgt_kp.label,
@@ -115,18 +128,15 @@ def infer_relationships(
 
         related = result.get("related", False)
         confidence = result.get("confidence", 0.0)
+        combined = max(confidence, sim * 0.3)
 
-        combined_confidence = max(confidence, cooc * 0.5)
-
-        if related and combined_confidence >= min_confidence:
+        if related and combined >= min_confidence:
             link = KnowledgeLink(
                 source_kp_id=src_kp.id,
                 target_kp_id=tgt_kp.id,
                 relation_type=result.get("relation_type", "related_to"),
-                weight=round(combined_confidence, 2),
-                evidence_chunk_ids=json.dumps(
-                    list(kp_chunks.get(src_kp.id, set()) | kp_chunks.get(tgt_kp.id, set()))
-                ),
+                weight=round(combined, 2),
+                evidence_chunk_ids=json.dumps([]),
             )
             db.add(link)
             count += 1
@@ -135,6 +145,16 @@ def infer_relationships(
         db.commit()
 
     return count
+
+
+def _label_overlap_score(label_a: str, label_b: str) -> float:
+    """Simple word overlap score when embeddings are unavailable."""
+    words_a = set(label_a.lower().split())
+    words_b = set(label_b.lower().split())
+    if not words_a or not words_b:
+        return 0.0
+    intersection = len(words_a & words_b)
+    return intersection / min(len(words_a), len(words_b))
 
 
 def build_knowledge_graph_for_book(

@@ -5,7 +5,6 @@ from fastapi.openapi.utils import get_openapi
 from app.routers import ai, auth, books, files, upload, ingestion, learning, personalization, knowledge, billing
 import logging
 import os
-from logging.handlers import RotatingFileHandler
 
 # ── Logging setup ──────────────────────────────────────────────
 from app.config import get_settings
@@ -16,19 +15,27 @@ log_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
 root_logger = logging.getLogger()
 root_logger.setLevel(log_level)
 
+# Avoid duplicate handlers on uvicorn reload
+if root_logger.handlers:
+    for h in root_logger.handlers:
+        root_logger.removeHandler(h)
+
 # Console handler
 console = logging.StreamHandler()
 console.setLevel(log_level)
 console.setFormatter(logging.Formatter("%(asctime)s  %(levelname)-8s  %(name)s  %(message)s"))
 root_logger.addHandler(console)
 
-# File handler — rotated, max 10 MB per file, keep 5 backups
+# File handler — daily rotation, keep 30 days
 log_dir = "logs"
 os.makedirs(log_dir, exist_ok=True)
-file_handler = RotatingFileHandler(
+from logging.handlers import TimedRotatingFileHandler
+
+file_handler = TimedRotatingFileHandler(
     os.path.join(log_dir, "app.log"),
-    maxBytes=10 * 1024 * 1024,
-    backupCount=5,
+    when="midnight",
+    interval=1,
+    backupCount=30,
     encoding="utf-8",
 )
 file_handler.setLevel(log_level)

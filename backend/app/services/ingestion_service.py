@@ -118,12 +118,22 @@ def ingest_book(book_id: int, file_url: str, file_type: str, db) -> int:
     # Trigger knowledge point extraction as best-effort (non-blocking)
     try:
         from app.services.knowledge_extraction_service import extract_knowledge_points_for_book
+        from app.services.knowledge_graph_service import infer_relationships
         book_owner = db.query(Book).filter(Book.id == book_id).first()
-        if book_owner:
+        if not book_owner:
+            logger.warning("Knowledge extraction skipped for book_id=%s: book/owner not found", book_id)
+        else:
+            logger.info("Starting knowledge extraction for book_id=%s", book_id)
             count = extract_knowledge_points_for_book(book_id, book_owner.owner_id, db)
+            db.commit()
             logger.info("Knowledge extraction for book_id=%s: %d points extracted", book_id, count)
+
+            if count > 0:
+                logger.info("Starting relationship inference for user_id=%s", book_owner.owner_id)
+                links = infer_relationships(book_owner.owner_id, db)
+                logger.info("Relationship inference for user_id=%s: %d links created", book_owner.owner_id, links)
     except Exception as exc:
-        logger.warning("Knowledge extraction failed for book_id=%s: %s", book_id, exc)
+        logger.warning("Knowledge pipeline failed for book_id=%s: %s", book_id, exc, exc_info=True)
 
     return len(db_chunks)
 

@@ -88,7 +88,9 @@ export default function KnowledgeGraphPage() {
 
   const loadStats = useCallback(async () => {
     try {
-      const res = await fetch("/api/knowledge/stats", {
+      const params = new URLSearchParams();
+      if (bookId) params.set("book_id", String(bookId));
+      const res = await fetch(`/api/knowledge/stats?${params}`, {
         headers: getAuthHeaders(),
       });
       if (res.ok) {
@@ -96,7 +98,7 @@ export default function KnowledgeGraphPage() {
         setStats(data);
       }
     } catch { /* ignore */ }
-  }, [getAuthHeaders]);
+  }, [bookId, getAuthHeaders]);
 
   useEffect(() => {
     const timer = setTimeout(() => loadPoints(), 200);

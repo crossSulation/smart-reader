@@ -18,4 +18,6 @@ export type Book = {
   notes?: string | null;
   file_type?: string | null;
   file_url?: string | null;
+  indexed?: boolean;
+  knowledge_count?: number;
 };

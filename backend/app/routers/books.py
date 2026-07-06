@@ -5,7 +5,7 @@ from pydantic import BaseModel, model_validator
 import logging
 
 from app.database import get_db
-from app.models import DocumentChunk
+from app.models import DocumentChunk, KnowledgePoint
 from app.schemas import Book, BookCreate
 from app.services.file_service import FileService
 from app.config import get_settings
@@ -70,7 +70,53 @@ async def list_books(user: dict = Depends(get_current_user), db: Session = Depen
     file_service = FileService(db)
     books = file_service.get_user_books(user['id'])
     logger.info("list_books called | user_id=%s | count=%s", user["id"], len(books))
-    return [_attach_file_fields(file_service, user['id'], book) for book in books]
+
+    for book in books:
+        _attach_file_fields(file_service, user['id'], book)
+
+    # Attach indexed status and knowledge count per book
+    if books:
+        book_ids = [b.id for b in books]
+        indexed_book_ids = set(
+            row[0] for row in db.query(DocumentChunk.book_id)
+            .filter(DocumentChunk.book_id.in_(book_ids), DocumentChunk.indexed_at.isnot(None))
+            .distinct()
+            .all()
+        )
+
+        # Build chunk_id -> book_id map for all chunks of these books
+        chunk_rows = (
+            db.query(DocumentChunk.id, DocumentChunk.book_id)
+            .filter(DocumentChunk.book_id.in_(book_ids))
+            .all()
+        )
+        chunk_to_book = {row[0]: row[1] for row in chunk_rows}
+
+        # Count knowledge points per book by matching source_chunk_ids
+        import json
+        kp_count: dict[int, int] = {}
+        kp_rows = (
+            db.query(KnowledgePoint.source_chunk_ids)
+            .filter(KnowledgePoint.user_id == user["id"])
+            .all()
+        )
+        for (src,) in kp_rows:
+            try:
+                ids = json.loads(src or "[]")
+            except (json.JSONDecodeError, TypeError):
+                continue
+            matched_books = set()
+            for cid in ids:
+                bid = chunk_to_book.get(cid)
+                if bid and bid not in matched_books:
+                    kp_count[bid] = kp_count.get(bid, 0) + 1
+                    matched_books.add(bid)
+
+        for book in books:
+            setattr(book, "indexed", book.id in indexed_book_ids)
+            setattr(book, "knowledge_count", kp_count.get(book.id, 0))
+
+    return books
 
 
 @router.post("/", response_model=Book)
@@ -226,3 +272,64 @@ async def delete_book(book_id: int, user: dict = Depends(get_current_user), db: 
     if not success:
         raise HTTPException(status_code=404, detail="Book not found")
     return {"message": "Book deleted successfully"}
+
+
+@router.get("/{book_id}/status")
+def get_book_status(book_id: int, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Return indexing and knowledge extraction status for a book."""
+    book = FileService(db).get_book(book_id, user["id"])
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    indexed_count = (
+        db.query(DocumentChunk)
+        .filter(DocumentChunk.book_id == book_id, DocumentChunk.indexed_at.isnot(None))
+        .count()
+    )
+    chunks_count = (
+        db.query(DocumentChunk)
+        .filter(DocumentChunk.book_id == book_id)
+        .count()
+    )
+    kp_count = (
+        db.query(KnowledgePoint)
+        .filter(KnowledgePoint.user_id == user["id"])
+        .filter(KnowledgePoint.source_chunk_ids.like(f'%{book_id}%'))
+        .count()
+    )
+
+    return {
+        "book_id": book_id,
+        "indexed": indexed_count > 0,
+        "chunks_count": chunks_count,
+        "knowledge_points_count": kp_count,
+    }
+
+
+@router.post("/{book_id}/extract-knowledge")
+def extract_book_knowledge(book_id: int, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Manually trigger knowledge point extraction for a book."""
+    book = FileService(db).get_book(book_id, user["id"])
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    chunks = (
+        db.query(DocumentChunk.id)
+        .filter(DocumentChunk.book_id == book_id)
+        .count()
+    )
+    if chunks == 0:
+        raise HTTPException(status_code=400, detail="Book has not been indexed yet")
+
+    from app.services.knowledge_extraction_service import extract_knowledge_points_for_book
+    from app.services.knowledge_graph_service import infer_relationships
+
+    count = extract_knowledge_points_for_book(book_id, user["id"], db)
+    db.commit()
+
+    links = 0
+    if count > 0:
+        links = infer_relationships(user["id"], db)
+
+    logger.info("Manual knowledge extraction | book_id=%s user=%s kp=%d links=%d", book_id, user["id"], count, links)
+    return {"book_id": book_id, "knowledge_points_extracted": count, "relationships_created": links}
