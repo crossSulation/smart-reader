@@ -69,6 +69,28 @@ def _parse_agent_query(raw_query: str | None) -> tuple[str | None, str]:
     return None, text
 
 
+MAX_HISTORY_TOKENS = 6000  # leave room for current turn's tool calls and response
+
+
+def _estimate_tokens(text: str) -> int:
+    """Rough token count: ~4 chars per token for English text."""
+    return max(1, len(text or "") // 4)
+
+
+def _trim_history(messages: list[Any], max_tokens: int) -> list[Any]:
+    """Keep the most recent messages within the token budget."""
+    total = 0
+    kept = []
+    for msg in reversed(messages):
+        estimated = _estimate_tokens(getattr(msg, "content", "") or "")
+        if total + estimated > max_tokens and kept:
+            break
+        total += estimated
+        kept.append(msg)
+    kept.reverse()
+    return kept
+
+
 def _load_chat_history(book_id: int, user_id: int, session_id: str, db: Session) -> list[Any]:
     try:
         from langchain_core.messages import AIMessage, HumanMessage
@@ -97,7 +119,7 @@ def _load_chat_history(book_id: int, user_id: int, session_id: str, db: Session)
         if row.response:
             messages.append(AIMessage(content=row.response))
 
-    return messages
+    return _trim_history(messages, MAX_HISTORY_TOKENS)
 
 
 def _store_agent_turn(
@@ -156,20 +178,32 @@ def _build_agent_executor(
     else:
         raise RuntimeError("LangChain agent currently supports LLM_PROVIDER=openai or ollama.")
 
+    _cache: dict[str, str] = {}  # request-level cache to avoid duplicate tool calls
+
     @tool("read")
     def read_tool(query: str = "") -> str:
         """Read book content at a specific location. Input: a page number ('42' or 'page 42'), a section name ('Chapter 3'), or leave empty to read the beginning of the book. Use this when you need to read a known section — do NOT use for semantic search; use the search tool for keyword/concept queries instead."""
+        cache_key = f"read:{query or ''}"
+        if cache_key in _cache:
+            return _cache[cache_key]
         excerpts = _run_read_tool(book_id, query, payload.top_k, payload.current_page, db)
-        return json.dumps({"excerpts": excerpts, "count": len(excerpts)}, ensure_ascii=False)
+        result = json.dumps({"excerpts": excerpts, "count": len(excerpts)}, ensure_ascii=False)
+        _cache[cache_key] = result
+        return result
 
     @tool("search")
     def search_tool(query: str) -> str:
         """Semantic search within the book. Input: query text."""
+        cache_key = f"search:{query}"
+        if cache_key in _cache:
+            return _cache[cache_key]
         hits = _run_search_tool(book_id, query, payload.top_k, db)
-        return json.dumps(
+        result = json.dumps(
             {"results": [item.model_dump() for item in hits], "count": len(hits)},
             ensure_ascii=False,
         )
+        _cache[cache_key] = result
+        return result
 
     @tool("write")
     def write_tool(content: str) -> str:
@@ -209,8 +243,11 @@ def _build_agent_executor(
     def web_search_tool(term: str) -> str:
         """Search concise external references on the web. Input: term or topic."""
         clean_term = (term or payload.term or "").strip()
+        cache_key = f"web_search:{clean_term}"
+        if cache_key in _cache:
+            return _cache[cache_key]
         refs = fetch_web_references(clean_term, limit=max(1, min(payload.top_k, 10)))
-        return json.dumps(
+        result = json.dumps(
             {
                 "term": clean_term,
                 "references": [item.model_dump() for item in refs],
@@ -218,6 +255,8 @@ def _build_agent_executor(
             },
             ensure_ascii=False,
         )
+        _cache[cache_key] = result
+        return result
 
     @tool("quiz")
     def quiz_tool(topic: str = "") -> str:
@@ -270,13 +309,15 @@ def _build_agent_executor(
     prompt = ChatPromptTemplate.from_messages([
         (
             "system",
-            "You are Smart Reader's LangChain agent. Use tools when needed. "
-            "Respect allowed tools only. "
-            "For factual answers grounded in the book, prefer read/search first. "
-            "When the user asks to save memory/notes, use write. "
-            "When the user asks to show/list existing notes, use list_notes. "
-            "When user asks external references, use web_search. "
-            "When user asks practice questions, use quiz."
+            "You are a precise reading assistant powered by the user's book content.\n\n"
+            "Rules:\n"
+            "1. Always cite source page numbers when quoting or referencing book content.\n"
+            "2. Use the read tool first to understand the user's current page context, then search to find related concepts across the book.\n"
+            "3. If the book does NOT contain enough evidence to answer, say so clearly. Never fabricate.\n"
+            "4. Structure your response: (1) direct answer, (2) supporting evidence with page citations, (3) follow-up suggestions if relevant.\n"
+            "5. Keep answers concise unless the user asks for more detail.\n"
+            "6. For external references (definitions, concepts not in the book), use web_search.\n"
+            "7. Save notes/memories with write. Show existing notes with list_notes. Generate quizzes with quiz."
             f"{markdown_instruction}",
         ),
         MessagesPlaceholder(variable_name="chat_history", optional=True),
