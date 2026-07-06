@@ -8,18 +8,6 @@ type UsageStats = {
   by_capability: Record<string, { tokens: number; cost: number }>;
 };
 
-type UsageItem = {
-  id: number;
-  capability: string;
-  provider: string;
-  model: string | null;
-  prompt_tokens: number;
-  completion_tokens: number;
-  total_tokens: number;
-  credit_cost: number;
-  created_at: string | null;
-};
-
 type CreditStats = {
   balance: number;
   monthly_tokens: number;
@@ -78,7 +66,6 @@ const CAPABILITY_LABELS: Record<string, string> = {
 export default function Billing() {
   const [stats, setStats] = useState<CreditStats | null>(null);
   const [usage, setUsage] = useState<UsageStats | null>(null);
-  const [history, setHistory] = useState<UsageItem[]>([]);
   const [packs, setPacks] = useState<Pack[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [recommendation, setRecommendation] = useState<Recommend | null>(null);
@@ -102,12 +89,6 @@ export default function Billing() {
       ]);
       if (sr.ok) setStats(await sr.json());
       if (ur.ok) setUsage(await ur.json());
-
-      const hRes = await fetch("/api/billing/usage/history?limit=50", { headers: authHeaders() });
-      if (hRes.ok) {
-        const hData = await hRes.json();
-        setHistory(hData.items || []);
-      }
 
       if (pr.ok) {
         const pData = await pr.json();
@@ -296,36 +277,6 @@ export default function Billing() {
         </div>
       )}
 
-      {/* Token Usage Log */}
-      {history.length > 0 && (
-        <div className="mb-6">
-          <h2 className="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">Recent Token Usage</h2>
-          <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 dark:bg-gray-800">
-                <tr>
-                  <th className="px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">Capability</th>
-                  <th className="px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">Model</th>
-                  <th className="px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">Tokens</th>
-                  <th className="px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">Cost</th>
-                  <th className="px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.map((item) => (
-                  <tr key={item.id} className="border-t border-gray-100 dark:border-gray-700">
-                    <td className="px-4 py-2 text-gray-700 dark:text-gray-300">{CAPABILITY_LABELS[item.capability] || item.capability}</td>
-                    <td className="px-4 py-2 text-gray-500 dark:text-gray-400">{item.model || item.provider}</td>
-                    <td className="px-4 py-2 text-gray-600 dark:text-gray-400">{formatNum(item.total_tokens)}</td>
-                    <td className="px-4 py-2 text-gray-600 dark:text-gray-400">{item.credit_cost.toFixed(2)}</td>
-                    <td className="px-4 py-2 text-gray-500 dark:text-gray-400">{formatDate(item.created_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

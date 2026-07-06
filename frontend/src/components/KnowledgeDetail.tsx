@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import type { KnowledgePointDetail } from "../types/KnowledgeGraph";
 import { useTranslation } from "react-i18next";
 type Props = {
@@ -19,6 +20,7 @@ export default function KnowledgeDetail({ kpId, onClose, onNavigateTo }: Props) 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const load = useCallback(async (id: number) => {
     setLoading(true);
     setError(null);
@@ -120,9 +122,20 @@ export default function KnowledgeDetail({ kpId, onClose, onNavigateTo }: Props) 
                 key={ch.chunk_id}
                 className="mb-2 rounded border border-gray-200 bg-gray-50 p-2 text-xs dark:border-gray-600 dark:bg-gray-800"
               >
-                <div className="mb-1 font-medium text-gray-600 dark:text-gray-400">
-                  {ch.book_title}
-                  {ch.page_start != null && ` — p.${ch.page_start}`}
+                <div className="mb-1 flex items-center justify-between font-medium text-gray-600 dark:text-gray-400">
+                  <span>
+                    {ch.book_title}
+                    {ch.page_start != null && ` — p.${ch.page_start}`}
+                  </span>
+                  {ch.book_id != null && ch.page_start != null && (
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/reader/${ch.book_id}?page=${ch.page_start}`)}
+                      className="shrink-0 rounded bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-400 dark:hover:bg-blue-900/60"
+                    >
+                      Read
+                    </button>
+                  )}
                 </div>
                 <div className="line-clamp-3 text-gray-500 dark:text-gray-400">
                   {ch.text}

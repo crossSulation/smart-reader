@@ -943,6 +943,7 @@ function Reader() {
                     onCreateNoteFromSelectionWithKp={createNoteFromSelection}
                     onCreateFlashcardFromSelectionWithKp={createFlashcardFromSelection}
                     onPrefillConsumed={() => { setPrefillReferenceTerm(""); }}
+                    onNoteSaved={() => { if (activeBookIdForAi) reloadNotes(activeBookIdForAi); }}
                     isMobile
                   />
                 </div>
@@ -1074,6 +1075,7 @@ function Reader() {
                   onCreateNoteFromSelectionWithKp={createNoteFromSelection}
                   onCreateFlashcardFromSelectionWithKp={createFlashcardFromSelection}
                   onPrefillConsumed={() => { setPrefillReferenceTerm(""); }}
+                  onNoteSaved={() => { if (activeBookIdForAi) reloadNotes(activeBookIdForAi); }}
                 />
               </div>
             </div>

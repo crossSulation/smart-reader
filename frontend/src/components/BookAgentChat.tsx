@@ -35,6 +35,7 @@ type BookAgentChatProps = {
   onRequestShowNotes?: () => void;
   onSeedConsumed?: () => void;
   currentPage?: number;
+  onNoteSaved?: () => void;
   selectedNote?: {
     id: number;
     content: string;
@@ -222,11 +223,13 @@ export default function BookAgentChat({
   onRequestShowNotes,
   onSeedConsumed,
   currentPage,
+  onNoteSaved,
   selectedNote = null,
 }: BookAgentChatProps) {
   const [message, setMessage] = useState("");
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([]);
+  const [savingNoteIds, setSavingNoteIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string>(createSessionId);
@@ -725,6 +728,30 @@ export default function BookAgentChat({
     ].join("\n");
   };
 
+  const handleSaveAsNote = async (msgId: string, content: string) => {
+    setSavingNoteIds((prev) => new Set(prev).add(msgId));
+    try {
+      await fetch("/api/learning/notes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+          book_id: Number(bookId),
+          content,
+          tags: ["ai-generated"],
+        }),
+      });
+      onNoteSaved?.();
+    } catch { /* ignore */ }
+    setSavingNoteIds((prev) => {
+      const next = new Set(prev);
+      next.delete(msgId);
+      return next;
+    });
+  };
+
   const AgentStepsDisplay = ({ steps }: { steps: AgentStep[] }) => {
     const [open, setOpen] = useState(false);
     if (!steps || steps.length === 0) return null;
@@ -1006,6 +1033,19 @@ export default function BookAgentChat({
                   >
                     {item.content || "..."}
                   </ReactMarkdown>
+                  {item.role === "assistant" && item.content && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSaveAsNote(item.id, item.content);
+                      }}
+                      disabled={savingNoteIds.has(item.id)}
+                      className="text-right text-[10px] text-gray-400 hover:text-blue-600 disabled:opacity-50 dark:text-gray-500 dark:hover:text-blue-400"
+                    >
+                      {savingNoteIds.has(item.id) ? "Saving..." : "+ Save as note"}
+                    </button>
+                  )}
                 </div>
               ) : (
                 item.content
