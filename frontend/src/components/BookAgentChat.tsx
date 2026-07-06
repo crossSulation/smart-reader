@@ -5,7 +5,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 
-type AgentToolName = "read" | "write" | "search" | "web_search" | "quiz" | "list_notes";
+type AgentToolName = "read" | "write" | "search" | "web_search" | "quiz" | "flashcards" | "list_notes";
 
 type AgentStreamEvent = {
   type: "token" | "tool_start" | "tool_end" | "final" | "error";
@@ -75,9 +75,15 @@ type ListNotesInsight = {
   items: Array<{ content: string; page: number | null; tags: string[] }>;
 };
 
-type ToolInsight = SearchInsight | ReadInsight | WebInsight | QuizInsight | ListNotesInsight;
+type FlashcardsInsight = {
+  kind: "flashcards";
+  items: Array<{ front: string; back: string }>;
+  saved?: number;
+};
 
-const ALL_AGENT_TOOLS: AgentToolName[] = ["read", "search", "write", "web_search", "quiz", "list_notes"];
+type ToolInsight = SearchInsight | ReadInsight | WebInsight | QuizInsight | ListNotesInsight | FlashcardsInsight;
+
+const ALL_AGENT_TOOLS: AgentToolName[] = ["read", "search", "write", "web_search", "quiz", "flashcards", "list_notes"];
 
 const STORAGE_PREFIX = "smart-reader:agent-chat:v1";
 
@@ -511,6 +517,26 @@ export default function BookAgentChat({
       return items.length > 0 ? { kind: "quiz", items } : null;
     }
 
+    if (tool === "flashcards") {
+      const rows = Array.isArray((observation as { flashcards?: unknown[] }).flashcards)
+        ? (observation as { flashcards: unknown[] }).flashcards
+        : [];
+      const items = rows
+        .map((row) => {
+          if (!row || typeof row !== "object") return null;
+          const rec = row as { front?: unknown; back?: unknown };
+          if (typeof rec.front !== "string" || typeof rec.back !== "string") return null;
+          return { front: rec.front, back: rec.back };
+        })
+        .filter((item): item is { front: string; back: string } => Boolean(item))
+        .slice(0, 6);
+      const saved = typeof (observation as { saved?: number }).saved === "number"
+        ? (observation as { saved: number }).saved
+        : undefined;
+
+      return items.length > 0 ? { kind: "flashcards", items, saved } : null;
+    }
+
     if (tool === "list_notes") {
       const rows = Array.isArray((observation as { notes?: unknown[] }).notes)
         ? (observation as { notes: unknown[] }).notes
@@ -904,6 +930,24 @@ export default function BookAgentChat({
                                 <span key={`${itemIdx}-${tag}`} className="rounded bg-blue-100 px-1 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">#{tag}</span>
                               ))}
                             </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {insight.kind === "flashcards" && (
+                    <>
+                      <p className="mb-1 font-semibold text-gray-600 dark:text-gray-300">
+                        Flashcards
+                        {insight.saved != null && (
+                          <span className="ml-1 font-normal text-gray-400">({insight.saved} saved to Review)</span>
+                        )}
+                      </p>
+                      <ul className="space-y-1">
+                        {insight.items.map((item, itemIdx) => (
+                          <li key={`fc-${idx}-${itemIdx}`} className="rounded border border-gray-200 bg-white px-2 py-1 dark:border-gray-500 dark:bg-gray-800">
+                            <p className="text-xs font-medium text-gray-800 dark:text-gray-200">Q: {item.front}</p>
+                            <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">A: {item.back}</p>
                           </li>
                         ))}
                       </ul>

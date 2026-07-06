@@ -11,12 +11,10 @@ type SelectionPopupProps = {
   onTranslate: (text: string, targetLang: string) => void;
   activeBookIdForAi: string | null;
   savingNote: boolean;
-  savingFlashcard: boolean;
   knowledgePoints: KnowledgePointItem[];
   selectedKpIds: number[];
   onSelectedKpIdsChange: (ids: number[]) => void;
   onCreateNoteFromSelection: (kpIds: number[]) => void;
-  onCreateFlashcardFromSelection: (kpIds: number[]) => void;
   learningStatus: string | null;
 };
 
@@ -29,12 +27,10 @@ export default function SelectionPopup({
   onTranslate,
   activeBookIdForAi,
   savingNote,
-  savingFlashcard,
   knowledgePoints,
   selectedKpIds,
   onSelectedKpIdsChange,
   onCreateNoteFromSelection,
-  onCreateFlashcardFromSelection,
   learningStatus,
 }: SelectionPopupProps) {
   const [translateLang, setTranslateLang] = useState<string>("zh");
@@ -88,20 +84,10 @@ export default function SelectionPopup({
             onClick={() => {
               onCreateNoteFromSelection(selectedKpIds);
             }}
-            disabled={!activeBookIdForAi || savingNote || savingFlashcard}
-            className="flex-1 rounded border border-blue-300 bg-white px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-blue-700 dark:bg-gray-800 dark:text-blue-400 dark:hover:bg-blue-900/30"
+            disabled={!activeBookIdForAi || savingNote}
+            className="w-full rounded border border-blue-300 bg-white px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-blue-700 dark:bg-gray-800 dark:text-blue-400 dark:hover:bg-blue-900/30"
           >
             {savingNote ? "Saving..." : "Save as note"}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              onCreateFlashcardFromSelection(selectedKpIds);
-            }}
-            disabled={!activeBookIdForAi || savingNote || savingFlashcard}
-            className="flex-1 rounded border border-blue-600 bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-500 dark:hover:bg-blue-600"
-          >
-            {savingFlashcard ? "Creating..." : "Create card"}
           </button>
         </div>
 

@@ -45,7 +45,6 @@ function Reader() {
   const [learningTagsInput, setLearningTagsInput] = useState("highlight");
   const [learningStatus, setLearningStatus] = useState<string | null>(null);
   const [savingNote, setSavingNote] = useState(false);
-  const [savingFlashcard, setSavingFlashcard] = useState(false);
   const [notes, setNotes] = useState<LearningNote[]>([]);
   const [notesLoading, setNotesLoading] = useState(false);
   const [notesError, setNotesError] = useState<string | null>(null);
@@ -233,51 +232,6 @@ function Reader() {
       setNotesError(err instanceof Error ? err.message : "Failed to update note.");
     } finally {
       setSavingEditedNoteId(null);
-    }
-  };
-
-  const createFlashcardFromSelection = async (kpIds: number[] = []) => {
-    if (!selectedExcerpt.trim() || !activeBookIdForAi) return;
-
-    setSavingFlashcard(true);
-    setLearningStatus(null);
-    try {
-      const tags = learningTagsInput
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter(Boolean);
-
-      const body: Record<string, unknown> = {
-        book_id: Number(activeBookIdForAi),
-        front: selectedExcerpt,
-        back: "",
-        source_text: selectedExcerpt,
-        tags,
-      };
-      if (kpIds.length > 0) {
-        body.knowledge_point_ids = kpIds;
-      }
-
-      const res = await fetch("/api/learning/flashcards", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || `Create flashcard failed (${res.status})`);
-      }
-
-      setLearningStatus("Created flashcard. Review it on the Review page.");
-      setSelectedKpIds([]);
-    } catch (err) {
-      setLearningStatus(err instanceof Error ? err.message : "Failed to create flashcard.");
-    } finally {
-      setSavingFlashcard(false);
     }
   };
 
@@ -917,7 +871,6 @@ function Reader() {
                     onTranslateSelection={handleTranslateSelection}
                     learningStatus={learningStatus}
                     savingNote={savingNote}
-                    savingFlashcard={savingFlashcard}
                     activeBookIdForAi={activeBookIdForAi}
                     currentPage={currentPage}
                     notesLoading={notesLoading}
@@ -941,7 +894,6 @@ function Reader() {
                     selectedKpIds={selectedKpIds}
                     onSelectedKpIdsChange={setSelectedKpIds}
                     onCreateNoteFromSelectionWithKp={createNoteFromSelection}
-                    onCreateFlashcardFromSelectionWithKp={createFlashcardFromSelection}
                     onPrefillConsumed={() => { setPrefillReferenceTerm(""); }}
                     onNoteSaved={() => { if (activeBookIdForAi) reloadNotes(activeBookIdForAi); }}
                     isMobile
@@ -1049,7 +1001,6 @@ function Reader() {
                   onTranslateSelection={handleTranslateSelection}
                   learningStatus={learningStatus}
                   savingNote={savingNote}
-                  savingFlashcard={savingFlashcard}
                   activeBookIdForAi={activeBookIdForAi}
                   currentPage={currentPage}
                   notesLoading={notesLoading}
@@ -1073,7 +1024,6 @@ function Reader() {
                   selectedKpIds={selectedKpIds}
                   onSelectedKpIdsChange={setSelectedKpIds}
                   onCreateNoteFromSelectionWithKp={createNoteFromSelection}
-                  onCreateFlashcardFromSelectionWithKp={createFlashcardFromSelection}
                   onPrefillConsumed={() => { setPrefillReferenceTerm(""); }}
                   onNoteSaved={() => { if (activeBookIdForAi) reloadNotes(activeBookIdForAi); }}
                 />

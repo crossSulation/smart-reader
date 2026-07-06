@@ -12,7 +12,7 @@ from app.services.retrieval_service import retrieve_hybrid
 from app.services.reranker_service import rerank_candidates
 from app.services.web_reference_service import fetch_web_references
 
-AGENT_ALL_TOOLS = ("read", "write", "search", "web_search", "quiz", "list_notes")
+AGENT_ALL_TOOLS = ("read", "write", "search", "web_search", "quiz", "flashcards", "list_notes")
 
 
 def _normalize_rank_scores(hits: list[tuple[int, float]]) -> list[tuple[int, float]]:
@@ -264,6 +264,12 @@ def _build_agent_executor(
         quiz_payload = _run_quiz_tool(book_id, user_id, topic or payload.message, payload.quiz_count, db)
         return json.dumps(quiz_payload, ensure_ascii=False)
 
+    @tool("flashcards")
+    def flashcards_tool(topic: str = "") -> str:
+        """Generate spaced-repetition flashcards from book content. Input: topic or concept to focus on, or leave empty for general flashcards."""
+        fc_payload = _run_flashcards_tool(book_id, user_id, topic or payload.message, payload.quiz_count, db)
+        return json.dumps(fc_payload, ensure_ascii=False)
+
     @tool("list_notes")
     def list_notes_tool(_: str = "") -> str:
         """List recent notes for this book. Input can be empty."""
@@ -292,6 +298,7 @@ def _build_agent_executor(
         "write": write_tool,
         "web_search": web_search_tool,
         "quiz": quiz_tool,
+        "flashcards": flashcards_tool,
         "list_notes": list_notes_tool,
     }
 
@@ -317,7 +324,7 @@ def _build_agent_executor(
             "4. Structure your response: (1) direct answer, (2) supporting evidence with page citations, (3) follow-up suggestions if relevant.\n"
             "5. Keep answers concise unless the user asks for more detail.\n"
             "6. For external references (definitions, concepts not in the book), use web_search.\n"
-            "7. Save notes/memories with write. Show existing notes with list_notes. Generate quizzes with quiz."
+            "7. Save notes/memories with write. Show existing notes with list_notes. Generate quizzes with quiz. Create flashcards with flashcards."
             f"{markdown_instruction}",
         ),
         MessagesPlaceholder(variable_name="chat_history", optional=True),
@@ -524,6 +531,74 @@ def _run_quiz_tool(book_id: int, user_id: int, prompt: str, quiz_count: int, db:
                 }
             ]
         }
+
+
+def _run_flashcards_tool(book_id: int, user_id: int, prompt: str, count: int, db: Session) -> dict[str, Any]:
+    settings = get_settings()
+    hits = _run_search_tool(book_id, prompt, max(count, 3), db)
+    context = [item.text for item in hits[:10]]
+
+    if not context:
+        return {
+            "flashcards": [
+                {"front": "No indexed content found", "back": "Index the book first then retry."}
+            ]
+        }
+
+    fc_system = (
+        "You are a flashcard generator for spaced-repetition learning. "
+        "Extract key concepts, definitions, and facts from the provided book excerpts. "
+        "Each flashcard must have a clear front (question/term/concept) and back (answer/definition/explanation). "
+        "Return ONLY valid JSON: {\"flashcards\":[{\"front\":\"...\",\"back\":\"...\"}]}."
+    )
+    fc_user = (
+        f"Generate {max(1, min(count, 10))} flashcards from the excerpts below. "
+        "Front = term, concept, or question. Back = definition, explanation, or answer.\n\n"
+        + "\n\n---\n\n".join(context)
+    )
+    raw = complete_and_log(fc_user, fc_system, settings, db, user_id, "agent")
+
+    try:
+        text = raw.strip()
+        start = text.find("{")
+        end = text.rfind("}")
+        if start >= 0 and end > start:
+            text = text[start:end + 1]
+        data = json.loads(text)
+    except Exception:
+        data = {
+            "flashcards": [
+                {"front": "Key concept from excerpts", "back": context[0][:180] if context else "Read the book first."}
+            ]
+        }
+
+    # Persist flashcards to DB
+    from app.models import Flashcard, ReviewItem
+    saved_count = 0
+    cards = data.get("flashcards", [])
+    for card in cards:
+        front = (card.get("front") or "").strip()
+        back = (card.get("back") or "").strip()
+        if not front or not back:
+            continue
+        fc = Flashcard(
+            user_id=user_id,
+            book_id=book_id,
+            front=front,
+            back=back,
+            source_text="\n".join(ctx[:200] for ctx in context[:2]),
+            tags="ai-generated",
+        )
+        db.add(fc)
+        db.flush()
+        # Create ReviewItem for FSRS scheduling
+        db.add(ReviewItem(flashcard_id=fc.id))
+        saved_count += 1
+
+    if saved_count > 0:
+        db.commit()
+
+    return {"flashcards": cards, "count": len(cards), "saved": saved_count}
 
 
 def run_langchain_book_agent(book_id: int, user_id: int, payload: AgentRequest, db: Session) -> dict[str, Any]:

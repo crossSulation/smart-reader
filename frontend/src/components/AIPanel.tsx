@@ -26,7 +26,6 @@ type AIPanelProps = {
   onTranslateSelection?: (text: string, targetLang: string) => void;
   learningStatus: string | null;
   savingNote: boolean;
-  savingFlashcard: boolean;
   activeBookIdForAi: string | null;
   currentPage: number;
   notesLoading: boolean;
@@ -50,7 +49,6 @@ type AIPanelProps = {
   selectedKpIds: number[];
   onSelectedKpIdsChange: (ids: number[]) => void;
   onCreateNoteFromSelectionWithKp: (kpIds: number[]) => void;
-  onCreateFlashcardFromSelectionWithKp: (kpIds: number[]) => void;
   onPrefillConsumed?: () => void;
   onNoteSaved?: () => void;
   isMobile?: boolean;
@@ -66,7 +64,6 @@ export default function AIPanel({
   onTranslateSelection,
   learningStatus,
   savingNote,
-  savingFlashcard,
   activeBookIdForAi,
   currentPage,
   notesLoading,
@@ -90,7 +87,6 @@ export default function AIPanel({
   selectedKpIds,
   onSelectedKpIdsChange,
   onCreateNoteFromSelectionWithKp,
-  onCreateFlashcardFromSelectionWithKp,
   onPrefillConsumed,
   onNoteSaved,
   isMobile = false,
@@ -168,12 +164,10 @@ export default function AIPanel({
             onTranslate={onTranslateSelection || (() => {})}
             activeBookIdForAi={activeBookIdForAi}
             savingNote={savingNote}
-            savingFlashcard={savingFlashcard}
             knowledgePoints={knowledgePoints}
             selectedKpIds={selectedKpIds}
             onSelectedKpIdsChange={onSelectedKpIdsChange}
             onCreateNoteFromSelection={onCreateNoteFromSelectionWithKp}
-            onCreateFlashcardFromSelection={onCreateFlashcardFromSelectionWithKp}
             learningStatus={learningStatus}
           />
         )}
