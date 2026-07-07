@@ -31,6 +31,8 @@ const RELATION_LABELS: Record<string, string> = {
   extends: "extends",
 };
 
+const MAX_SIM_NODES = 200;
+
 export default function KnowledgeGraphCanvas({
   data,
   loading,
@@ -218,29 +220,35 @@ export default function KnowledgeGraphCanvas({
       if (!running) return;
       const current = new Map(nodesRef.current);
       const arr = Array.from(current.values());
+
+      // Cap physics simulation to MAX_SIM_NODES (prioritize high-link nodes)
+      const simNodes = arr.length > MAX_SIM_NODES
+        ? [...arr].sort((a, b) => b.link_count - a.link_count).slice(0, MAX_SIM_NODES)
+        : arr;
+      const simIds = new Set(simNodes.map((n) => n.id));
       const maxLinks = Math.max(1, ...arr.map((n) => n.link_count));
 
-      // Repulsion
-      for (let i = 0; i < arr.length; i++) {
-        for (let j = i + 1; j < arr.length; j++) {
-          const dx = arr[j].x - arr[i].x;
-          const dy = arr[j].y - arr[i].y;
+      // Repulsion (simNodes only)
+      for (let i = 0; i < simNodes.length; i++) {
+        for (let j = i + 1; j < simNodes.length; j++) {
+          const dx = simNodes[j].x - simNodes[i].x;
+          const dy = simNodes[j].y - simNodes[i].y;
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const ri = 8 + (arr[i].link_count / Math.max(maxLinks, 1)) * 18;
-          const rj = 8 + (arr[j].link_count / Math.max(maxLinks, 1)) * 18;
+          const ri = 8 + (simNodes[i].link_count / Math.max(maxLinks, 1)) * 18;
+          const rj = 8 + (simNodes[j].link_count / Math.max(maxLinks, 1)) * 18;
           const minDist = ri + rj + 48;
           if (dist < minDist) {
             const force = (minDist - dist) * 0.5;
             const fx = (dx / dist) * force;
             const fy = (dy / dist) * force;
-            arr[i].vx -= fx; arr[i].vy -= fy;
-            arr[j].vx += fx; arr[j].vy += fy;
+            simNodes[i].vx -= fx; simNodes[i].vy -= fy;
+            simNodes[j].vx += fx; simNodes[j].vy += fy;
           } else {
             const force = 600 / (dist * dist);
             const fx = (dx / dist) * force;
             const fy = (dy / dist) * force;
-            arr[i].vx -= fx; arr[i].vy -= fy;
-            arr[j].vx += fx; arr[j].vy += fy;
+            simNodes[i].vx -= fx; simNodes[i].vy -= fy;
+            simNodes[j].vx += fx; simNodes[j].vy += fy;
           }
         }
       }
@@ -260,19 +268,21 @@ export default function KnowledgeGraphCanvas({
         t.vx -= fx; t.vy -= fy;
       });
 
-      // Center gravity + dampen + clamp
+      // Center gravity + dampen + clamp (all nodes)
       const { w: ww, h: wh } = worldRef.current;
       arr.forEach((n) => {
-        const ri = 8 + (n.link_count / Math.max(maxLinks, 1)) * 18;
-        const margin = ri + 20;
-        n.vx += (ww / 2 - n.x) * 0.001;
-        n.vy += (wh / 2 - n.y) * 0.001;
-        n.vx *= 0.85;
-        n.vy *= 0.85;
-        n.x += n.vx;
-        n.y += n.vy;
-        n.x = Math.max(margin, Math.min(ww - margin, n.x));
-        n.y = Math.max(margin, Math.min(wh - margin, n.y));
+        if (simIds.has(n.id)) {
+          const ri = 8 + (n.link_count / Math.max(maxLinks, 1)) * 18;
+          n.vx += (ww / 2 - n.x) * 0.001;
+          n.vy += (wh / 2 - n.y) * 0.001;
+          n.vx *= 0.85;
+          n.vy *= 0.85;
+          n.x += n.vx;
+          n.y += n.vy;
+          const margin = ri + 20;
+          n.x = Math.max(margin, Math.min(ww - margin, n.x));
+          n.y = Math.max(margin, Math.min(wh - margin, n.y));
+        }
       });
 
       nodesRef.current = current;

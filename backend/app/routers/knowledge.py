@@ -209,52 +209,81 @@ def get_graph(
     book_id: Optional[int] = Query(None),
     central_kp_id: Optional[int] = Query(None),
     depth: int = Query(2, ge=1, le=5),
+    limit: int = Query(200, ge=10, le=1000),
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
+    kp_id_set: set[int] = set()
+
     if central_kp_id:
+        # BFS from central node, collect nodes in distance order
         visited = {central_kp_id}
         frontier = {central_kp_id}
+        ordered_ids = [central_kp_id]
         for _ in range(depth):
-            if not frontier:
+            if not frontier or len(ordered_ids) >= limit:
                 break
-            links = db.query(KnowledgeLink).filter(
-                KnowledgeLink.source_kp_id.in_(frontier) | KnowledgeLink.target_kp_id.in_(frontier)
-            ).all()
-            new_ids = set()
-            for link in links:
-                new_ids.add(link.source_kp_id)
-                new_ids.add(link.target_kp_id)
+            links = (
+                db.query(KnowledgeLink.source_kp_id, KnowledgeLink.target_kp_id)
+                .filter(
+                    KnowledgeLink.source_kp_id.in_(frontier) | KnowledgeLink.target_kp_id.in_(frontier)
+                )
+                .all()
+            )
+            new_ids: set[int] = set()
+            for src, tgt in links:
+                new_ids.add(src)
+                new_ids.add(tgt)
             frontier = new_ids - visited
             visited |= new_ids
+            for nid in frontier:
+                ordered_ids.append(nid)
 
-        kps = db.query(KnowledgePoint).filter(
-            KnowledgePoint.id.in_(visited),
-            KnowledgePoint.user_id == user["id"],
-        ).all()
+        kp_id_set = set(ordered_ids[:limit])
     elif book_id:
-        chunk_ids = [row[0] for row in db.query(DocumentChunk.id).filter(DocumentChunk.book_id == book_id).all()]
-        cid_set = set(chunk_ids)
-        all_kps = db.query(KnowledgePoint).filter(KnowledgePoint.user_id == user["id"]).all()
-        kp_ids = set()
-        for kp in all_kps:
-            if set(_parse_json(kp.source_chunk_ids)) & cid_set:
-                kp_ids.add(kp.id)
-        kps = db.query(KnowledgePoint).filter(KnowledgePoint.id.in_(kp_ids)).all() if kp_ids else []
+        chunk_ids = {row[0] for row in db.query(DocumentChunk.id).filter(DocumentChunk.book_id == book_id).all()}
+        if chunk_ids:
+            all_kps = db.query(KnowledgePoint).filter(KnowledgePoint.user_id == user["id"]).all()
+            for kp in all_kps:
+                if set(_parse_json(kp.source_chunk_ids)) & chunk_ids:
+                    kp_id_set.add(kp.id)
+                    if len(kp_id_set) >= limit:
+                        break
     else:
-        kps = db.query(KnowledgePoint).filter(KnowledgePoint.user_id == user["id"]).all()
+        kp_rows = (
+            db.query(KnowledgePoint.id)
+            .filter(KnowledgePoint.user_id == user["id"])
+            .order_by(KnowledgePoint.updated_at.desc())
+            .limit(limit * 2)
+            .all()
+        )
+        kp_id_set = {row[0] for row in kp_rows}
 
-    kp_id_set = {kp.id for kp in kps}
-    links = db.query(KnowledgeLink).filter(
-        KnowledgeLink.source_kp_id.in_(kp_id_set) & KnowledgeLink.target_kp_id.in_(kp_id_set)
-    ).all()
+    if not kp_id_set:
+        return GraphResponse(nodes=[], edges=[])
+
+    kps = db.query(KnowledgePoint).filter(KnowledgePoint.id.in_(kp_id_set)).all()
+    kp_map = {kp.id: kp for kp in kps}
+
+    # Edges only between visible nodes
+    links = (
+        db.query(KnowledgeLink)
+        .filter(
+            KnowledgeLink.source_kp_id.in_(kp_id_set),
+            KnowledgeLink.target_kp_id.in_(kp_id_set),
+        )
+        .all()
+    )
 
     nodes = []
     for kp in kps:
         link_count = sum(1 for l in links if l.source_kp_id == kp.id or l.target_kp_id == kp.id)
         nodes.append(GraphNode(id=kp.id, label=kp.label, entity_type=kp.entity_type, link_count=link_count))
 
-    edges = [GraphEdge(id=l.id, source=l.source_kp_id, target=l.target_kp_id, relation_type=l.relation_type, weight=l.weight) for l in links]
+    edges = [
+        GraphEdge(id=l.id, source=l.source_kp_id, target=l.target_kp_id, relation_type=l.relation_type, weight=l.weight)
+        for l in links
+    ]
 
     return GraphResponse(nodes=nodes, edges=edges)
 

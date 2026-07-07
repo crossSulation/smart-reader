@@ -47,6 +47,7 @@ export default function KnowledgeGraphPage() {
       const params = new URLSearchParams();
       if (central) params.set("central_kp_id", String(central));
       if (bookId) params.set("book_id", String(bookId));
+      params.set("limit", "200");
       const res = await fetch(`/api/knowledge/graph?${params}`, {
         headers: getAuthHeaders(),
       });
