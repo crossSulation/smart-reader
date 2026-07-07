@@ -27,6 +27,7 @@ interface WeeklySummary {
   reviews_completed: number;
   review_accuracy: number;
   top_weak_topics: string[];
+  weak_topic_pages: Array<{ topic: string; book_id: number; page_start: number | null; section_path: string | null }>;
   daily_trend: {
     date: string;
     notes_created: number;
@@ -467,6 +468,24 @@ function Profile() {
                 <Typography variant="body2" color="text.secondary">
                   {t('profile.noWeakTopics', 'No weak topics detected this week.')}
                 </Typography>
+              )}
+              {summary.weak_topic_pages && summary.weak_topic_pages.length > 0 && (
+                <Box mt={1.5}>
+                  <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
+                    {t('profile.suggestedReRead', 'Suggested re-read')}
+                  </Typography>
+                  {summary.weak_topic_pages.slice(0, 3).map((item) => (
+                    <Chip
+                      key={`${item.book_id}-${item.page_start}`}
+                      label={`${item.topic} → Book #${item.book_id} p.${item.page_start ?? "?"}`}
+                      size="small"
+                      variant="outlined"
+                      clickable
+                      onClick={() => navigate(`/reader/${item.book_id}?page=${item.page_start ?? 1}`)}
+                      sx={{ mr: 0.5, mb: 0.5 }}
+                    />
+                  ))}
+                </Box>
               )}
             </Box>
 

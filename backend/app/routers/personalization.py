@@ -129,6 +129,26 @@ def get_weekly_summary(
 
     top_weak_topics = [topic for topic, _ in weak_topic_counter.most_common(5)]
 
+    # Collect pages for weak topics (for re-read links)
+    weak_topic_pages: list[dict] = []
+    for topic in top_weak_topics[:3]:
+        chunks = (
+            db.query(DocumentChunk)
+            .filter(
+                DocumentChunk.text.ilike(f"%{topic}%"),
+                DocumentChunk.book_id.in_([b.id for b in books]),
+            )
+            .limit(1)
+            .all()
+        )
+        for ch in chunks:
+            weak_topic_pages.append({
+                "topic": topic,
+                "book_id": ch.book_id,
+                "page_start": ch.page_start,
+                "section_path": ch.section_path,
+            })
+
     day_buckets = []
     for offset in range(period_days - 1, -1, -1):
         day = (now - timedelta(days=offset)).date()
@@ -195,5 +215,6 @@ def get_weekly_summary(
         reviews_completed=reviews_completed,
         review_accuracy=review_accuracy,
         top_weak_topics=top_weak_topics,
+        weak_topic_pages=weak_topic_pages,
         daily_trend=daily_trend,
     )

@@ -5,7 +5,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 
-type AgentToolName = "read" | "write" | "search" | "web_search" | "quiz" | "flashcards" | "list_notes";
+type AgentToolName = "read" | "write" | "search" | "web_search" | "quiz" | "flashcards" | "summary" | "list_notes";
 
 type AgentStreamEvent = {
   type: "token" | "tool_start" | "tool_end" | "final" | "error";
@@ -65,25 +65,11 @@ type WebInsight = {
   items: Array<{ title: string; url: string; source: string }>;
 };
 
-type QuizInsight = {
-  kind: "quiz";
-  items: Array<{ question: string; answer: string }>;
-};
+type ToolInsight = SearchInsight | ReadInsight | WebInsight;
 
-type ListNotesInsight = {
-  kind: "list_notes";
-  items: Array<{ content: string; page: number | null; tags: string[] }>;
-};
+const OUTPUT_TOOLS: Set<string> = new Set(["summary", "quiz", "flashcards", "list_notes"]);
 
-type FlashcardsInsight = {
-  kind: "flashcards";
-  items: Array<{ front: string; back: string }>;
-  saved?: number;
-};
-
-type ToolInsight = SearchInsight | ReadInsight | WebInsight | QuizInsight | ListNotesInsight | FlashcardsInsight;
-
-const ALL_AGENT_TOOLS: AgentToolName[] = ["read", "search", "write", "web_search", "quiz", "flashcards", "list_notes"];
+const ALL_AGENT_TOOLS: AgentToolName[] = ["read", "search", "write", "web_search", "quiz", "flashcards", "summary", "list_notes"];
 
 const STORAGE_PREFIX = "smart-reader:agent-chat:v1";
 
@@ -500,64 +486,6 @@ export default function BookAgentChat({
       return items.length > 0 ? { kind: "web_search", items } : null;
     }
 
-    if (tool === "quiz") {
-      const rows = Array.isArray((observation as { questions?: unknown[] }).questions)
-        ? (observation as { questions: unknown[] }).questions
-        : [];
-      const items = rows
-        .map((row) => {
-          if (!row || typeof row !== "object") return null;
-          const rec = row as { question?: unknown; answer?: unknown };
-          if (typeof rec.question !== "string" || typeof rec.answer !== "string") return null;
-          return { question: rec.question, answer: rec.answer };
-        })
-        .filter((item): item is { question: string; answer: string } => Boolean(item))
-        .slice(0, 3);
-
-      return items.length > 0 ? { kind: "quiz", items } : null;
-    }
-
-    if (tool === "flashcards") {
-      const rows = Array.isArray((observation as { flashcards?: unknown[] }).flashcards)
-        ? (observation as { flashcards: unknown[] }).flashcards
-        : [];
-      const items = rows
-        .map((row) => {
-          if (!row || typeof row !== "object") return null;
-          const rec = row as { front?: unknown; back?: unknown };
-          if (typeof rec.front !== "string" || typeof rec.back !== "string") return null;
-          return { front: rec.front, back: rec.back };
-        })
-        .filter((item): item is { front: string; back: string } => Boolean(item))
-        .slice(0, 6);
-      const saved = typeof (observation as { saved?: number }).saved === "number"
-        ? (observation as { saved: number }).saved
-        : undefined;
-
-      return items.length > 0 ? { kind: "flashcards", items, saved } : null;
-    }
-
-    if (tool === "list_notes") {
-      const rows = Array.isArray((observation as { notes?: unknown[] }).notes)
-        ? (observation as { notes: unknown[] }).notes
-        : [];
-      const items = rows
-        .map((row) => {
-          if (!row || typeof row !== "object") return null;
-          const rec = row as { content?: unknown; page?: unknown; tags?: unknown };
-          if (typeof rec.content !== "string") return null;
-          return {
-            content: rec.content,
-            page: typeof rec.page === "number" ? rec.page : null,
-            tags: Array.isArray(rec.tags) ? rec.tags.filter((tag): tag is string => typeof tag === "string") : [],
-          };
-        })
-        .filter((item): item is { content: string; page: number | null; tags: string[] } => Boolean(item))
-        .slice(0, 6);
-
-      return items.length > 0 ? { kind: "list_notes", items } : null;
-    }
-
     return null;
   };
 
@@ -663,14 +591,16 @@ export default function BookAgentChat({
 
           if (eventPayload.type === "tool_end" && eventPayload.tool) {
             pushStep(assistantId, eventPayload.tool, "end");
-            const insight = buildInsight(eventPayload.tool, eventPayload.observation);
-            if (insight) {
+            if (!OUTPUT_TOOLS.has(eventPayload.tool)) {
+              const insight = buildInsight(eventPayload.tool, eventPayload.observation);
+              if (insight) {
               setInsights((prev) => [...prev, insight]);
               setChat((prev) =>
                 prev.map((item) =>
                   item.id === assistantId ? { ...item, insights: [...item.insights, insight] } : item,
                 ),
               );
+            }
             }
             continue;
           }
@@ -827,7 +757,7 @@ export default function BookAgentChat({
     const [open, setOpen] = useState(false);
     if (!insights || insights.length === 0) return null;
 
-    const totalItems = insights.reduce((sum, i) => sum + i.items.length, 0);
+    const totalItems = insights.reduce((sum, i) => sum + ("items" in i ? i.items.length : 1), 0);
 
     const btn = (
       <button
@@ -869,8 +799,8 @@ export default function BookAgentChat({
                               </span>
                               {item.page !== null && onJumpToPage && (
                                 <button type="button" onClick={() => onJumpToPage(item.page as number)} className="text-[11px] text-blue-600 hover:underline dark:text-blue-400">Go</button>
-                              )}
-                            </div>
+                  )}
+                </div>
                           </li>
                         ))}
                       </ul>
@@ -899,55 +829,6 @@ export default function BookAgentChat({
                           <li key={`web-${idx}-${itemIdx}`} className="rounded border border-gray-200 bg-white px-2 py-1 dark:border-gray-500 dark:bg-gray-800">
                             <a href={item.url} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline dark:text-blue-400">{item.title}</a>
                             <p className="text-[11px] text-gray-500 dark:text-gray-400">{item.source}</p>
-                          </li>
-                        ))}
-                      </ul>
-                    </>
-                  )}
-                  {insight.kind === "quiz" && (
-                    <>
-                      <p className="mb-1 font-semibold text-gray-600 dark:text-gray-300">Quiz preview</p>
-                      <ul className="space-y-1">
-                        {insight.items.map((item, itemIdx) => (
-                          <li key={`quiz-${idx}-${itemIdx}`} className="rounded border border-gray-200 bg-white px-2 py-1 dark:border-gray-500 dark:bg-gray-800">
-                            <p className="font-medium">Q: {item.question}</p>
-                            <p className="text-gray-600 dark:text-gray-400">A: {item.answer}</p>
-                          </li>
-                        ))}
-                      </ul>
-                    </>
-                  )}
-                  {insight.kind === "list_notes" && (
-                    <>
-                      <p className="mb-1 font-semibold text-gray-600 dark:text-gray-300">Notes list</p>
-                      <ul className="space-y-1">
-                        {insight.items.map((item, itemIdx) => (
-                          <li key={`notes-${idx}-${itemIdx}`} className="rounded border border-gray-200 bg-white px-2 py-1 dark:border-gray-500 dark:bg-gray-800">
-                            <p className="line-clamp-2">{item.content}</p>
-                            <div className="mt-1 flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400">
-                              {item.page !== null ? <span>Page {item.page}</span> : <span>No page</span>}
-                              {item.tags.map((tag) => (
-                                <span key={`${itemIdx}-${tag}`} className="rounded bg-blue-100 px-1 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">#{tag}</span>
-                              ))}
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    </>
-                  )}
-                  {insight.kind === "flashcards" && (
-                    <>
-                      <p className="mb-1 font-semibold text-gray-600 dark:text-gray-300">
-                        Flashcards
-                        {insight.saved != null && (
-                          <span className="ml-1 font-normal text-gray-400">({insight.saved} saved to Review)</span>
-                        )}
-                      </p>
-                      <ul className="space-y-1">
-                        {insight.items.map((item, itemIdx) => (
-                          <li key={`fc-${idx}-${itemIdx}`} className="rounded border border-gray-200 bg-white px-2 py-1 dark:border-gray-500 dark:bg-gray-800">
-                            <p className="text-xs font-medium text-gray-800 dark:text-gray-200">Q: {item.front}</p>
-                            <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">A: {item.back}</p>
                           </li>
                         ))}
                       </ul>

@@ -355,6 +355,19 @@ def rate_review_item(
     item.last_rating = rating
     item.due_at = datetime.now(timezone.utc) + timedelta(days=item.interval_days)
 
+    # Track weak topics: accumulate count when user struggles
+    if rating == "again" and card.tags:
+        from app.models import User
+        user_row = db.query(User).filter(User.id == user["id"]).first()
+        if user_row:
+            try:
+                counts = json.loads(user_row.weak_topics or "{}")
+            except (json.JSONDecodeError, TypeError):
+                counts = {}
+            for tag in [t.strip() for t in card.tags.split(",") if t.strip()]:
+                counts[tag] = counts.get(tag, 0) + 1
+            user_row.weak_topics = json.dumps(counts)
+
     db.commit()
     db.refresh(item)
 

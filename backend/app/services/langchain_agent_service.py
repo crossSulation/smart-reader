@@ -12,7 +12,7 @@ from app.services.retrieval_service import retrieve_hybrid
 from app.services.reranker_service import rerank_candidates
 from app.services.web_reference_service import fetch_web_references
 
-AGENT_ALL_TOOLS = ("read", "write", "search", "web_search", "quiz", "flashcards", "list_notes")
+AGENT_ALL_TOOLS = ("read", "write", "search", "web_search", "quiz", "flashcards", "list_notes", "summary")
 
 
 def _normalize_rank_scores(hits: list[tuple[int, float]]) -> list[tuple[int, float]]:
@@ -270,6 +270,12 @@ def _build_agent_executor(
         fc_payload = _run_flashcards_tool(book_id, user_id, topic or payload.message, payload.quiz_count, db)
         return json.dumps(fc_payload, ensure_ascii=False)
 
+    @tool("summary")
+    def summary_tool(topic: str = "", template: str = "bullet_points") -> str:
+        """Generate a structured summary from book content. Input: topic or section to summarize. template can be 'bullet_points', 'cornell', or 'sq3r'. Use bullet_points for quick overviews, cornell for study notes, sq3r for deep reading."""
+        sp = _run_summary_tool(book_id, user_id, topic, template, db)
+        return json.dumps(sp, ensure_ascii=False)
+
     @tool("list_notes")
     def list_notes_tool(_: str = "") -> str:
         """List recent notes for this book. Input can be empty."""
@@ -299,6 +305,7 @@ def _build_agent_executor(
         "web_search": web_search_tool,
         "quiz": quiz_tool,
         "flashcards": flashcards_tool,
+        "summary": summary_tool,
         "list_notes": list_notes_tool,
     }
 
@@ -313,6 +320,27 @@ def _build_agent_executor(
             " For markdown documents, call read or search before finalizing an answer so the response is grounded in the current document content."
         )
 
+    # Inject weak topics from review history
+    weak_topics_hint = ""
+    try:
+        from app.models import User as UserModel
+        user_row = db.query(UserModel).filter(UserModel.id == user_id).first()
+        if user_row and user_row.weak_topics:
+            import json as _json
+            try:
+                counts = _json.loads(user_row.weak_topics)
+                top = sorted(counts.items(), key=lambda x: -x[1])[:3]
+                if top:
+                    weak_topics_hint = (
+                        " The user has been struggling with these topics in review: "
+                        + ", ".join(f"{t} ({c}× missed)" for t, c in top)
+                        + ". Emphasize these when relevant."
+                    )
+            except (_json.JSONDecodeError, TypeError):
+                pass
+    except Exception:
+        pass
+
     prompt = ChatPromptTemplate.from_messages([
         (
             "system",
@@ -324,8 +352,8 @@ def _build_agent_executor(
             "4. Structure your response: (1) direct answer, (2) supporting evidence with page citations, (3) follow-up suggestions if relevant.\n"
             "5. Keep answers concise unless the user asks for more detail.\n"
             "6. For external references (definitions, concepts not in the book), use web_search.\n"
-            "7. Save notes/memories with write. Show existing notes with list_notes. Generate quizzes with quiz. Create flashcards with flashcards."
-            f"{markdown_instruction}",
+            "7. Save notes/memories with write. Show existing notes with list_notes. Generate quizzes with quiz. Create flashcards with flashcards. Create summaries with summary (bullet_points, cornell, sq3r)."
+            f"{markdown_instruction}{weak_topics_hint}",
         ),
         MessagesPlaceholder(variable_name="chat_history", optional=True),
         ("human", "{input}"),
@@ -601,6 +629,74 @@ def _run_flashcards_tool(book_id: int, user_id: int, prompt: str, count: int, db
     return {"flashcards": cards, "count": len(cards), "saved": saved_count}
 
 
+def _run_summary_tool(book_id: int, user_id: int, topic: str, template: str, db: Session) -> dict[str, Any]:
+    from app.services.llm_service import build_summary_prompt, complete_and_log
+    from app.config import get_settings as _get_settings
+
+    settings = _get_settings()
+    if topic.strip():
+        hits = _run_search_tool(book_id, topic, 10, db)
+        context = [item.text for item in hits[:10]]
+    else:
+        rows = (
+            db.query(DocumentChunk)
+            .filter(DocumentChunk.book_id == book_id)
+            .order_by(DocumentChunk.chunk_index)
+            .limit(20)
+            .all()
+        )
+        context = [r.text for r in rows]
+
+    if not context:
+        return {"summary": "No content found to summarize.", "template": template or "bullet_points"}
+
+    book_title = db.query(Book).filter(Book.id == book_id).first().title if db.query(Book).filter(Book.id == book_id).first() else "Book"
+    normalized = (template or "bullet_points").lower().strip()
+    if normalized not in {"cornell", "bullet_points", "sq3r"}:
+        normalized = "bullet_points"
+
+    system, user_prompt = build_summary_prompt(context, book_title, template=normalized)
+    raw = complete_and_log(user_prompt, system, settings, db, user_id, "summary")
+
+    # Parse and format summary as readable text
+    try:
+        import re, json as _json
+        text = raw.strip()
+        m = re.search(r'\{[\s\S]*\}', text)
+        payload = _json.loads(m.group(0)) if m else _json.loads(text)
+    except Exception:
+        return {"summary": raw, "template": normalized, "chunks_used": len(context)}
+
+    lines: list[str] = []
+    if normalized == "bullet_points":
+        for sec in payload.get("sections", []):
+            heading = sec.get("heading", "")
+            if heading:
+                lines.append(f"## {heading}")
+            for b in sec.get("bullets", []):
+                lines.append(f"- {b}")
+    elif normalized == "cornell":
+        lines.append("### Cue Questions")
+        for q in payload.get("cue_questions", []):
+            lines.append(f"- {q}")
+        lines.append("### Notes")
+        for n in payload.get("notes", []):
+            lines.append(f"- {n}")
+        lines.append("### Summary")
+        for s in payload.get("summary", []):
+            lines.append(f"- {s}")
+    elif normalized == "sq3r":
+        for key, label in [("survey", "Survey"), ("question", "Question"), ("read", "Read"), ("recite", "Recite"), ("review", "Review")]:
+            items = payload.get(key, [])
+            if items:
+                lines.append(f"### {label}")
+                for item in items:
+                    lines.append(f"- {item}")
+
+    formatted = "\n\n".join(lines) if lines else raw
+    return {"summary": formatted, "template": normalized, "chunks_used": len(context)}
+
+
 def run_langchain_book_agent(book_id: int, user_id: int, payload: AgentRequest, db: Session) -> dict[str, Any]:
     """Run a LangChain tool-calling agent over book tools."""
     try:
@@ -627,6 +723,17 @@ def run_langchain_book_agent(book_id: int, user_id: int, payload: AgentRequest, 
         )
 
     output = result.get("output", "")
+
+    # Merge output-tool results into the conversation text
+    output_blocks: list[str] = []
+    for item in trace:
+        if item["tool"] in OUTPUT_TOOLS:
+            block = _format_tool_output_for_chat(item["tool"], item.get("observation", ""))
+            if block:
+                output_blocks.append(block)
+    if output_blocks:
+        output = "\n\n---\n\n".join(output_blocks + ([output] if output else []))
+
     _store_agent_turn(
         book_id=book_id,
         user_id=user_id,
@@ -644,6 +751,59 @@ def run_langchain_book_agent(book_id: int, user_id: int, payload: AgentRequest, 
         "allowed_tools": allowed_tools,
         "provider": provider_label,
     }
+
+
+OUTPUT_TOOLS = {"summary", "quiz", "flashcards", "list_notes"}
+
+
+def _format_tool_output_for_chat(tool_name: str, observation: str) -> str:
+    """Convert a tool's JSON observation into a readable conversation block."""
+    try:
+        data = json.loads(observation) if isinstance(observation, str) else observation
+    except (json.JSONDecodeError, TypeError):
+        return ""
+
+    lines: list[str] = []
+
+    if tool_name == "summary":
+        if isinstance(data, dict) and data.get("summary"):
+            tpl = data.get("template", "summary")
+            lines.append(f"**[{tpl.upper()} Summary]**\n{data['summary']}")
+
+    elif tool_name == "quiz":
+        questions = data.get("questions", []) if isinstance(data, dict) else []
+        if questions:
+            lines.append("**Quiz Questions**")
+            for i, q in enumerate(questions, 1):
+                lines.append(f"{i}. Q: {q.get('question', '?')}")
+                lines.append(f"   A: {q.get('answer', '?')}")
+
+    elif tool_name == "flashcards":
+        cards = data.get("flashcards", []) if isinstance(data, dict) else []
+        saved = data.get("saved", 0) if isinstance(data, dict) else 0
+        if cards:
+            if saved > 0:
+                lines.append(f"**Flashcards** ({saved} saved to Review)")
+            else:
+                lines.append("**Flashcards**")
+            for i, c in enumerate(cards[:6], 1):
+                lines.append(f"{i}. Q: {c.get('front', '?')}")
+                lines.append(f"   A: {c.get('back', '?')}")
+
+    elif tool_name == "list_notes":
+        notes = data.get("notes", []) if isinstance(data, dict) else []
+        if notes:
+            lines.append(f"**Notes** ({len(notes)} found)")
+            for n in notes[:5]:
+                page = n.get("page")
+                tag_text = " ".join(f"#{t}" for t in n.get("tags", [])[:3])
+                lines.append(f"- {n.get('content', '')[:120]}  ")
+                if page is not None:
+                    lines[-1] += f"(p.{page})"
+                if tag_text:
+                    lines[-1] += f" {tag_text}"
+
+    return "\n\n".join(lines)
 
 
 async def stream_langchain_book_agent(
@@ -718,6 +878,18 @@ async def stream_langchain_book_agent(
 
     if not final_output:
         final_output = "".join(token_buffer).strip()
+
+    # Merge output-tool results into the conversation text
+    output_blocks: list[str] = []
+    for item in trace:
+        if item["tool"] in OUTPUT_TOOLS:
+            observation = item.get("observation", "")
+            if isinstance(observation, str) and observation:
+                block = _format_tool_output_for_chat(item["tool"], observation)
+                if block:
+                    output_blocks.append(block)
+    if output_blocks:
+        final_output = "\n\n---\n\n".join(output_blocks + ([final_output] if final_output else []))
 
     _store_agent_turn(
         book_id=book_id,

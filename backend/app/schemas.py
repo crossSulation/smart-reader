@@ -350,6 +350,7 @@ class WeeklySummaryResponse(BaseModel):
     reviews_completed: int
     review_accuracy: float
     top_weak_topics: List[str] = []
+    weak_topic_pages: List[dict] = []
     daily_trend: List[WeeklyTrendPoint] = []
 
 
