@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { GraphData, GraphNode } from "../types/KnowledgeGraph";
-import { useTranslation } from "react-i18next";
+
 interface PositionedNode extends GraphNode {
   x: number;
   y: number;
@@ -24,11 +24,11 @@ const ENTITY_COLORS: Record<string, string> = {
 };
 
 const RELATION_LABELS: Record<string, string> = {
-  related_to: "knowledge.related",
-  prerequisite_of: "knowledge.prerequisite",
-  derived_from: "knowledge.derived",
-  contradicts: "knowledge.contradicts",
-  extends: "knowledge.extends",
+  related_to: "related",
+  prerequisite_of: "prerequisite",
+  derived_from: "derived",
+  contradicts: "contradicts",
+  extends: "extends",
 };
 
 export default function KnowledgeGraphCanvas({
@@ -38,14 +38,26 @@ export default function KnowledgeGraphCanvas({
   onNodeClick,
   onNodeDblClick,
 }: Props) {
-  const svgRef = useRef<SVGSVGElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef<number>(0);
   const nodesRef = useRef<Map<number, PositionedNode>>(new Map());
+  const worldRef = useRef({ w: 800, h: 560 });
   const [nodes, setNodes] = useState<PositionedNode[]>([]);
-  const { t } = useTranslation();
-  const initPositions = useCallback((graphData: GraphData) => {
-    const cx = 400;
-    const cy = 300;
+  const [isDark, setIsDark] = useState(() =>
+    typeof document !== "undefined" && document.documentElement.classList.contains("dark")
+  );
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
+
+  const initPositions = useCallback((graphData: GraphData, w: number, h: number) => {
+    const cx = w / 2;
+    const cy = h / 2;
     const radius = Math.min(cx, cy) - 80;
     const step = (2 * Math.PI) / Math.max(graphData.nodes.length, 1);
     return graphData.nodes.map((n, i) => ({
@@ -59,12 +71,134 @@ export default function KnowledgeGraphCanvas({
 
   useEffect(() => {
     if (!data) return;
-    const positioned = initPositions(data);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const w = Math.max(400, rect.width);
+    const h = Math.max(300, rect.height);
+    worldRef.current = { w, h };
+    const positioned = initPositions(data, w, h);
     setNodes(positioned);
     const map = new Map<number, PositionedNode>();
     positioned.forEach((n) => map.set(n.id, n));
     nodesRef.current = map;
   }, [data, initPositions]);
+
+  // ── Canvas drawing ──────────────────────────────────────────
+
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !data) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const w = rect.width * dpr;
+    const h = rect.height * dpr;
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+
+    // Background
+    const { w: worldW, h: worldH } = worldRef.current;
+    const grad = ctx.createRadialGradient(worldW / 2, worldH / 2, 0, worldW / 2, worldH / 2, Math.max(worldW, worldH));
+    grad.addColorStop(0, isDark ? "#1e293b" : "#f8fafc");
+    grad.addColorStop(1, isDark ? "#0f172a" : "#e2e8f0");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, rect.width, rect.height);
+
+    const arr = Array.from(nodesRef.current.values());
+    const maxLinks = Math.max(1, ...arr.map((n) => n.link_count));
+    const nodeR = (n: PositionedNode) => 8 + (n.link_count / maxLinks) * 18;
+
+    // ── Draw edges ──
+    ctx.lineCap = "round";
+    data.edges.forEach((e) => {
+      const s = nodesRef.current.get(e.source);
+      const t = nodesRef.current.get(e.target);
+      if (!s || !t) return;
+
+      const dx = t.x - s.x;
+      const dy = t.y - s.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist === 0) return;
+
+      const sr = nodeR(s);
+      const tr = nodeR(t);
+      const sx = s.x + (dx / dist) * sr;
+      const sy = s.y + (dy / dist) * sr;
+      const tx = t.x - (dx / dist) * tr;
+      const ty = t.y - (dy / dist) * tr;
+
+      const color = e.weight > 0.6
+        ? (isDark ? "#94a3b8" : "#64748b")
+        : (isDark ? "#475569" : "#cbd5e1");
+      ctx.strokeStyle = color;
+      ctx.lineWidth = Math.max(1, e.weight * 3);
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+
+      // Arrowhead
+      const angle = Math.atan2(dy, dx);
+      const headLen = 8;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(tx, ty);
+      ctx.lineTo(
+        tx - headLen * Math.cos(angle - Math.PI / 6),
+        ty - headLen * Math.sin(angle - Math.PI / 6),
+      );
+      ctx.lineTo(
+        tx - headLen * Math.cos(angle + Math.PI / 6),
+        ty - headLen * Math.sin(angle + Math.PI / 6),
+      );
+      ctx.closePath();
+      ctx.fill();
+
+      // Edge label
+      const mx = (sx + tx) / 2;
+      const my = (sy + ty) / 2 - 6;
+      ctx.font = "9px system-ui";
+      ctx.fillStyle = isDark ? "#64748b" : "#94a3b8";
+      ctx.textAlign = "center";
+      const relLabel = RELATION_LABELS[e.relation_type] || e.relation_type;
+      ctx.fillText(relLabel, mx, my);
+    });
+
+    // ── Draw nodes ──
+    arr.forEach((n) => {
+      const r = nodeR(n);
+      const isSel = n.id === selectedNodeId;
+
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = ENTITY_COLORS[n.entity_type] || "#94a3b8";
+      ctx.globalAlpha = isSel ? 1 : 0.85;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = isSel ? (isDark ? "#e2e8f0" : "#1e293b") : (isDark ? "#334155" : "#fff");
+      ctx.lineWidth = isSel ? 3 : 1.5;
+      ctx.stroke();
+
+      // Label
+      const label = n.label.length > 14 ? n.label.slice(0, 13) + "\u2026" : n.label;
+      ctx.font = isSel ? "bold 11px system-ui" : "11px system-ui";
+      ctx.fillStyle = isSel
+        ? (isDark ? "#e2e8f0" : "#1e293b")
+        : (isDark ? "#94a3b8" : "#475569");
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.fillText(label, n.x, n.y + r + 4);
+    });
+  }, [data, selectedNodeId, isDark]);
+
+  // ── Force simulation + canvas render loop ────────────────
 
   useEffect(() => {
     if (nodes.length === 0 || !data) return;
@@ -78,12 +212,15 @@ export default function KnowledgeGraphCanvas({
     });
 
     let running = true;
+    let frameCount = 0;
+
     const tick = () => {
       if (!running) return;
       const current = new Map(nodesRef.current);
       const arr = Array.from(current.values());
       const maxLinks = Math.max(1, ...arr.map((n) => n.link_count));
 
+      // Repulsion
       for (let i = 0; i < arr.length; i++) {
         for (let j = i + 1; j < arr.length; j++) {
           const dx = arr[j].x - arr[i].x;
@@ -96,57 +233,57 @@ export default function KnowledgeGraphCanvas({
             const force = (minDist - dist) * 0.5;
             const fx = (dx / dist) * force;
             const fy = (dy / dist) * force;
-            arr[i].vx -= fx;
-            arr[i].vy -= fy;
-            arr[j].vx += fx;
-            arr[j].vy += fy;
+            arr[i].vx -= fx; arr[i].vy -= fy;
+            arr[j].vx += fx; arr[j].vy += fy;
           } else {
             const force = 600 / (dist * dist);
             const fx = (dx / dist) * force;
             const fy = (dy / dist) * force;
-            arr[i].vx -= fx;
-            arr[i].vy -= fy;
-            arr[j].vx += fx;
-            arr[j].vy += fy;
+            arr[i].vx -= fx; arr[i].vy -= fy;
+            arr[j].vx += fx; arr[j].vy += fy;
           }
         }
       }
 
+      // Spring
       data.edges.forEach((e) => {
         const s = current.get(e.source);
-        const targetNode = current.get(e.target);
-        if (!s || !targetNode) return;
-        const dx = targetNode.x - s.x;
-        const dy = targetNode.y - s.y;
+        const t = current.get(e.target);
+        if (!s || !t) return;
+        const dx = t.x - s.x;
+        const dy = t.y - s.y;
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
         const force = (dist - 180) * 0.003;
         const fx = (dx / dist) * force;
         const fy = (dy / dist) * force;
-        s.vx += fx;
-        s.vy += fy;
-        targetNode.vx -= fx;
-        targetNode.vy -= fy;
+        s.vx += fx; s.vy += fy;
+        t.vx -= fx; t.vy -= fy;
       });
 
-      const cx = 400;
-      const cy = 280;
+      // Center gravity + dampen + clamp
+      const { w: ww, h: wh } = worldRef.current;
       arr.forEach((n) => {
         const ri = 8 + (n.link_count / Math.max(maxLinks, 1)) * 18;
         const margin = ri + 20;
-        const dx = cx - n.x;
-        const dy = cy - n.y;
-        n.vx += dx * 0.001;
-        n.vy += dy * 0.001;
+        n.vx += (ww / 2 - n.x) * 0.001;
+        n.vy += (wh / 2 - n.y) * 0.001;
         n.vx *= 0.85;
         n.vy *= 0.85;
         n.x += n.vx;
         n.y += n.vy;
-        n.x = Math.max(margin, Math.min(800 - margin, n.x));
-        n.y = Math.max(margin, Math.min(560 - margin, n.y));
+        n.x = Math.max(margin, Math.min(ww - margin, n.x));
+        n.y = Math.max(margin, Math.min(wh - margin, n.y));
       });
 
       nodesRef.current = current;
-      setNodes([...arr]);
+
+      // Throttle React state updates to every 3 frames for performance
+      if (frameCount % 3 === 0) {
+        setNodes([...arr]);
+      }
+      frameCount++;
+
+      draw();
       animRef.current = requestAnimationFrame(tick);
     };
 
@@ -155,12 +292,86 @@ export default function KnowledgeGraphCanvas({
       running = false;
       cancelAnimationFrame(animRef.current);
     };
-  }, [nodes.length, data]);
+  }, [nodes.length, data, draw]);
+
+  // ── Canvas resize ───────────────────────────────────────────
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const parent = canvas.parentElement;
+    if (!parent) return;
+
+    const resize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const w = parent.clientWidth;
+      const h = parent.clientHeight;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      if (w > 0 && h > 0) {
+        worldRef.current = { w, h };
+      }
+      draw();
+    };
+
+    const observer = new ResizeObserver(resize);
+    observer.observe(parent);
+    window.addEventListener("resize", resize);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", resize);
+    };
+  }, [draw]);
+
+  // ── Click / double-click detection ────────────────────────────
+
+  const lastClickRef = useRef<{ time: number; nodeId: number | null }>({ time: 0, nodeId: null });
+
+  const handleMouseEvent = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const { w: ww, h: wh } = worldRef.current;
+    const mx = (e.clientX - rect.left) * (ww / rect.width);
+    const my = (e.clientY - rect.top) * (wh / rect.height);
+
+    const arr = Array.from(nodesRef.current.values());
+    const maxLinks = Math.max(1, ...arr.map((n) => n.link_count));
+    const nodeR = (n: PositionedNode) => 8 + (n.link_count / maxLinks) * 18;
+
+    // Find hit node (topmost by rendering order)
+    let hitId: number | null = null;
+    for (const n of arr) {
+      const r = nodeR(n);
+      const dx = mx - n.x;
+      const dy = my - n.y;
+      if (Math.sqrt(dx * dx + dy * dy) <= r + 4) {
+        hitId = n.id;
+        break;
+      }
+    }
+
+    if (hitId !== null) {
+      const now = Date.now();
+      if (now - lastClickRef.current.time < 300 && lastClickRef.current.nodeId === hitId) {
+        onNodeDblClick(hitId);
+        lastClickRef.current = { time: 0, nodeId: null };
+      } else {
+        onNodeClick(hitId);
+        lastClickRef.current = { time: now, nodeId: hitId };
+        setTimeout(() => {
+          if (lastClickRef.current.time === now) {
+            lastClickRef.current = { time: 0, nodeId: null };
+          }
+        }, 300);
+      }
+    }
+  }, [onNodeClick, onNodeDblClick]);
 
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center text-gray-400 dark:text-gray-500">
-        {t("knowledge.loading", "Loading...")}
+        Loading...
       </div>
     );
   }
@@ -168,92 +379,17 @@ export default function KnowledgeGraphCanvas({
   if (!data || data.nodes.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-gray-400 dark:text-gray-500">
-        {t("knowledge.noKnowledgePoints", "No knowledge points yet. Index a book to get started.")}
+        No knowledge points yet. Index a book to get started.
       </div>
     );
   }
 
-  const maxLinks = Math.max(1, ...nodes.map((n) => n.link_count));
-  const nodeRadius = (n: PositionedNode) => 8 + (n.link_count / Math.max(maxLinks, 1)) * 18;
-
   return (
-    <svg
-      ref={svgRef}
-      viewBox="0 0 800 560"
-      className="h-full w-full"
-      style={{ background: "radial-gradient(circle, #f8fafc 0%, #e2e8f0 100%)" }}
-    >
-      <defs>
-        {data.edges.map((e) => (
-          <marker
-            key={e.id}
-            id={`arrow-${e.id}`}
-            viewBox="0 0 10 10"
-            refX={8}
-            refY={5}
-            markerWidth={6}
-            markerHeight={6}
-            orient="auto-start-reverse"
-          >
-            <path d="M 0 0 L 10 5 L 0 10 z" fill={e.weight > 0.6 ? "#94a3b8" : "#cbd5e1"} />
-          </marker>
-        ))}
-      </defs>
-
-      {data.edges.map((e) => {
-        const s = nodes.find((n) => n.id === e.source);
-        const targetNode = nodes.find((n) => n.id === e.target);
-        if (!s || !targetNode) return null;
-        const mx = (s.x + targetNode.x) / 2;
-        const my = (s.y + targetNode.y) / 2;
-        const relationLabelLangKey = RELATION_LABELS[e.relation_type] || e.relation_type;
-        return (
-          <g key={e.id}>
-            <line
-              x1={s.x} y1={s.y} x2={targetNode.x} y2={targetNode.y}
-              stroke={e.weight > 0.6 ? "#94a3b8" : "#cbd5e1"}
-              strokeWidth={Math.max(1, e.weight * 3)}
-              markerEnd={`url(#arrow-${e.id})`}
-            />
-            <text
-              x={mx} y={my - 4}
-              textAnchor="middle"
-              className="fill-gray-400 text-[9px] select-none pointer-events-none"
-            >
-              {t(relationLabelLangKey)}
-            </text>
-          </g>
-        );
-      })}
-
-      {nodes.map((n) => {
-        const r = nodeRadius(n);
-        const isSelected = n.id === selectedNodeId;
-        return (
-          <g
-            key={n.id}
-            onClick={() => onNodeClick(n.id)}
-            onDoubleClick={() => onNodeDblClick(n.id)}
-            className="cursor-pointer"
-          >
-            <circle
-              cx={n.x} cy={n.y} r={r}
-              fill={ENTITY_COLORS[n.entity_type] || "#94a3b8"}
-              stroke={isSelected ? "#1e293b" : "#fff"}
-              strokeWidth={isSelected ? 3 : 1.5}
-              opacity={isSelected ? 1 : 0.85}
-              className="transition-all duration-150"
-            />
-            <text
-              x={n.x} y={n.y + r + 13}
-              textAnchor="middle"
-              className={`select-none text-[11px] ${isSelected ? "fill-gray-900 font-semibold" : "fill-gray-600"} pointer-events-none`}
-            >
-              {n.label.length > 14 ? n.label.slice(0, 13) + "\u2026" : n.label}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
+    <canvas
+      ref={canvasRef}
+      onClick={handleMouseEvent}
+      className="h-full w-full cursor-pointer"
+      style={{ touchAction: "none" }}
+    />
   );
 }
