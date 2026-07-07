@@ -13,24 +13,24 @@ from app.services.llm_service import complete_and_log
 from app.config import get_settings
 
 
-RELATION_SYSTEM = """You are a knowledge graph linker. Given two knowledge points from different contexts, determine if they have a meaningful semantic relationship.
+RELATION_SYSTEM = """You are a knowledge graph linker. Given a list of knowledge point pairs, determine which have meaningful semantic relationships.
 
-For each pair, return a JSON object with:
-- related: true/false
-- relation_type: one of "related_to", "prerequisite_of", "derived_from", "contradicts", "extends" (only if related=true)
-- confidence: 0.0 to 1.0
-- explanation: one short sentence
+For each pair, analyze whether the two knowledge points are related. Return a JSON array of results, one per pair.
 
-Input format: {"source": "Label1", "target": "Label2", "source_desc": "description1", "target_desc": "description2"}
+Input format: {"pairs": [{"id": 0, "source": "Label1", "target": "Label2", "source_desc": "desc1", "target_desc": "desc2"}, ...]}
 
-Return ONLY a JSON object. Example:
-{"related": true, "relation_type": "prerequisite_of", "confidence": 0.85, "explanation": "Understanding X is required before grasping Y"}
+Return: {"results": [{"id": 0, "related": true/false, "relation_type": "related_to|prerequisite_of|derived_from|contradicts|extends", "confidence": 0.0-1.0}, ...]}
 
-If no relationship exists, return {"related": false, "confidence": 0.0}
+Only include pairs where related=true (skip unrelated pairs). If no pairs are related, return {"results": []}.
+
+Example: {"results": [{"id": 0, "related": true, "relation_type": "prerequisite_of", "confidence": 0.85}, {"id": 2, "related": true, "relation_type": "extends", "confidence": 0.65}]}
 """
+
+BATCH_SIZE = 25  # pairs per LLM call to stay within token limits
 
 
 def _parse_llm_relation_json(raw: str) -> dict:
+    """Parse a single-pair response (kept for compatibility)."""
     if not raw:
         return {"related": False, "confidence": 0.0}
     cleaned = raw.strip()
@@ -41,6 +41,25 @@ def _parse_llm_relation_json(raw: str) -> dict:
         return json.loads(cleaned)
     except json.JSONDecodeError:
         return {"related": False, "confidence": 0.0}
+
+
+def _parse_batch_result(raw: str) -> list[dict]:
+    """Parse batch LLM response: extract JSON array of results."""
+    if not raw:
+        return []
+    cleaned = raw.strip()
+    m = re.search(r'\[[\s\S]*\]', cleaned)
+    if not m:
+        return []
+    try:
+        data = json.loads(m.group(0))
+    except json.JSONDecodeError:
+        return []
+    if isinstance(data, dict) and "results" in data:
+        return data["results"]
+    if isinstance(data, list):
+        return data
+    return []
 
 
 def _cosine_similarity(a: List[float], b: List[float]) -> float:
@@ -114,28 +133,51 @@ def infer_relationships(
     pairs.sort(key=lambda x: -x[2])
     pairs = pairs[:max_pairs]
 
+    if not pairs:
+        return 0
+
+    settings = get_settings()
     count = 0
-    for src_kp, tgt_kp, sim in pairs:
-        prompt = json.dumps({
-            "source": src_kp.label,
-            "target": tgt_kp.label,
-            "source_desc": src_kp.description or "",
-            "target_desc": tgt_kp.description or "",
-        })
-        settings = get_settings()
+
+    # Batch LLM calls: send up to BATCH_SIZE pairs per call
+    for batch_start in range(0, len(pairs), BATCH_SIZE):
+        batch = pairs[batch_start:batch_start + BATCH_SIZE]
+        batch_payload = {
+            "pairs": [
+                {
+                    "id": i,
+                    "source": src.label,
+                    "target": tgt.label,
+                    "source_desc": src.description or "",
+                    "target_desc": tgt.description or "",
+                }
+                for i, (src, tgt, _) in enumerate(batch)
+            ]
+        }
+        prompt = json.dumps(batch_payload)
         raw = complete_and_log(prompt, RELATION_SYSTEM, settings, db, user_id, "knowledge_extraction")
-        result = _parse_llm_relation_json(raw)
+        results = _parse_batch_result(raw)
 
-        related = result.get("related", False)
-        confidence = result.get("confidence", 0.0)
-        combined = max(confidence, sim * 0.3)
+        # Map results back to pairs
+        result_map: dict[int, dict] = {}
+        for r in results:
+            rid = r.get("id")
+            if isinstance(rid, int) and 0 <= rid < len(batch):
+                result_map[rid] = r
 
-        if related and combined >= min_confidence:
+        for i, (src_kp, tgt_kp, _) in enumerate(batch):
+            result = result_map.get(i, {})
+            related = result.get("related", False)
+            confidence = result.get("confidence", 0.0)
+
+            if not related or confidence < min_confidence:
+                continue
+
             link = KnowledgeLink(
                 source_kp_id=src_kp.id,
                 target_kp_id=tgt_kp.id,
                 relation_type=result.get("relation_type", "related_to"),
-                weight=round(combined, 2),
+                weight=round(confidence, 2),
                 evidence_chunk_ids=json.dumps([]),
             )
             db.add(link)
