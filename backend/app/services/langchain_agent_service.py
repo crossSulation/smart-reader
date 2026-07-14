@@ -130,7 +130,7 @@ def _store_agent_turn(
     output: str,
     provider: str,
     db: Session,
-) -> None:
+) -> int:
     record = AIInteraction(
         user_id=user_id,
         book_id=book_id,
@@ -142,6 +142,7 @@ def _store_agent_turn(
     )
     db.add(record)
     db.commit()
+    return record.id
 
 
 def _build_agent_executor(
@@ -197,7 +198,7 @@ def _build_agent_executor(
         cache_key = f"search:{query}"
         if cache_key in _cache:
             return _cache[cache_key]
-        hits = _run_search_tool(book_id, query, payload.top_k, db)
+        hits = _run_search_tool(book_id, query, payload.top_k, db, current_page=payload.current_page)
         result = json.dumps(
             {"results": [item.model_dump() for item in hits], "count": len(hits)},
             ensure_ascii=False,
@@ -347,7 +348,7 @@ def _build_agent_executor(
             "You are a precise reading assistant powered by the user's book content.\n\n"
             "Rules:\n"
             "1. Always cite source page numbers when quoting or referencing book content.\n"
-            "2. Use the read tool first to understand the user's current page context, then search to find related concepts across the book.\n"
+            "2. Call read and search together in parallel when both are needed — this saves time and gives you complete context immediately.\n"
             "3. If the book does NOT contain enough evidence to answer, say so clearly. Never fabricate.\n"
             "4. Structure your response: (1) direct answer, (2) supporting evidence with page citations, (3) follow-up suggestions if relevant.\n"
             "5. Keep answers concise unless the user asks for more detail.\n"
@@ -374,7 +375,13 @@ def _build_agent_executor(
     return executor, history, provider_label, allowed_tools
 
 
-def _run_search_tool(book_id: int, query: str, top_k: int, db: Session) -> list[SearchResult]:
+def _run_search_tool(
+    book_id: int,
+    query: str,
+    top_k: int,
+    db: Session,
+    current_page: int | None = None,
+) -> list[SearchResult]:
     settings = get_settings()
     rows = (
         db.query(DocumentChunk)
@@ -392,7 +399,7 @@ def _run_search_tool(book_id: int, query: str, top_k: int, db: Session) -> list[
         book_id=book_id,
         query=query,
         query_vector=query_vec,
-        top_k=max(1, min(top_k, 20)) * 2,
+        top_k=max(1, min(top_k, 20)) * 3,  # fetch more for re-ranking + proximity
         chunks=chunk_data,
     )
 
@@ -407,11 +414,25 @@ def _run_search_tool(book_id: int, query: str, top_k: int, db: Session) -> list[
         reranked = rerank_candidates(
             query=query,
             candidates=candidates_for_rerank,
-            top_k=max(1, min(top_k, 20)),
+            top_k=max(1, min(top_k, 20)) * 2,
         )
         top_hits_final = reranked
     except Exception:
         top_hits_final = [(cid, score) for cid, _, score in candidates_for_rerank[:top_k]]
+
+    # Proximity boost: favor chunks near the user's current page
+    if current_page is not None:
+        boosted = []
+        for cid, score in top_hits_final:
+            chunk = chunk_map.get(cid)
+            if chunk and chunk.page_start is not None:
+                page_diff = abs(chunk.page_start - current_page)
+                proximity = 1.0 / (1.0 + page_diff / 10.0)  # 0 pages = 1.0, 10 pages = 0.5, 100 pages = 0.09
+                boosted.append((cid, score * 0.65 + proximity * 0.35))
+            else:
+                boosted.append((cid, score))
+        boosted.sort(key=lambda x: -x[1])
+        top_hits_final = boosted[:top_k]
 
     normalized_hits = _normalize_rank_scores(top_hits_final)
     return [
@@ -734,7 +755,7 @@ def run_langchain_book_agent(book_id: int, user_id: int, payload: AgentRequest, 
     if output_blocks:
         output = "\n\n---\n\n".join(output_blocks + ([output] if output else []))
 
-    _store_agent_turn(
+    interaction_id = _store_agent_turn(
         book_id=book_id,
         user_id=user_id,
         session_id=session_id,
@@ -746,6 +767,7 @@ def run_langchain_book_agent(book_id: int, user_id: int, payload: AgentRequest, 
 
     return {
         "output": output,
+        "interaction_id": interaction_id,
         "trace": trace,
         "session_id": session_id,
         "allowed_tools": allowed_tools,
@@ -891,7 +913,7 @@ async def stream_langchain_book_agent(
     if output_blocks:
         final_output = "\n\n---\n\n".join(output_blocks + ([final_output] if final_output else []))
 
-    _store_agent_turn(
+    interaction_id = _store_agent_turn(
         book_id=book_id,
         user_id=user_id,
         session_id=session_id,
@@ -914,6 +936,7 @@ async def stream_langchain_book_agent(
             model="",
             prompt_tokens=max(1, estimated_prompt),
             completion_tokens=max(1, estimated_completion),
+            interaction_id=interaction_id,
         )
     except ValueError:
         pass
@@ -924,8 +947,8 @@ async def stream_langchain_book_agent(
     yield {
         "type": "final",
         "output": final_output,
-        "trace": trace,
         "session_id": session_id,
+        "interaction_id": interaction_id,
         "allowed_tools": allowed_tools,
         "provider": provider_label,
     }

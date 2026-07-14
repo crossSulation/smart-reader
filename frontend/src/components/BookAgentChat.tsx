@@ -16,14 +16,17 @@ type AgentStreamEvent = {
   session_id?: string;
   allowed_tools?: AgentToolName[];
   message?: string;
+  interaction_id?: number;
 };
 
 type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
-  agentSteps: AgentStep[]; // save the agent steps at the time of this message
-  insights: ToolInsight[]; // save the insights at the time of this message
+  agentSteps: AgentStep[];
+  insights: ToolInsight[];
+  interaction_id?: number;
+  feedback?: "up" | "down";
 };
 
 type BookAgentChatProps = {
@@ -239,6 +242,25 @@ export default function BookAgentChat({
     () => selectedExcerpt.trim().replace(/\s+/g, " ").slice(0, 400),
     [selectedExcerpt],
   );
+
+  const handleFeedback = async (msg: ChatMessage, fb: "up" | "down") => {
+    if (!msg.interaction_id) return;
+    try {
+      await fetch(`/api/books/${bookId}/feedback/${msg.interaction_id}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({ feedback: fb }),
+      });
+      setChat((prev) =>
+        prev.map((item) =>
+          item.id === msg.id ? { ...item, feedback: item.feedback === fb ? undefined : fb } : item,
+        ),
+      );
+    } catch { /* ignore */ }
+  };
 
   const quickPrompts = useMemo(() => QUICK_PROMPTS[fileType] || QUICK_PROMPTS.pdf, [fileType]);
   const selectedNoteSnippet = useMemo(() => {
@@ -609,6 +631,13 @@ export default function BookAgentChat({
             if (eventPayload.session_id) {
               setSessionId(eventPayload.session_id);
             }
+            if (eventPayload.interaction_id) {
+              setChat((prev) =>
+                prev.map((item) =>
+                  item.id === assistantId ? { ...item, interaction_id: eventPayload.interaction_id } : item,
+                ),
+              );
+            }
             if (Array.isArray(eventPayload.allowed_tools) && eventPayload.allowed_tools.length > 0) {
               setAllowedTools(eventPayload.allowed_tools);
             }
@@ -970,6 +999,36 @@ export default function BookAgentChat({
                     >
                       {savingNoteIds.has(item.id) ? "Saving..." : "+ Save as note"}
                     </button>
+                  )}
+                  {item.role === "assistant" && item.interaction_id && (
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFeedback(item, "up");
+                        }}
+                        className={`text-[10px] ${item.feedback === "up"
+                          ? "text-green-600"
+                          : "text-gray-400 hover:text-green-600 dark:text-gray-500 dark:hover:text-green-400"}`}
+                        title="Helpful"
+                      >
+                        👍
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFeedback(item, "down");
+                        }}
+                        className={`text-[10px] ${item.feedback === "down"
+                          ? "text-red-500"
+                          : "text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400"}`}
+                        title="Not helpful"
+                      >
+                        👎
+                      </button>
+                    </div>
                   )}
                 </div>
               ) : (

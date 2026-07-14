@@ -97,6 +97,7 @@ class AIInteraction(Base):
     response = Column(Text, nullable=False)
     provider = Column(String, nullable=True)            # llm provider used
     chunks_used = Column(Integer, nullable=True)
+    feedback = Column(String, nullable=True)            # "up" | "down" | None
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     citations = relationship("AICitation", back_populates="interaction", cascade="all, delete-orphan")
 
