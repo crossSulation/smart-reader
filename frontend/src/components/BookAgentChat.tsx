@@ -72,6 +72,17 @@ type ToolInsight = SearchInsight | ReadInsight | WebInsight;
 
 const OUTPUT_TOOLS: Set<string> = new Set(["summary", "quiz", "flashcards", "list_notes"]);
 
+const TOOL_LABELS: Record<AgentToolName, string> = {
+  read: "Read page",
+  search: "Search book",
+  write: "Save note",
+  web_search: "Web",
+  quiz: "Quiz",
+  flashcards: "Cards",
+  summary: "Summary",
+  list_notes: "Notes",
+};
+
 const ALL_AGENT_TOOLS: AgentToolName[] = ["read", "search", "write", "web_search", "quiz", "flashcards", "summary", "list_notes"];
 
 const STORAGE_PREFIX = "smart-reader:agent-chat:v1";
@@ -900,21 +911,26 @@ export default function BookAgentChat({
         </div>
       )}
 
-      <div className="mb-3 flex flex-wrap gap-2">
+      <div className="mb-3 flex flex-wrap gap-1.5">
         {ALL_AGENT_TOOLS.map((tool) => {
           const enabled = allowedTools.includes(tool);
           return (
-            <button
+            <label
               key={tool}
-              type="button"
-              onClick={() => toggleTool(tool)}
-              className={`rounded border px-2 py-1 text-[11px] ${enabled
-                ? "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-300"
-                : "border-gray-300 bg-white text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400"
-                }`}
+              className={`flex cursor-pointer select-none items-center gap-1 rounded border px-2 py-1 text-[11px] transition ${
+                enabled
+                  ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                  : "border-gray-200 bg-white text-gray-400 line-through dark:border-gray-600 dark:bg-gray-800 dark:text-gray-500"
+              }`}
             >
-              {enabled ? "On" : "Off"} {tool}
-            </button>
+              <input
+                type="checkbox"
+                checked={enabled}
+                onChange={() => toggleTool(tool)}
+                className="sr-only"
+              />
+              {TOOL_LABELS[tool] || tool}
+            </label>
           );
         })}
       </div>

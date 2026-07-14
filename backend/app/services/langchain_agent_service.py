@@ -342,6 +342,31 @@ def _build_agent_executor(
     except Exception:
         pass
 
+    # Load book TOC for chapter-aware responses
+    toc_hint = ""
+    try:
+        from app.models import DocumentChunk as DC
+        sections = (
+            db.query(DC.section_path, DC.page_start)
+            .filter(DC.book_id == book_id, DC.section_path.isnot(None))
+            .order_by(DC.page_start)
+            .all()
+        )
+        seen: set[str] = set()
+        chapters: list[str] = []
+        for sp, ps in sections:
+            if sp and sp not in seen and ps is not None:
+                seen.add(sp)
+                chapters.append(f"  {sp} (p.{ps})")
+        if chapters:
+            toc_hint = (
+                "\n\nBook Structure:\n"
+                + "\n".join(chapters[:20])
+                + "\n\nWhen citing locations, reference these chapter/section names rather than just page numbers."
+            )
+    except Exception:
+        pass
+
     prompt = ChatPromptTemplate.from_messages([
         (
             "system",
@@ -354,7 +379,7 @@ def _build_agent_executor(
             "5. Keep answers concise unless the user asks for more detail.\n"
             "6. For external references (definitions, concepts not in the book), use web_search.\n"
             "7. Save notes/memories with write. Show existing notes with list_notes. Generate quizzes with quiz. Create flashcards with flashcards. Create summaries with summary (bullet_points, cornell, sq3r)."
-            f"{markdown_instruction}{weak_topics_hint}",
+            f"{markdown_instruction}{weak_topics_hint}{toc_hint}",
         ),
         MessagesPlaceholder(variable_name="chat_history", optional=True),
         ("human", "{input}"),
