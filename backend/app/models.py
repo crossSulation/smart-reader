@@ -15,6 +15,7 @@ class User(Base):
     study_goal = Column(String, nullable=True)
     weak_topics = Column(Text, nullable=True)  # comma-separated weak topics
     frequently_reviewed_tags = Column(Text, nullable=True)  # comma-separated tags
+    fsrs_params = Column(Text, nullable=True)  # JSON: trained FSRS weights (future)
     credits = Column(DECIMAL(precision=12, scale=4), default=0, nullable=False)
     monthly_credits_reset_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -202,6 +203,18 @@ class KnowledgeLink(Base):
 
     source = relationship("KnowledgePoint", foreign_keys=[source_kp_id], back_populates="outgoing_links")
     target = relationship("KnowledgePoint", foreign_keys=[target_kp_id], back_populates="incoming_links")
+
+
+class AgentMemory(Base):
+    __tablename__ = "agent_memories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    book_id = Column(Integer, ForeignKey("books.id"), nullable=False, index=True)
+    session_id = Column(String, nullable=False)
+    summary = Column(Text, nullable=False)
+    key_topics = Column(Text, nullable=True)  # comma-separated
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class TokenUsageLog(Base):

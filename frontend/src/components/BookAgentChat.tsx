@@ -93,18 +93,21 @@ const QUICK_PROMPTS: Record<"pdf" | "epub" | "markdown", string[]> = {
     "Create 3 quiz questions from this PDF section.",
     "Save useful takeaways as notes with practical tags.",
     "Explain difficult terms and include short web references.",
+    "Search across all my books for concepts related to this topic.",
   ],
   epub: [
     "Summarize this chapter arc and the top 5 ideas.",
     "Generate a short recall quiz for this chapter.",
     "Identify character or concept relationships in this section.",
     "Save study notes from key excerpts.",
+    "Compare this book's main ideas with concepts from my other books.",
   ],
   markdown: [
     "Summarize headings and key points from this markdown document.",
     "Turn this section into a quick checklist for revision.",
     "Create 3 Q&A flash prompts from the current markdown content.",
     "Find external references for unknown terms in this document.",
+    "Search across all my books for related knowledge points.",
   ],
 };
 
