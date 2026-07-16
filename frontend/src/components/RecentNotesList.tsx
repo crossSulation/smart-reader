@@ -3,6 +3,7 @@ import { HubOutlined } from "@mui/icons-material";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { KnowledgePointItem } from "../types/KnowledgeGraph";
+import Skeleton from "./Skeleton";
 
 export type RecentNoteItem = {
   id: number;
@@ -62,7 +63,14 @@ export default function RecentNotesList({
     <div className="min-h-0 flex-1 rounded border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
       <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">Recent Notes</div>
       {notesLoading ? (
-        <div className="text-xs text-gray-500 dark:text-gray-400">Loading notes...</div>
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="rounded border border-gray-100 bg-gray-50 px-2 py-1.5 dark:border-gray-700 dark:bg-gray-800">
+              <Skeleton className="h-3 w-4/5 rounded" />
+              <Skeleton className="mt-1 h-2 w-1/3 rounded" />
+            </div>
+          ))}
+        </div>
       ) : notesError ? (
         <div className="text-xs text-red-600 dark:text-red-400">{notesError}</div>
       ) : notes.length === 0 ? (

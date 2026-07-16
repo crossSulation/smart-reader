@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { SkeletonText, SkeletonCard } from "../components/Skeleton";
 
 type UsageStats = {
   period: string;
@@ -133,7 +134,14 @@ export default function Billing() {
   };
 
   if (loading) {
-    return <div className="flex h-full items-center justify-center text-gray-500">Loading billing data...</div>;
+    return (
+      <div className="flex h-full flex-col gap-6 p-6">
+        <SkeletonText lines={1} className="w-1/3" />
+        <SkeletonCard />
+        <SkeletonCard />
+        <SkeletonCard />
+      </div>
+    );
   }
 
   return (

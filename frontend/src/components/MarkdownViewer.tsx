@@ -6,6 +6,7 @@ import remarkMath from "remark-math";
 import mermaid from "mermaid";
 import SmilesDrawer from "smiles-drawer";
 import "katex/dist/katex.min.css";
+import Skeleton from "./Skeleton";
 
 type HeadingItem = {
   id: string;
@@ -555,7 +556,7 @@ const MarkdownViewer = memo(forwardRef<MarkdownViewerHandle, MarkdownViewerProps
             <div className="page" />
           </div>
         </div>
-        <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading markdown...</p>
+        <Skeleton className="mt-4 h-4 w-40" />
       </div>
     );
   }

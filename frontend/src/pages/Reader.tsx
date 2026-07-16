@@ -15,6 +15,7 @@ import AIPanel, { type AIPanelLearningNote } from "../components/AIPanel";
 import BareTitleBar from "../components/BareTitleBar";
 import { useKeyboardShortcuts, type ShortcutBinding } from "../hooks/useKeyboardShortcuts";
 import { useThemeContext } from "../contexts/ThemeContext";
+import { SkeletonText } from "../components/Skeleton";
 import type { Book } from "../types/Book";
 import type { KnowledgePointItem } from "../types/KnowledgeGraph";
 
@@ -102,12 +103,24 @@ function Reader() {
 
     setSavingNote(true);
     setLearningStatus(null);
-    try {
-      const tags = learningTagsInput
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter(Boolean);
 
+    const tags = learningTagsInput
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+
+    const optimisticNote: LearningNote = {
+      id: -Date.now(),
+      book_id: Number(activeBookIdForAi),
+      content: selectedExcerpt,
+      page: activeFileType === "pdf" ? currentPdfPage : null,
+      tags,
+      knowledge_point_ids: kpIds,
+      created_at: new Date().toISOString(),
+    };
+    setNotes((prev) => [optimisticNote, ...prev]);
+
+    try {
       const body: Record<string, unknown> = {
         book_id: Number(activeBookIdForAi),
         content: selectedExcerpt,
@@ -145,6 +158,7 @@ function Reader() {
         }
       }
     } catch (err) {
+      setNotes((prev) => prev.filter((n) => n.id !== optimisticNote.id));
       setLearningStatus(err instanceof Error ? err.message : "Failed to save note.");
     } finally {
       setSavingNote(false);
@@ -705,7 +719,10 @@ function Reader() {
     return (
       <div className="h-screen overflow-hidden flex flex-col">
         {isTauri && <BareTitleBar />}
-        <div className="p-8 text-center">Loading...</div>
+        <div className="p-8 space-y-4">
+          <SkeletonText lines={1} className="w-1/3" />
+          <SkeletonText lines={6} />
+        </div>
       </div>
     );
   }

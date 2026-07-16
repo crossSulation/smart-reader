@@ -1,5 +1,6 @@
 import type { KnowledgePointItem } from "../types/KnowledgeGraph";
 import { useTranslation } from "react-i18next";
+import Skeleton from "./Skeleton";
 
 type Props = {
   items: KnowledgePointItem[];
@@ -64,7 +65,14 @@ export default function KnowledgeList({
 
       <div className="flex-1 overflow-y-auto">
         {loading ? (
-          <div className="p-4 text-center text-sm text-gray-400">{t("knowledge.loading", "Loading...")}</div>
+          <div className="space-y-1 p-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-2 px-3 py-2">
+                <Skeleton className="h-3 w-20 rounded" />
+                <Skeleton className="h-3 w-8 rounded-full" />
+              </div>
+            ))}
+          </div>
         ) : items.length === 0 ? (
           <div className="p-4 text-center text-sm text-gray-400">
             {t("knowledge.noResults", "No knowledge points found. Try expanding your search?")}

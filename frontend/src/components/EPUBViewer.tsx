@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback, useMemo, forwardRef, useImper
 import { fetchWithCache } from '../utils/fileCache';
 import Rendition from 'epubjs/types/rendition';
 import View from 'epubjs/types/managers/view';
+import Skeleton from "./Skeleton";
 
 type EPUBNavItem = {
   label: string;
@@ -663,7 +664,7 @@ const EPUBViewer = forwardRef<EPUBViewerHandle, EPUBViewerProps>(function EPUBVi
                   <div className="page" />
                 </div>
               </div>
-              <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading EPUB...</p>
+              <Skeleton className="mt-4 h-4 w-36" />
             </div>
           )}
           <div

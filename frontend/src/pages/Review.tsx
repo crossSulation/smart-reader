@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams, useNavigate } from "react-router-dom";
+import { SkeletonCard, SkeletonList } from "../components/Skeleton";
 
 type ReviewRating = "again" | "hard" | "good" | "easy";
 type ReviewTab = "flashcards" | "notes";
@@ -182,6 +183,13 @@ function Review() {
   }, []);
 
   const rateItem = async (itemId: number, rating: ReviewRating) => {
+    setFlippedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(itemId);
+      return next;
+    });
+    const removedItem = items.find((item) => item.id === itemId);
+    setItems((prev) => prev.filter((item) => item.id !== itemId));
     setSubmittingId(itemId);
     setError(null);
     try {
@@ -194,14 +202,11 @@ function Review() {
         body: JSON.stringify({ rating }),
       });
       if (!res.ok) throw new Error("Failed to rate card");
-      setFlippedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(itemId);
-        return next;
-      });
-      setItems((prev) => prev.filter((item) => item.id !== itemId));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit rating");
+      if (removedItem) {
+        setItems((prev) => [...prev, removedItem]);
+      }
     } finally {
       setSubmittingId(null);
     }
@@ -259,7 +264,7 @@ function Review() {
         </div>
       </div>
 
-      {loading && <div className="rounded border border-gray-200 bg-white p-4 text-sm text-gray-600">Loading due cards...</div>}
+      {loading && <SkeletonList count={3} />}
       {error && <div className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
       {!loading && tab === "flashcards" && items.length === 0 && (
         <div className="rounded border border-green-200 bg-green-50 p-4 text-sm text-green-800">
@@ -285,7 +290,7 @@ function Review() {
       {tab === "notes" && (
         <div className="space-y-3">
           {notesLoading ? (
-            <div className="rounded border border-gray-200 bg-white p-4 text-sm text-gray-600">Loading notes...</div>
+            <SkeletonList count={4} />
           ) : notes.length === 0 ? (
             <div className="rounded border border-green-200 bg-green-50 p-4 text-sm text-green-800">
               No notes yet. Save notes while reading and they will appear here.

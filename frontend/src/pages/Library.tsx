@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from 'react-i18next';
-import { SortOutlined, GridViewOutlined, ViewListOutlined, ArrowForwardOutlined } from '@mui/icons-material';
+import { SortOutlined, GridViewOutlined, ViewListOutlined, ArrowForwardOutlined, DeleteOutlineOutlined } from '@mui/icons-material';
 import BookCard from "../components/BookCard";
 import FileUpload from "../components/FileUpload";
 import type { Book } from "../types/Book";
 import NoBooks from "../components/NoBooks";
+import { SkeletonGrid } from "../components/Skeleton";
 
 type SortOption = 'title' | 'author' | 'current_page' | 'date_added';
 type SortOrder = 'asc' | 'desc';
@@ -145,7 +146,47 @@ function Library() {
 
   const isSearchMode = !!searchQuery.trim();
 
-  if (loading) return <div className="flex-1 flex items-center justify-center">加载中...</div>;
+  const [deletedBook, setDeletedBook] = useState<Book | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  const handleDeleteBook = useCallback(async (bookId: number) => {
+    const book = books.find((b) => b.id === bookId);
+    if (!book) return;
+    setDeletingId(bookId);
+    setDeletedBook(book);
+    setBooks((prev) => prev.filter((b) => b.id !== bookId));
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/books/${bookId}`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        setBooks((prev) => [...prev, book]);
+        setDeletedBook(null);
+      }
+    } catch {
+      setBooks((prev) => [...prev, book]);
+      setDeletedBook(null);
+    } finally {
+      setDeletingId(null);
+    }
+  }, [books]);
+
+  const handleUndoDelete = useCallback(() => {
+    if (deletedBook) {
+      setBooks((prev) => [...prev, deletedBook]);
+      setDeletedBook(null);
+    }
+  }, [deletedBook]);
+
+  useEffect(() => {
+    if (!deletedBook) return;
+    const timer = setTimeout(() => setDeletedBook(null), 5000);
+    return () => clearTimeout(timer);
+  }, [deletedBook]);
+
+  if (loading) return <div className="flex-1 px-8 py-6"><SkeletonGrid count={6} /></div>;
 
   const BookListRow = ({ book }: { book: Book }) => {
     const [kpCount, setKpCount] = useState(book.knowledge_count ?? 0);
@@ -222,6 +263,13 @@ function Library() {
           >
             {t('bookCard.continueReading')}
           </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); handleDeleteBook(book.id); }}
+            className="rounded border border-gray-200 px-2 py-1 text-[10px] text-gray-400 hover:border-red-300 hover:text-red-500 dark:border-gray-600 dark:text-gray-500 dark:hover:border-red-400 dark:hover:text-red-400"
+          >
+            <DeleteOutlineOutlined sx={{ fontSize: 12 }} />
+          </button>
         </div>
       </div>
     );
@@ -240,15 +288,26 @@ function Library() {
         </button>
       </div>
 
+      {deletedBook && (
+        <div className="mb-4 flex items-center justify-between rounded-lg bg-amber-50 border border-amber-200 px-4 py-2 dark:bg-amber-900/20 dark:border-amber-800 animate-fade-in">
+          <span className="text-sm text-amber-800 dark:text-amber-200">
+            "{deletedBook.title}" deleted.
+          </span>
+          <button
+            type="button"
+            onClick={handleUndoDelete}
+            className="rounded bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700 transition"
+          >
+            Undo
+          </button>
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        {isSearchMode && (
+        {isSearchMode && !searchLoading && searchResults && (
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            {searchLoading
-              ? "Searching..."
-              : searchResults
-                ? `Found ${searchResults.length} result${searchResults.length !== 1 ? 's' : ''} for "${searchQuery}"`
-                : ""}
+            Found {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for "{searchQuery}"
           </div>
         )}
         <div className="flex-1" />
@@ -310,7 +369,7 @@ function Library() {
 
       {isSearchMode ? (
         searchLoading ? (
-          <div className="flex justify-center items-center h-64 text-gray-500">Searching...</div>
+          <div className="py-6"><SkeletonCard /></div>
         ) : searchResults && searchResults.length > 0 ? (
           <div className="flex flex-col gap-3">
             {searchResults.map((r) => (
@@ -351,7 +410,7 @@ function Library() {
         <>
           {viewMode === 'grid' ? (
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
-              {filteredBooks.map((book) => <BookCard key={book.id} book={book} />)}
+              {filteredBooks.map((book) => <BookCard key={book.id} book={book} onDelete={handleDeleteBook} />)}
             </div>
           ) : (
             <div className="flex flex-col gap-3">

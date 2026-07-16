@@ -2,13 +2,14 @@ import { useNavigate } from 'react-router-dom';
 import { useState, type MouseEvent } from 'react';
 import type { Book } from "../types/Book";
 import { useTranslation } from 'react-i18next';
-import { BoltOutlined, AutoAwesomeOutlined } from '@mui/icons-material';
+import { BoltOutlined, AutoAwesomeOutlined, DeleteOutlineOutlined } from '@mui/icons-material';
 
-function BookCard({ book }: { book: Book }) {
+function BookCard({ book, onDelete }: { book: Book; onDelete?: (id: number) => void }) {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const [kpCount, setKpCount] = useState(book.knowledge_count ?? 0);
   const [extracting, setExtracting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const indexed = book.indexed ?? false;
 
   const fileType = (book.file_type || "").toLowerCase();
@@ -119,6 +120,38 @@ function BookCard({ book }: { book: Book }) {
         >
           {t('bookCard.continueReading')}
         </button>
+
+        {onDelete && (
+          <div className="mt-2 border-t border-gray-100 pt-2 dark:border-gray-700">
+            {confirmDelete ? (
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onDelete(book.id); setConfirmDelete(false); }}
+                  className="flex-1 rounded bg-red-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-red-700 transition"
+                >
+                  Confirm
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setConfirmDelete(false); }}
+                  className="flex-1 rounded border border-gray-300 px-2 py-1 text-[10px] text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
+                className="flex w-full items-center justify-center gap-1 rounded border border-gray-200 px-2 py-1 text-[10px] text-gray-400 hover:border-red-300 hover:text-red-500 dark:border-gray-600 dark:text-gray-500 dark:hover:border-red-400 dark:hover:text-red-400"
+              >
+                <DeleteOutlineOutlined sx={{ fontSize: 12 }} />
+                Delete
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

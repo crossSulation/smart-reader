@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { PersonOutlined, EmailOutlined } from '@mui/icons-material';
 import { TextField, Button, Alert, Paper, Typography, Box, Avatar, MenuItem, Chip } from '@mui/material';
+import { SkeletonText } from '../components/Skeleton';
 
 interface User {
   id: number;
@@ -295,7 +296,7 @@ function Profile() {
     }
   };
 
-  if (loading) return <div className="p-8 text-center">{t('common.loading')}</div>;
+  if (loading) return <div className="p-8 space-y-4"><SkeletonText lines={8} /></div>;
 
   if (!user) return <div className="p-8 text-center">{t('profile.loadError')}</div>;
 

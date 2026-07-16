@@ -5,6 +5,7 @@ import BookAgentChat from "./BookAgentChat";
 import SelectionPopup from "./SelectionPopup";
 import RecentNotesList from "./RecentNotesList";
 import type { KnowledgePointItem } from "../types/KnowledgeGraph";
+import Skeleton from "./Skeleton";
 
 export type AIPanelLearningNote = {
   id: number;
@@ -247,7 +248,14 @@ export default function AIPanel({
                   </button>
                 </div>
                 {knowledgePointsLoading ? (
-                  <div className="text-xs text-gray-500 dark:text-gray-400">Loading knowledge points...</div>
+                  <div className="space-y-2">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <Skeleton className="h-3 w-3 rounded-full" />
+                        <Skeleton className="h-3 w-24 rounded" />
+                      </div>
+                    ))}
+                  </div>
                 ) : knowledgePoints.length === 0 ? (
                   <div className="rounded border border-dashed border-gray-300 p-3 text-center text-xs text-gray-500 dark:border-gray-600 dark:text-gray-400">
                     <HubOutlined sx={{ fontSize: 24 }} className="mb-1 text-gray-300 dark:text-gray-600" />

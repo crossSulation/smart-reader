@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { GraphData, GraphNode } from "../types/KnowledgeGraph";
+import Skeleton from "./Skeleton";
 
 interface PositionedNode extends GraphNode {
   x: number;
@@ -117,12 +118,30 @@ export default function KnowledgeGraphCanvas({
     const maxLinks = Math.max(1, ...arr.map((n) => n.link_count));
     const nodeR = (n: PositionedNode) => 8 + (n.link_count / maxLinks) * 18;
 
+    // ── Viewport culling ──
+    const VPAD = 80;
+    const rectW = rect.width;
+    const rectH = rect.height;
+    const visibleNodeIds = new Set<number>();
+    arr.forEach((n) => {
+      const r = nodeR(n);
+      if (
+        n.x + r > -VPAD &&
+        n.x - r < rectW + VPAD &&
+        n.y + r > -VPAD &&
+        n.y - r < rectH + VPAD
+      ) {
+        visibleNodeIds.add(n.id);
+      }
+    });
+
     // ── Draw edges ──
     ctx.lineCap = "round";
     data.edges.forEach((e) => {
       const s = nodesRef.current.get(e.source);
       const t = nodesRef.current.get(e.target);
       if (!s || !t) return;
+      if (!visibleNodeIds.has(e.source) && !visibleNodeIds.has(e.target)) return;
 
       const dx = t.x - s.x;
       const dy = t.y - s.y;
@@ -174,7 +193,10 @@ export default function KnowledgeGraphCanvas({
     });
 
     // ── Draw nodes ──
+    let drawnCount = 0;
     arr.forEach((n) => {
+      if (!visibleNodeIds.has(n.id)) return;
+      drawnCount++;
       const r = nodeR(n);
       const isSel = n.id === selectedNodeId;
 
@@ -198,6 +220,15 @@ export default function KnowledgeGraphCanvas({
       ctx.textBaseline = "top";
       ctx.fillText(label, n.x, n.y + r + 4);
     });
+
+    // ── Stats overlay (bottom-right) ──
+    if (drawnCount < arr.length) {
+      ctx.font = "10px system-ui";
+      ctx.fillStyle = isDark ? "#475569" : "#94a3b8";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(`${drawnCount} / ${arr.length} nodes`, rectW - 12, rectH - 8);
+    }
   }, [data, selectedNodeId, isDark]);
 
   // ── Force simulation + canvas render loop ────────────────
@@ -380,8 +411,9 @@ export default function KnowledgeGraphCanvas({
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center text-gray-400 dark:text-gray-500">
-        Loading...
+      <div className="flex h-full flex-col items-center justify-center gap-4">
+        <Skeleton className="h-64 w-64 rounded-full" />
+        <Skeleton className="h-4 w-40" />
       </div>
     );
   }

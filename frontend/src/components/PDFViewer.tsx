@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback, useMemo, type TouchEvent } fr
 import { Document, Page, pdfjs } from "react-pdf";
 import 'react-pdf/dist/Page/TextLayer.css';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
+import Skeleton from "./Skeleton";
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -369,7 +370,7 @@ export default function PDFViewer({
                   <div className="page" />
                 </div>
               </div>
-              <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading document...</p>
+              <Skeleton className="mt-4 h-4 w-40" />
             </div>
           ) : (
           <Document
@@ -390,7 +391,7 @@ export default function PDFViewer({
                     <div className="page" />
                   </div>
                 </div>
-                <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading document...</p>
+                <Skeleton className="mt-4 h-4 w-40" />
               </div>
             )}
             {!showLoader && (

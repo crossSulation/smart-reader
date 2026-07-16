@@ -90,3 +90,5 @@ htmlcov/
 ehthumbs.db
 Thumbs.db
 backend/uploads/
+.opencode
+.npm-cache

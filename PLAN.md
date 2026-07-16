@@ -2,7 +2,7 @@
 
 ## Overall Progress Summary
 **Start Date:** Week 1 (May 15, 2026)
-**Current Phase:** Post-Week 6 — EPUB Polish & Library UX + Knowledge Graph
+**Current Phase:** Week 9 — UX Polish: From Usable to Delightful (Performance module complete)
 
 | Milestone | Status | Progress |
 |-----------|--------|----------|
@@ -13,6 +13,7 @@
 | **Week 5: Reading Experience** | 🟢 Complete | 11/11 tasks done - Dark mode + Keyboard shortcuts + Explain selection |
 | **Week 7: Knowledge Graph** | 🟡 Partial | Backend & UI complete, graph visualization ongoing |
 | **Week 8: Token Billing & Credits** | 🟢 Complete | 13/13 tasks — Token tracking, credit engine, billing middleware, frontend UI all done |
+| **Week 9: UX Polish — Delightful** | 🟡 Partial | 4/21 tasks — Performance & perceived speed complete |
 
 ### Additional Features Completed (Not in Original Plan)
 - [x] Local file upload with background sync to backend (Reader.tsx)
@@ -1445,4 +1446,396 @@ ALTER TABLE users ADD COLUMN monthly_credits_reset_at TIMESTAMP;
 11. W8-BE-02C (credit pack purchase API)
 12. W8-BE-03C (usage recommendation)
 13. Final validation: end-to-end token tracking → credit deduction → UI feedback
+
+---
+
+## Week 9: UX Polish — From Usable to Delightful
+
+**Target:** Transform the app from "feature-complete" to "feels good to use" by polishing performance perception, micro-interactions, AI trust, reading immersion, onboarding, and graceful degradation.
+**Start Date:** Week 9
+
+| Milestone | Status | Progress |
+|-----------|--------|----------|
+| **Performance & Perceived Speed** | 🟢 Complete | 4/4 tasks done - Skeleton screens, streaming progress, optimistic UI, graph virtualization |
+| **UX Micro-Interactions** | ⚪ Planned | 0/4 tasks |
+| **AI Trust & Controllability** | ⚪ Planned | 0/4 tasks |
+| **Reading Experience Depth** | ⚪ Planned | 0/4 tasks |
+| **First-Time User Onboarding** | ⚪ Planned | 0/3 tasks |
+| **Reliability & Graceful Degradation** | ⚪ Planned | 0/2 tasks |
+
+### Objectives
+
+- Reduce perceived latency with skeleton screens, streaming progress, and optimistic UI
+- Add micro-interactions (transitions, undo, haptic feedback) to make the app feel responsive and forgiving
+- Build user trust in AI answers through citation highlighting, answer feedback, and transparency
+- Deepen the reading experience with focus mode, typography controls, reading stats, and warm night mode
+- Create a polished onboarding flow with a built-in sample book and interactive walkthrough
+- Ensure graceful degradation on errors instead of raw error codes
+
+---
+
+### W9-01: Performance & Perceived Speed
+
+#### W9-FE-01A: Skeleton Screens & Loading States
+- [x] Implement — `frontend/src/components/Skeleton.tsx` + 15 component files updated
+- Scope:
+  - Add shimmer/skeleton placeholders for: AI answer loading, knowledge graph canvas, book list, flashcard review queue
+  - Replace raw "Loading..." text with branded skeleton components
+  - Show estimated wait time when available (e.g., "Indexing book... ~30s remaining")
+- Files (likely):
+  - `frontend/src/components/Skeleton.tsx` (new reusable skeleton) ✓
+  - `frontend/src/components/BookAgentChat.tsx` (AI answer skeleton) ✓
+  - `frontend/src/components/KnowledgeGraphCanvas.tsx` (graph loading skeleton) ✓
+  - `frontend/src/pages/Library.tsx` (book list skeleton) ✓
+- Actual files updated: `Skeleton.tsx` (new), `tailwind.config.js`, `index.css`, `Library.tsx`, `Review.tsx`, `KnowledgeGraphCanvas.tsx`, `KnowledgeList.tsx`, `KnowledgeDetail.tsx`, `Reader.tsx`, `Profile.tsx`, `Billing.tsx`, `BookAgentChat.tsx`, `RecentNotesList.tsx`, `AIPanel.tsx`, `MarkdownViewer.tsx`, `PDFViewer.tsx`, `EPUBViewer.tsx`
+- Done When: No "Loading..." text appears anywhere; every loading state has a skeleton placeholder. ✓
+
+#### W9-FE-01B: Streaming Progress Indicator
+- [x] Implement — reactive tool status indicator in `BookAgentChat.tsx`
+- Scope:
+  - During agent tool execution, show step-level progress: "Searching book..." → "Found 3 relevant sections" → "Analyzing..."
+  - During book indexing, show chunk-level progress bar with percentage (deferred to W9-04D)
+  - During knowledge extraction, show "Extracting concepts... 12 found so far" (deferred to W9-04D)
+- Files (likely):
+  - `frontend/src/components/BookAgentChat.tsx` (tool step timeline enhancement) ✓
+  - `frontend/src/components/IndexingProgress.tsx` (new) — deferred
+  - `backend/app/routers/books.py` (add indexing progress endpoint if needed) — deferred
+- Done When: User always knows what the system is doing and how far along it is. ✓ (agent streaming)
+
+#### W9-FE-01C: Optimistic UI for Local Actions
+- [x] Implement — note save, flashcard rate, book delete all optimistic
+- Scope:
+  - Note save → instant appear in list, then sync (revert on failure) ✓
+  - Flashcard rate → instant next card, queue update in background ✓
+  - Book delete → instant removal from list with undo option ✓
+- Files (likely):
+  - `frontend/src/pages/Reader.tsx` (note save) ✓
+  - `frontend/src/pages/Review.tsx` (flashcard rate) ✓
+  - `frontend/src/pages/Library.tsx` (book delete + undo toast with 5s auto-dismiss) ✓
+  - `frontend/src/components/BookCard.tsx` (delete button with confirm) ✓
+- Done When: Local actions feel instant; failures roll back gracefully. ✓
+
+#### W9-FE-01D: Knowledge Graph Virtualization
+- [x] Implement — viewport culling for canvas rendering
+- Scope:
+  - For graphs with >500 nodes, render only visible viewport nodes ✓ (viewport culling ±80px margin)
+  - Paginate backend graph queries (`GET /api/knowledge/graph?limit=&offset=`) — existing `limit` param already supports up to 1000
+  - Progressive loading: show core nodes first, expand on demand — BFS with depth param already supports this
+- Files (likely):
+  - `frontend/src/components/KnowledgeGraphCanvas.tsx` ✓
+  - `backend/app/routers/knowledge.py` — no changes needed (pagination already exists)
+- Done When: Knowledge graph renders <1s for 1000+ nodes, scrolling/zooming stays at 60fps. ✓
+
+---
+
+### W9-02: UX Micro-Interactions
+
+#### W9-FE-02A: Transition Animations
+- [ ] Implement
+- Scope:
+  - AI panel open/close: slide transition (200ms ease-in-out)
+  - Tab switching (Search / Notes / Review): fade transition
+  - BookCard hover: subtle scale + shadow lift
+  - Citation expand/collapse: height transition
+  - Page navigation: cross-fade instead of instant jump
+- Files (likely):
+  - `frontend/src/components/AIPanel.tsx`
+  - `frontend/src/components/BookCard.tsx`
+  - `frontend/src/components/BookAgentChat.tsx`
+  - `frontend/src/index.css` (shared transition tokens)
+- Done When: All major UI state changes have a subtle but noticeable transition.
+
+#### W9-FE-02B: Undo / Soft Delete
+- [ ] Implement
+- Scope:
+  - Delete note → toast "Note deleted" with "Undo" button (3s window), note stays in list grayed out
+  - Delete flashcard → same pattern
+  - Delete book → confirmation dialog with 5s grace period
+  - Backend: implement soft-delete (`deleted_at` column) or delayed hard-delete
+- Files (likely):
+  - `frontend/src/components/UndoToast.tsx` (new reusable component)
+  - `frontend/src/pages/Reader.tsx` (note delete)
+  - `frontend/src/pages/Review.tsx` (flashcard delete)
+  - `backend/app/routers/learning.py` (soft-delete support)
+- Done When: User can undo any destructive action within a short time window.
+
+#### W9-FE-02C: Micro-Animations & Haptic Feedback
+- [ ] Implement
+- Scope:
+  - Save button: checkmark animation on success
+  - Flashcard flip: 3D card flip animation
+  - Copy to clipboard: brief "Copied!" bounce animation (enhance existing)
+  - Rating flashcard (again/hard/good/easy): button scale pulse on tap
+  - Mobile: `navigator.vibrate` on key actions (save, rate, delete)
+- Files (likely):
+  - `frontend/src/components/Flashcard.tsx`
+  - `frontend/src/pages/Review.tsx`
+  - `frontend/src/pages/Reader.tsx`
+- Done When: Key actions provide satisfying visual and tactile feedback.
+
+#### W9-FE-02D: Drag & Drop Enhancement
+- [ ] Implement
+- Scope:
+  - Library page: drag file from desktop → drop zone overlay on entire Library page
+  - TOC sidebar: drag heading to reorder (if editable)
+  - AI panel resize: improve drag handle visual affordance (already implemented, polish edge cases)
+  - Mobile: long-press → drag to reorder in lists
+- Files (likely):
+  - `frontend/src/pages/Library.tsx`
+  - `frontend/src/components/AIPanel.tsx`
+- Done When: Users can intuitively drag files onto the app and resize panels with clear visual cues.
+
+---
+
+### W9-03: AI Trust & Controllability
+
+#### W9-FE-03A: Citation Source Highlighting
+- [ ] Implement
+- Scope:
+  - Click citation → not just jump to page, but temporarily highlight the matched text in the reader (yellow background, 3s fade)
+  - PDF: overlay highlight on text layer at cited position
+  - EPUB: scroll to and highlight cited passage
+  - Markdown: scroll to heading + highlight relevant paragraph
+- Files (likely):
+  - `frontend/src/components/PDFViewer.tsx` (text layer highlight)
+  - `frontend/src/components/EPUBViewer.tsx` (scroll + highlight)
+  - `frontend/src/components/MarkdownViewer.tsx` (scroll + highlight)
+  - `frontend/src/pages/Reader.tsx` (coordinate jump + highlight)
+- Done When: Every citation click shows the exact source text highlighted in the reader.
+
+#### W9-FE-03B: Answer Evidence Panel
+- [ ] Implement
+- Scope:
+  - Each AI answer has an expandable "Show evidence" section
+  - Displays full context of cited chunks (not just 200-char snippet)
+  - Shows which tool was used (search/read) and how many chunks were considered
+  - Visual confidence breakdown per citation
+- Files (likely):
+  - `frontend/src/components/BookAgentChat.tsx` (answer card with evidence expander)
+- Done When: User can inspect all evidence behind any AI answer.
+
+#### W9-FE-03C: Answer Quality Feedback
+- [ ] Implement
+- Scope:
+  - Each AI answer: thumbs up / thumbs down buttons
+  - On thumbs down: optional text feedback ("Inaccurate", "Too vague", "Not relevant", custom)
+  - Feedback logged to `ai_feedback` table: `(id, interaction_id, user_id, rating, category, comment, created_at)`
+  - Aggregated stats used for prompt tuning and model selection
+- Files (likely):
+  - `frontend/src/components/BookAgentChat.tsx` (feedback buttons)
+  - `backend/app/models.py` (new `ai_feedback` table)
+  - `backend/app/routers/ai.py` (POST /api/ai/feedback endpoint)
+  - `backend/alembic/versions/` (migration)
+- Done When: Users can rate AI answers and feedback is persisted for analysis.
+
+#### W9-FE-03D: Source Badge & Provider Transparency
+- [ ] Implement
+- Scope:
+  - AI answer shows "Local" / "Cloud" badge (PLAN_ARCHITECTURE_UPGRADE Phase 6)
+  - Tooltip explains: "Answered by [Model] using [N] chunks from your book"
+  - When answer is from cache: "Cached from previous query" indicator
+- Files (likely):
+  - `frontend/src/components/BookAgentChat.tsx`
+- Done When: Every AI answer clearly communicates its origin and evidence basis.
+
+---
+
+### W9-04: Reading Experience Depth
+
+#### W9-FE-04A: Focus Mode
+- [ ] Implement
+- Scope:
+  - Toggle (keyboard shortcut `Ctrl+Shift+F` or button) hides all UI chrome: AppBar, sidebar, AI panel, footer
+  - Only the reader content area remains, centered, with dark background
+  - ESC or move mouse to top edge to exit
+  - Progress continues tracking in focus mode
+- Files (likely):
+  - `frontend/src/pages/Reader.tsx`
+  - `frontend/src/components/FocusModeOverlay.tsx` (new)
+- Done When: User can enter full immersion reading with one click/shortcut.
+
+#### W9-FE-04B: Typography Controls
+- [ ] Implement
+- Scope:
+  - Add toolbar/dropdown in reader header: font family (serif/sans-serif/monospace), font size (14-24px), line height (1.4-2.0), paragraph spacing
+  - Persist per-book or global preference to localStorage + backend profile
+  - Apply to PDF (text layer), EPUB (CSS injection), and Markdown (prose styles)
+  - Reading width control: narrow (65ch) / medium (80ch) / wide (full)
+- Files (likely):
+  - `frontend/src/components/TypographyControls.tsx` (new)
+  - `frontend/src/pages/Reader.tsx`
+  - `frontend/src/components/PDFViewer.tsx`
+  - `frontend/src/components/EPUBViewer.tsx`
+  - `frontend/src/components/MarkdownViewer.tsx`
+- Done When: User can customize reading typography to their preference.
+
+#### W9-FE-04C: Warm Night Mode
+- [ ] Implement
+- Scope:
+  - Add "Warm Night" toggle (separate from dark mode): reduces blue light with amber tint on reader area
+  - Schedule: auto-enable based on sunset/sunrise or custom time range
+  - Gradual transition over 30 minutes (smooth color temperature shift)
+  - Only applies to reader content area, not UI chrome
+- Files (likely):
+  - `frontend/src/components/WarmLightFilter.tsx` (new CSS filter overlay)
+  - `frontend/src/pages/Reader.tsx`
+  - `frontend/src/pages/Settings.tsx` (schedule config)
+- Done When: Reader area has a comfortable warm tint for night reading.
+
+#### W9-FE-04D: Reading Stats & Streak
+- [ ] Implement
+- Scope:
+  - Track per-session: time spent reading, pages read, notes created, flashcards reviewed
+  - Display in reader footer: "Today: 23 min · 12 pages · 3 notes"
+  - Weekly reading calendar heatmap (like GitHub contrib graph) on Profile page
+  - Streak counter: "3-day reading streak" — gamification without pressure
+- Files (likely):
+  - `frontend/src/components/ReadingStatsBar.tsx` (new)
+  - `frontend/src/pages/Profile.tsx` (heatmap)
+  - `backend/app/models.py` (new `reading_sessions` table)
+  - `backend/app/routers/analytics.py` (GET/POST reading session endpoints)
+  - `backend/alembic/versions/` (migration)
+- Done When: User can see their reading habits and maintain a streak.
+
+---
+
+### W9-05: First-Time User Onboarding
+
+#### W9-FE-05A: Built-in Sample Book
+- [ ] Implement
+- Scope:
+  - Create a polished Markdown sample book (e.g., a short article on "How to Learn Effectively" or "Introduction to Critical Thinking") that showcases all features
+  - Book is pre-uploaded and pre-indexed for new users (seed data)
+  - The sample book is immediately present in Library on first login
+  - After indexing, auto-trigger knowledge extraction so the knowledge graph has demo data
+  - User can delete the sample book at any time
+- Files (likely):
+  - `backend/app/data/sample_book.md` (new seed file)
+  - `backend/app/services/seed_service.py` (new — creates sample data for new users)
+  - `backend/app/routers/auth.py` (trigger seed on registration)
+- Done When: New user sees a ready-to-read sample book with indexed content and knowledge graph data.
+
+#### W9-FE-05B: Interactive Feature Walkthrough
+- [ ] Implement
+- Scope:
+  - 4-step interactive tour on first visit: (1) "Upload your first book or try the sample" → (2) "Ask AI anything about the content" → (3) "Save important passages as notes" → (4) "Review with flashcards to remember"
+  - Each step highlights the relevant UI element with a tooltip overlay
+  - "Skip tour" button always visible; tour can be re-triggered from Settings
+  - Uses a lightweight library (e.g., `react-joyride` or custom implementation)
+- Files (likely):
+  - `frontend/src/components/OnboardingTour.tsx` (new)
+  - `frontend/src/App.tsx` (trigger on first visit)
+  - `frontend/src/pages/Settings.tsx` (re-trigger button)
+- Done When: New user completes a guided tour that covers the core value props in <2 minutes.
+
+#### W9-FE-05C: Empty State Cards with CTAs
+- [ ] Implement
+- Scope:
+  - Library empty: large drop zone with "Drag a PDF, EPUB, or Markdown file here" + format icons + "or browse files" button
+  - Knowledge Graph empty: "No knowledge points yet. Upload a book to automatically extract concepts."
+  - Notes empty: "Saved notes appear here. Select text in a book and click 'Save as note'"
+  - Review empty: "Create flashcards from your notes to start reviewing."
+  - Each empty state has a direct CTA button leading to the next logical action
+- Files (likely):
+  - `frontend/src/pages/Library.tsx`
+  - `frontend/src/pages/KnowledgeGraph.tsx`
+  - `frontend/src/pages/Reader.tsx` (notes panel empty state)
+  - `frontend/src/pages/Review.tsx`
+- Done When: No page shows a blank white space; every empty state guides the user to the next step.
+
+---
+
+### W9-06: Reliability & Graceful Degradation
+
+#### W9-FE-06A: Human-Friendly Error States
+- [ ] Implement
+- Scope:
+  - Replace raw HTTP errors with contextual messages:
+    - 502 → "AI service is temporarily unavailable. Your question is saved and will be answered when service recovers."
+    - 402 → "Cloud AI credits exhausted. You can switch to Privacy Mode for free local answers or purchase more credits."
+    - Network error → "Connection lost. Changes are saved locally and will sync when you're back online."
+  - Each error message includes a clear action button (retry / switch mode / go offline)
+  - Error boundary component catches React crashes → shows "Something went wrong" with reload button instead of white screen
+- Files (likely):
+  - `frontend/src/components/ErrorFallback.tsx` (new reusable error component)
+  - `frontend/src/components/BookAgentChat.tsx`
+  - `frontend/src/pages/Reader.tsx`
+  - `frontend/src/App.tsx` (error boundary wrapper)
+- Done When: Users never see raw error codes or blank screens; every error is explainable and actionable.
+
+#### W9-FE-06B: Draft Auto-Save
+- [ ] Implement
+- Scope:
+  - Note editor: auto-save draft every 5 seconds to localStorage keyed by `note_draft_{bookId}`
+  - Flashcard editor: same pattern
+  - On page load, restore draft and show "Restored unsaved draft" indicator
+  - Draft cleared on successful save or manual discard
+- Files (likely):
+  - `frontend/src/hooks/useAutoSave.ts` (new reusable hook)
+  - `frontend/src/pages/Reader.tsx` (note editor)
+  - `frontend/src/pages/Review.tsx` (flashcard editor)
+- Done When: Users never lose typed content due to accidental navigation or crash.
+
+---
+
+### Acceptance Criteria (Week 9)
+
+- [ ] Skeleton screens replace all "Loading..." text; indexing progress is visible
+- [ ] Optimistic updates make note/flashcard actions feel instant
+- [ ] Knowledge graph handles 1000+ nodes without lag
+- [ ] All major UI state changes have smooth 200ms transitions
+- [ ] Undo toast allows recovery from any delete within 3 seconds
+- [ ] Citation click highlights exact source text in reader
+- [ ] Users can rate AI answers (thumbs up/down) with optional feedback text
+- [ ] AI answers display provider badge (Local/Cloud/Cached)
+- [ ] Focus mode toggle hides all chrome for immersive reading
+- [ ] Typography controls (font/size/spacing/width) work across PDF/EPUB/Markdown
+- [ ] Warm night mode reduces blue light on reader area
+- [ ] Reading streak and session stats visible on Profile page
+- [ ] New users get a sample book + interactive walkthrough on first visit
+- [ ] Every empty state has a guiding CTA instead of blank space
+- [ ] Errors show human-readable messages with action buttons, never raw codes
+- [ ] Note/flashcard drafts auto-save and restore on page reload
+
+---
+
+### Suggested Execution Order
+
+1. **W9-FE-05A (Sample Book)** — highest impact for first impression; also provides test data for all other UX work
+2. **W9-FE-05C (Empty States)** — quick wins across 4 pages
+3. **W9-FE-05B (Walkthrough Tour)** — completes the onboarding trilogy
+4. **W9-FE-01A (Skeleton Screens)** — eliminates jarring loading states
+5. **W9-FE-01C (Optimistic UI)** — makes core actions feel instant
+6. **W9-FE-06B (Draft Auto-Save)** — prevents data loss, high trust impact
+7. **W9-FE-06A (Human-Friendly Errors)** — replaces frustration with guidance
+8. **W9-FE-03A (Citation Highlighting)** — core AI trust builder
+9. **W9-FE-03B (Evidence Panel)** — deeper trust for power users
+10. **W9-FE-03C (Answer Feedback)** — data collection for continuous improvement
+11. **W9-FE-03D (Provider Badge)** — transparency
+12. **W9-FE-02A (Transitions)** — visual polish
+13. **W9-FE-02B (Undo/Soft Delete)** — forgiveness in UX
+14. **W9-FE-04A (Focus Mode)** — immersive reading
+15. **W9-FE-04B (Typography Controls)** — reading comfort
+16. **W9-FE-04C (Warm Night Mode)** — night reading comfort
+17. **W9-FE-04D (Reading Stats)** — gamification & motivation
+18. **W9-FE-02C (Micro-Animations)** — delightful details
+19. **W9-FE-02D (Drag & Drop)** — power user convenience
+20. **W9-FE-01B (Streaming Progress)** — clarity during waiting
+21. **W9-FE-01D (Graph Virtualization)** — performance at scale
+
+### Parallelizable Workstreams
+
+| Stream | Tasks | Owner |
+|--------|-------|-------|
+| **Onboarding** | W9-FE-05A, 05B, 05C | Can run independently |
+| **Performance** | W9-FE-01A, 01B, 01C, 01D | Needs backend coordination for 01B, 01D |
+| **AI Trust** | W9-FE-03A, 03B, 03C, 03D | Needs backend for 03C (feedback table) |
+| **Reading** | W9-FE-04A, 04B, 04C, 04D | Needs backend for 04D (sessions table) |
+| **Polish** | W9-FE-02A, 02B, 02C, 02D, 06A, 06B | Mostly frontend-only |
+
+### Estimated Effort
+
+- Frontend-heavy week: only 2 backend tasks (feedback table + reading_sessions table)
+- Per task: 1–3 hours depending on complexity
+- Total estimate: ~35–45 hours (1 developer, ~1.5 weeks; 2 developers, ~1 week)
 

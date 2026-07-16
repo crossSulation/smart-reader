@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
+import Skeleton from "./Skeleton";
 
 type AgentToolName = "read" | "write" | "search" | "web_search" | "quiz" | "flashcards" | "summary" | "list_notes";
 
@@ -234,6 +235,19 @@ export default function BookAgentChat({
   const latestSelectedNoteIdRef = useRef<number | null>(null);
   const autoSentSeedRef = useRef<string>('');
   const sendMessageRef = useRef<((msg: string) => Promise<void>) | null>(null);
+  const [activeTools, setActiveTools] = useState<Set<string>>(new Set());
+  const [toolStatus, setToolStatus] = useState<string>("");
+
+  const TOOL_LABELS: Record<string, string> = {
+    search: "Searching the book",
+    read: "Reading nearby content",
+    web_search: "Searching the web",
+    write: "Saving a note",
+    quiz: "Generating quiz questions",
+    flashcards: "Creating flashcards",
+    summary: "Generating summary",
+    list_notes: "Retrieving notes",
+  };
 
   const selectedSnippet = useMemo(
     () => selectedExcerpt.trim().replace(/\s+/g, " ").slice(0, 400),
@@ -504,6 +518,8 @@ export default function BookAgentChat({
     setError(null);
     setAgentSteps([]);
     setInsights([]);
+    setActiveTools(new Set());
+    setToolStatus("");
     setChat((prev) => [
       ...prev,
       { id: userId, role: "user", content: clean, agentSteps: [], insights: [] },
@@ -586,11 +602,18 @@ export default function BookAgentChat({
 
           if (eventPayload.type === "tool_start" && eventPayload.tool) {
             pushStep(assistantId, eventPayload.tool, "start");
+            setActiveTools((prev) => new Set(prev).add(eventPayload.tool!));
+            setToolStatus(TOOL_LABELS[eventPayload.tool!] || `Running ${eventPayload.tool}...`);
             continue;
           }
 
           if (eventPayload.type === "tool_end" && eventPayload.tool) {
             pushStep(assistantId, eventPayload.tool, "end");
+            setActiveTools((prev) => {
+              const next = new Set(prev);
+              next.delete(eventPayload.tool!);
+              return next;
+            });
             if (!OUTPUT_TOOLS.has(eventPayload.tool)) {
               const insight = buildInsight(eventPayload.tool, eventPayload.observation);
               if (insight) {
@@ -891,6 +914,16 @@ export default function BookAgentChat({
       </div>
 
       <div ref={scrollContainerRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto rounded border border-gray-100 bg-gray-50 p-2 dark:border-gray-700 dark:bg-gray-800">
+        {loading && activeTools.size > 0 && (
+          <div className="flex items-center gap-2 rounded bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 animate-fade-in">
+            <div className="flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+              <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" style={{ animationDelay: "0.15s" }} />
+              <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" style={{ animationDelay: "0.3s" }} />
+            </div>
+            <span>{toolStatus || "Processing..."}</span>
+          </div>
+        )}
         {chat.length === 0 ? (
           <div className="text-xs text-gray-500 dark:text-gray-400">
             Ask one question and the agent will decide tools for search, notes, references, and quiz.
@@ -956,8 +989,18 @@ export default function BookAgentChat({
                       hr: () => <hr className="my-6 border-gray-200 dark:border-gray-700" />,
                     }}
                   >
-                    {item.content || "..."}
+                    {item.content}
                   </ReactMarkdown>
+                  {!item.content && (
+                    loading ? (
+                      <div className="space-y-2 py-1">
+                        <Skeleton className="h-3 w-3/4 rounded" />
+                        <Skeleton className="h-3 w-1/2 rounded" />
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 dark:text-gray-500">...</span>
+                    )
+                  )}
                   {item.role === "assistant" && item.content && (
                     <button
                       type="button"

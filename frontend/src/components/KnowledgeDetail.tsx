@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import type { KnowledgePointDetail } from "../types/KnowledgeGraph";
 import { useTranslation } from "react-i18next";
+import { SkeletonText } from "./Skeleton";
 type Props = {
   kpId: number | null;
   onClose: () => void;
@@ -58,7 +59,7 @@ export default function KnowledgeDetail({ kpId, onClose, onNavigateTo }: Props) 
   }
 
   if (loading) {
-    return <div className="p-4 text-center text-sm text-gray-400">{t("knowledge.loading", "Loading...")}</div>;
+    return <div className="p-4 space-y-3"><SkeletonText lines={5} /></div>;
   }
 
   if (error) {
