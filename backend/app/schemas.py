@@ -175,7 +175,7 @@ class WebReferenceResponse(BaseModel):
     references: List[WebReferenceItem]
 
 
-AgentToolName = Literal["read", "write", "search", "web_search", "quiz", "list_notes"]
+AgentToolName = Literal["read", "write", "search", "web_search", "quiz", "flashcards", "summary", "list_notes"]
 
 
 class AgentRequest(BaseModel):

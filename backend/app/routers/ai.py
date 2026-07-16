@@ -9,7 +9,7 @@ from typing import List, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import StreamingResponse
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -567,3 +567,32 @@ async def run_book_agent_stream(
             yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+class FeedbackRequest(BaseModel):
+    feedback: Literal["up", "down"]
+
+
+@router.post("/{book_id}/feedback/{interaction_id}")
+def submit_feedback(
+    book_id: int,
+    interaction_id: int,
+    body: FeedbackRequest,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Submit thumbs up/down feedback for an agent interaction."""
+    interaction = (
+        db.query(AIInteraction)
+        .filter(
+            AIInteraction.id == interaction_id,
+            AIInteraction.book_id == book_id,
+            AIInteraction.user_id == user["id"],
+        )
+        .first()
+    )
+    if not interaction:
+        raise HTTPException(status_code=404, detail="Interaction not found")
+    interaction.feedback = body.feedback
+    db.commit()
+    return {"ok": True}

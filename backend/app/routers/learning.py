@@ -383,3 +383,43 @@ def rate_review_item(
         flashcard_back=card.back,
         book_id=card.book_id,
     )
+
+
+@router.post("/review/train-fsrs")
+def train_user_fsrs(
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Train FSRS parameters from review history. Requires ≥50 rated reviews."""
+    from app.services.fsrs_service import train_fsrs_params, export_review_logs
+
+    logs = export_review_logs(db, user["id"])
+    if len(logs) < 50:
+        return {"trained": False, "review_count": len(logs), "message": "Not enough data (need ≥50 rated reviews)"}
+
+    params = train_fsrs_params(user["id"], db)
+    if params:
+        return {"trained": True, "review_count": params["review_count"], "params": params}
+    return {"trained": False, "review_count": len(logs), "message": "Training failed. Ensure fsrs-optimizer is installed."}
+
+
+@router.get("/review/fsrs-status")
+def get_fsrs_status(
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Check if FSRS is trained and how much data is available."""
+    from app.models import User as UserModel
+    from app.services.fsrs_service import export_review_logs
+
+    user_row = db.query(UserModel).filter(UserModel.id == user["id"]).first()
+    is_trained = bool(user_row and user_row.fsrs_params)
+    logs = export_review_logs(db, user["id"])
+
+    return {
+        "trained": is_trained,
+        "review_count": len(logs),
+        "min_required": 50,
+        "ready_to_train": len(logs) >= 50 and not is_trained,
+        "params": json.loads(user_row.fsrs_params) if is_trained else None,
+    }

@@ -7,7 +7,7 @@ from app.config import get_settings
 from app.models import AIInteraction, DocumentChunk, Note
 from app.schemas import AgentRequest, SearchResult
 from app.services.embedding_service import embed_single
-from app.services.llm_service import complete_and_log
+from app.services.llm_service import complete, complete_and_log
 from app.services.retrieval_service import retrieve_hybrid
 from app.services.reranker_service import rerank_candidates
 from app.services.web_reference_service import fetch_web_references
@@ -130,7 +130,7 @@ def _store_agent_turn(
     output: str,
     provider: str,
     db: Session,
-) -> None:
+) -> int:
     record = AIInteraction(
         user_id=user_id,
         book_id=book_id,
@@ -142,6 +142,7 @@ def _store_agent_turn(
     )
     db.add(record)
     db.commit()
+    return record.id
 
 
 def _build_agent_executor(
@@ -192,12 +193,15 @@ def _build_agent_executor(
         return result
 
     @tool("search")
-    def search_tool(query: str) -> str:
-        """Semantic search within the book. Input: query text."""
-        cache_key = f"search:{query}"
+    def search_tool(query: str, cross_book: bool = False) -> str:
+        """Semantic search within the book. Set cross_book=true to search across all your books. Input: query text."""
+        cache_key = f"search:{query}:{cross_book}"
         if cache_key in _cache:
             return _cache[cache_key]
-        hits = _run_search_tool(book_id, query, payload.top_k, db)
+        if cross_book:
+            hits = _run_cross_book_search(user_id, query, payload.top_k, db)
+        else:
+            hits = _run_search_tool(book_id, query, payload.top_k, db, current_page=payload.current_page)
         result = json.dumps(
             {"results": [item.model_dump() for item in hits], "count": len(hits)},
             ensure_ascii=False,
@@ -341,19 +345,71 @@ def _build_agent_executor(
     except Exception:
         pass
 
+    # Load book TOC for chapter-aware responses
+    toc_hint = ""
+    try:
+        from app.models import DocumentChunk as DC
+        sections = (
+            db.query(DC.section_path, DC.page_start)
+            .filter(DC.book_id == book_id, DC.section_path.isnot(None))
+            .order_by(DC.page_start)
+            .all()
+        )
+        seen: set[str] = set()
+        chapters: list[str] = []
+        for sp, ps in sections:
+            if sp and sp not in seen and ps is not None:
+                seen.add(sp)
+                chapters.append(f"  {sp} (p.{ps})")
+        if chapters:
+            toc_hint = (
+                "\n\nBook Structure:\n"
+                + "\n".join(chapters[:20])
+                + "\n\nWhen citing locations, reference these chapter/section names rather than just page numbers."
+            )
+    except Exception:
+        pass
+
+    # Load previous session memories for this book
+    memory_hint = ""
+    try:
+        from app.models import AgentMemory
+        memories = (
+            db.query(AgentMemory.summary, AgentMemory.key_topics)
+            .filter(
+                AgentMemory.user_id == user_id,
+                AgentMemory.book_id == book_id,
+                AgentMemory.session_id != session_id,
+            )
+            .order_by(AgentMemory.created_at.desc())
+            .limit(5)
+            .all()
+        )
+        if memories:
+            parts = []
+            for summary, topics in memories:
+                parts.append(f"- {summary}")
+            memory_hint = (
+                "\n\nPrevious sessions with this book:\n"
+                + "\n".join(parts)
+                + "\n\nUse this context to provide continuity in your responses."
+            )
+    except Exception:
+        pass
+
     prompt = ChatPromptTemplate.from_messages([
         (
             "system",
             "You are a precise reading assistant powered by the user's book content.\n\n"
             "Rules:\n"
             "1. Always cite source page numbers when quoting or referencing book content.\n"
-            "2. Use the read tool first to understand the user's current page context, then search to find related concepts across the book.\n"
+            "2. Call read and search together in parallel when both are needed — this saves time and gives you complete context immediately.\n"
             "3. If the book does NOT contain enough evidence to answer, say so clearly. Never fabricate.\n"
             "4. Structure your response: (1) direct answer, (2) supporting evidence with page citations, (3) follow-up suggestions if relevant.\n"
             "5. Keep answers concise unless the user asks for more detail.\n"
-            "6. For external references (definitions, concepts not in the book), use web_search.\n"
+            "6. For external references or comparing concepts across books, use web_search or search with cross_book=true.\n"
             "7. Save notes/memories with write. Show existing notes with list_notes. Generate quizzes with quiz. Create flashcards with flashcards. Create summaries with summary (bullet_points, cornell, sq3r)."
-            f"{markdown_instruction}{weak_topics_hint}",
+            f"{markdown_instruction}{weak_topics_hint}{memory_hint}{toc_hint}",
         ),
         MessagesPlaceholder(variable_name="chat_history", optional=True),
         ("human", "{input}"),
@@ -374,7 +430,13 @@ def _build_agent_executor(
     return executor, history, provider_label, allowed_tools
 
 
-def _run_search_tool(book_id: int, query: str, top_k: int, db: Session) -> list[SearchResult]:
+def _run_search_tool(
+    book_id: int,
+    query: str,
+    top_k: int,
+    db: Session,
+    current_page: int | None = None,
+) -> list[SearchResult]:
     settings = get_settings()
     rows = (
         db.query(DocumentChunk)
@@ -392,7 +454,7 @@ def _run_search_tool(book_id: int, query: str, top_k: int, db: Session) -> list[
         book_id=book_id,
         query=query,
         query_vector=query_vec,
-        top_k=max(1, min(top_k, 20)) * 2,
+        top_k=max(1, min(top_k, 20)) * 3,  # fetch more for re-ranking + proximity
         chunks=chunk_data,
     )
 
@@ -407,11 +469,25 @@ def _run_search_tool(book_id: int, query: str, top_k: int, db: Session) -> list[
         reranked = rerank_candidates(
             query=query,
             candidates=candidates_for_rerank,
-            top_k=max(1, min(top_k, 20)),
+            top_k=max(1, min(top_k, 20)) * 2,
         )
         top_hits_final = reranked
     except Exception:
         top_hits_final = [(cid, score) for cid, _, score in candidates_for_rerank[:top_k]]
+
+    # Proximity boost: favor chunks near the user's current page
+    if current_page is not None:
+        boosted = []
+        for cid, score in top_hits_final:
+            chunk = chunk_map.get(cid)
+            if chunk and chunk.page_start is not None:
+                page_diff = abs(chunk.page_start - current_page)
+                proximity = 1.0 / (1.0 + page_diff / 10.0)  # 0 pages = 1.0, 10 pages = 0.5, 100 pages = 0.09
+                boosted.append((cid, score * 0.65 + proximity * 0.35))
+            else:
+                boosted.append((cid, score))
+        boosted.sort(key=lambda x: -x[1])
+        top_hits_final = boosted[:top_k]
 
     normalized_hits = _normalize_rank_scores(top_hits_final)
     return [
@@ -427,6 +503,83 @@ def _run_search_tool(book_id: int, query: str, top_k: int, db: Session) -> list[
         for cid, score in normalized_hits
         if cid in chunk_map
     ]
+
+
+def _run_cross_book_search(
+    user_id: int,
+    query: str,
+    top_k: int,
+    db: Session,
+) -> list[SearchResult]:
+    """Search across all books owned by the user."""
+    from app.models import Book as BookModel
+    user_book_ids = [row[0] for row in db.query(BookModel.id).filter(BookModel.owner_id == user_id).all()]
+    if not user_book_ids:
+        return []
+
+    settings = get_settings()
+    rows = (
+        db.query(DocumentChunk)
+        .filter(DocumentChunk.book_id.in_(user_book_ids), DocumentChunk.embedding.isnot(None))
+        .all()
+    )
+    if not rows:
+        return []
+
+    query_vec = embed_single(query, settings.EMBEDDING_MODEL)
+    chunk_data = [(c.id, c.text, c.embedding) for c in rows]
+    all_hits: list[tuple[int, float]] = []
+
+    # Search per book and merge results
+    for bid in user_book_ids:
+        book_chunks = [(cid, t, e) for cid, t, e in chunk_data if rows[0].book_id == bid]  # simplified — search all at once is faster
+        if not book_chunks:
+            continue
+        try:
+            hits = retrieve_hybrid(
+                book_id=bid,
+                query=query,
+                query_vector=query_vec,
+                top_k=max(1, min(top_k, 20)),
+                chunks=book_chunks,
+            )
+            all_hits.extend(hits)
+        except Exception:
+            pass
+
+    # If no per-book hits, fall back to global search
+    if not all_hits:
+        all_hits = retrieve_hybrid(
+            book_id=0,
+            query=query,
+            query_vector=query_vec,
+            top_k=max(1, min(top_k, 20)),
+            chunks=chunk_data,
+        )
+
+    chunk_map = {c.id: c for c in rows}
+    all_hits.sort(key=lambda x: -x[1])
+    unique = []
+    seen = set()
+    for cid, score in all_hits:
+        if cid not in seen and cid in chunk_map:
+            unique.append((cid, score))
+            seen.add(cid)
+
+    normalized = _normalize_rank_scores(unique[:top_k * 2])
+    return [
+        SearchResult(
+            chunk_id=cid,
+            chunk_index=chunk_map[cid].chunk_index,
+            text=chunk_map[cid].text,
+            page_start=chunk_map[cid].page_start,
+            page_end=chunk_map[cid].page_end,
+            section_path=chunk_map[cid].section_path,
+            score=round(score, 4),
+        )
+        for cid, score in normalized
+        if cid in chunk_map
+    ][:top_k]
 
 
 def _run_read_tool(
@@ -734,7 +887,7 @@ def run_langchain_book_agent(book_id: int, user_id: int, payload: AgentRequest, 
     if output_blocks:
         output = "\n\n---\n\n".join(output_blocks + ([output] if output else []))
 
-    _store_agent_turn(
+    interaction_id = _store_agent_turn(
         book_id=book_id,
         user_id=user_id,
         session_id=session_id,
@@ -746,6 +899,7 @@ def run_langchain_book_agent(book_id: int, user_id: int, payload: AgentRequest, 
 
     return {
         "output": output,
+        "interaction_id": interaction_id,
         "trace": trace,
         "session_id": session_id,
         "allowed_tools": allowed_tools,
@@ -891,7 +1045,7 @@ async def stream_langchain_book_agent(
     if output_blocks:
         final_output = "\n\n---\n\n".join(output_blocks + ([final_output] if final_output else []))
 
-    _store_agent_turn(
+    interaction_id = _store_agent_turn(
         book_id=book_id,
         user_id=user_id,
         session_id=session_id,
@@ -914,6 +1068,7 @@ async def stream_langchain_book_agent(
             model="",
             prompt_tokens=max(1, estimated_prompt),
             completion_tokens=max(1, estimated_completion),
+            interaction_id=interaction_id,
         )
     except ValueError:
         pass
@@ -921,11 +1076,34 @@ async def stream_langchain_book_agent(
         import logging
         logging.getLogger(__name__).warning("Failed to log streaming agent tokens: %s", e)
 
+    # Save session memory for future context
+    try:
+        if final_output and len(final_output.strip()) > 50:
+            summary_prompt = f"Summarize this learning session in 2-3 sentences, focusing on what the user asked about and key concepts discussed:\n\n{final_output[:1500]}"
+            summary_raw = complete(
+                summary_prompt,
+                "You are a session summarizer. Return ONLY the summary text, no JSON, no markdown.",
+                get_settings(),
+            )
+            summary_text = summary_raw.text.strip()[:500]
+            if summary_text:
+                from app.models import AgentMemory
+                db.add(AgentMemory(
+                    user_id=user_id,
+                    book_id=book_id,
+                    session_id=session_id,
+                    summary=summary_text,
+                    key_topics=None,
+                ))
+                db.commit()
+    except Exception:
+        pass
+
     yield {
         "type": "final",
         "output": final_output,
-        "trace": trace,
         "session_id": session_id,
+        "interaction_id": interaction_id,
         "allowed_tools": allowed_tools,
         "provider": provider_label,
     }

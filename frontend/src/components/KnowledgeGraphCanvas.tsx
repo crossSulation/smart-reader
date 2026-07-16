@@ -299,7 +299,7 @@ export default function KnowledgeGraphCanvas({
         t.vx -= fx; t.vy -= fy;
       });
 
-      // Center gravity + dampen + clamp (all nodes)
+      // Center gravity + dampen + clamp (simulated nodes)
       const { w: ww, h: wh } = worldRef.current;
       arr.forEach((n) => {
         if (simIds.has(n.id)) {
@@ -315,6 +315,32 @@ export default function KnowledgeGraphCanvas({
           n.y = Math.max(margin, Math.min(wh - margin, n.y));
         }
       });
+
+      // Position non-simulated nodes in an outer ring around the sim center
+      if (arr.length > MAX_SIM_NODES) {
+        const nonSim = arr.filter((n) => !simIds.has(n.id));
+        if (nonSim.length > 0) {
+          // Compute centroid of simulated nodes
+          let sx = 0, sy = 0;
+          simNodes.forEach((n) => { sx += n.x; sy += n.y; });
+          sx /= simNodes.length;
+          sy /= simNodes.length;
+
+          // Max distance from centroid to any sim node
+          let maxDist = 0;
+          simNodes.forEach((n) => {
+            const d = Math.sqrt((n.x - sx) ** 2 + (n.y - sy) ** 2);
+            if (d > maxDist) maxDist = d;
+          });
+          const ringRadius = Math.max(maxDist + 40, Math.min(ww, wh) * 0.35);
+
+          nonSim.forEach((n, i) => {
+            const angle = (2 * Math.PI * i) / nonSim.length;
+            n.x = sx + ringRadius * Math.cos(angle);
+            n.y = sy + ringRadius * Math.sin(angle);
+          });
+        }
+      }
 
       nodesRef.current = current;
 

@@ -17,14 +17,17 @@ type AgentStreamEvent = {
   session_id?: string;
   allowed_tools?: AgentToolName[];
   message?: string;
+  interaction_id?: number;
 };
 
 type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
-  agentSteps: AgentStep[]; // save the agent steps at the time of this message
-  insights: ToolInsight[]; // save the insights at the time of this message
+  agentSteps: AgentStep[];
+  insights: ToolInsight[];
+  interaction_id?: number;
+  feedback?: "up" | "down";
 };
 
 type BookAgentChatProps = {
@@ -70,6 +73,17 @@ type ToolInsight = SearchInsight | ReadInsight | WebInsight;
 
 const OUTPUT_TOOLS: Set<string> = new Set(["summary", "quiz", "flashcards", "list_notes"]);
 
+const TOOL_LABELS: Record<AgentToolName, string> = {
+  read: "Read page",
+  search: "Search book",
+  write: "Save note",
+  web_search: "Web",
+  quiz: "Quiz",
+  flashcards: "Cards",
+  summary: "Summary",
+  list_notes: "Notes",
+};
+
 const ALL_AGENT_TOOLS: AgentToolName[] = ["read", "search", "write", "web_search", "quiz", "flashcards", "summary", "list_notes"];
 
 const STORAGE_PREFIX = "smart-reader:agent-chat:v1";
@@ -80,18 +94,21 @@ const QUICK_PROMPTS: Record<"pdf" | "epub" | "markdown", string[]> = {
     "Create 3 quiz questions from this PDF section.",
     "Save useful takeaways as notes with practical tags.",
     "Explain difficult terms and include short web references.",
+    "Search across all my books for concepts related to this topic.",
   ],
   epub: [
     "Summarize this chapter arc and the top 5 ideas.",
     "Generate a short recall quiz for this chapter.",
     "Identify character or concept relationships in this section.",
     "Save study notes from key excerpts.",
+    "Compare this book's main ideas with concepts from my other books.",
   ],
   markdown: [
     "Summarize headings and key points from this markdown document.",
     "Turn this section into a quick checklist for revision.",
     "Create 3 Q&A flash prompts from the current markdown content.",
     "Find external references for unknown terms in this document.",
+    "Search across all my books for related knowledge points.",
   ],
 };
 
@@ -253,6 +270,25 @@ export default function BookAgentChat({
     () => selectedExcerpt.trim().replace(/\s+/g, " ").slice(0, 400),
     [selectedExcerpt],
   );
+
+  const handleFeedback = async (msg: ChatMessage, fb: "up" | "down") => {
+    if (!msg.interaction_id) return;
+    try {
+      await fetch(`/api/books/${bookId}/feedback/${msg.interaction_id}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({ feedback: fb }),
+      });
+      setChat((prev) =>
+        prev.map((item) =>
+          item.id === msg.id ? { ...item, feedback: item.feedback === fb ? undefined : fb } : item,
+        ),
+      );
+    } catch { /* ignore */ }
+  };
 
   const quickPrompts = useMemo(() => QUICK_PROMPTS[fileType] || QUICK_PROMPTS.pdf, [fileType]);
   const selectedNoteSnippet = useMemo(() => {
@@ -632,6 +668,13 @@ export default function BookAgentChat({
             if (eventPayload.session_id) {
               setSessionId(eventPayload.session_id);
             }
+            if (eventPayload.interaction_id) {
+              setChat((prev) =>
+                prev.map((item) =>
+                  item.id === assistantId ? { ...item, interaction_id: eventPayload.interaction_id } : item,
+                ),
+              );
+            }
             if (Array.isArray(eventPayload.allowed_tools) && eventPayload.allowed_tools.length > 0) {
               setAllowedTools(eventPayload.allowed_tools);
             }
@@ -894,21 +937,26 @@ export default function BookAgentChat({
         </div>
       )}
 
-      <div className="mb-3 flex flex-wrap gap-2">
+      <div className="mb-3 flex flex-wrap gap-1.5">
         {ALL_AGENT_TOOLS.map((tool) => {
           const enabled = allowedTools.includes(tool);
           return (
-            <button
+            <label
               key={tool}
-              type="button"
-              onClick={() => toggleTool(tool)}
-              className={`rounded border px-2 py-1 text-[11px] ${enabled
-                ? "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-300"
-                : "border-gray-300 bg-white text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400"
-                }`}
+              className={`flex cursor-pointer select-none items-center gap-1 rounded border px-2 py-1 text-[11px] transition ${
+                enabled
+                  ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                  : "border-gray-200 bg-white text-gray-400 line-through dark:border-gray-600 dark:bg-gray-800 dark:text-gray-500"
+              }`}
             >
-              {enabled ? "On" : "Off"} {tool}
-            </button>
+              <input
+                type="checkbox"
+                checked={enabled}
+                onChange={() => toggleTool(tool)}
+                className="sr-only"
+              />
+              {TOOL_LABELS[tool] || tool}
+            </label>
           );
         })}
       </div>
@@ -1013,6 +1061,36 @@ export default function BookAgentChat({
                     >
                       {savingNoteIds.has(item.id) ? "Saving..." : "+ Save as note"}
                     </button>
+                  )}
+                  {item.role === "assistant" && item.interaction_id && (
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFeedback(item, "up");
+                        }}
+                        className={`text-[10px] ${item.feedback === "up"
+                          ? "text-green-600"
+                          : "text-gray-400 hover:text-green-600 dark:text-gray-500 dark:hover:text-green-400"}`}
+                        title="Helpful"
+                      >
+                        👍
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFeedback(item, "down");
+                        }}
+                        className={`text-[10px] ${item.feedback === "down"
+                          ? "text-red-500"
+                          : "text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400"}`}
+                        title="Not helpful"
+                      >
+                        👎
+                      </button>
+                    </div>
                   )}
                 </div>
               ) : (
