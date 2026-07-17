@@ -6,7 +6,7 @@ import BookCard from "../components/BookCard";
 import FileUpload from "../components/FileUpload";
 import type { Book } from "../types/Book";
 import NoBooks from "../components/NoBooks";
-import { SkeletonGrid } from "../components/Skeleton";
+import { SkeletonGrid, SkeletonCard } from "../components/Skeleton";
 
 type SortOption = 'title' | 'author' | 'current_page' | 'date_added';
 type SortOrder = 'asc' | 'desc';

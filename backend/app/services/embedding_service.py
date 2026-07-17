@@ -76,18 +76,41 @@ def search_chunks(
 ) -> List[Tuple[int, float]]:
     """
     Return top_k (chunk_id, score) pairs sorted by cosine similarity descending.
-    Skips candidates with null/empty embeddings.
+    Uses numpy for batch vectorised computation.
     """
-    scores: List[Tuple[int, float]] = []
+    if not candidates:
+        return []
+
+    import numpy as np
+
+    ids = []
+    vectors = []
     for chunk_id, emb_json in candidates:
         if not emb_json:
             continue
         try:
-            vec = from_json(emb_json)
-            score = cosine_similarity(query_vector, vec)
-            scores.append((chunk_id, score))
+            vec = json.loads(emb_json)
+            if vec is None or not isinstance(vec, list):
+                continue
+            vectors.append(vec)
+            ids.append(chunk_id)
         except Exception:
             continue
 
-    scores.sort(key=lambda x: x[1], reverse=True)
-    return scores[:top_k]
+    if not vectors:
+        return []
+
+    mat = np.array(vectors, dtype=np.float32)
+    q = np.array(query_vector, dtype=np.float32)
+    q_norm = q / (np.linalg.norm(q) or 1.0)
+    mat_norms = np.linalg.norm(mat, axis=1)
+    mat_norms = np.where(mat_norms > 0, mat_norms, 1.0)
+    mat_normalised = mat / mat_norms[:, None]
+    scores = np.dot(mat_normalised, q_norm)
+
+    k = min(top_k, len(scores))
+    if k <= 0:
+        return []
+    idx = np.argpartition(-scores, k - 1)[:k]
+    idx = idx[np.argsort(-scores[idx])]
+    return [(ids[int(i)], float(scores[int(i)])) for i in idx]

@@ -119,6 +119,101 @@ async def list_books(user: dict = Depends(get_current_user), db: Session = Depen
     return books
 
 
+@router.get("/search", response_model=List[BookSearchResult])
+def search_books(
+    q: str = Query(..., min_length=1),
+    top_k: int = Query(10, ge=1, le=50),
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Semantic search across all user books. Returns matched books with snippets."""
+    from app.services.embedding_service import embed_single, search_chunks
+
+    file_service = FileService(db)
+    books = file_service.get_user_books(user["id"])
+
+    if not books:
+        return []
+
+    book_ids = [b.id for b in books]
+    settings_obj = get_settings()
+    q_lower = q.lower()
+
+    title_author_matches = []
+    for b in books:
+        title_match = q_lower in (b.title or "").lower()
+        author = getattr(b, "author", None) or ""
+        author_match = q_lower in author.lower()
+        if title_match or author_match:
+            title_author_matches.append(BookSearchResult(
+                book_id=b.id,
+                title=b.title,
+                author=getattr(b, "author", None),
+                file_type=getattr(b, "file_type", None),
+                score=1.0 if title_match else 0.5,
+                snippet=b.title or "",
+            ))
+
+    rows = (
+        db.query(DocumentChunk.id, DocumentChunk.embedding, DocumentChunk.book_id, DocumentChunk.text)
+        .filter(
+            DocumentChunk.book_id.in_(book_ids),
+            DocumentChunk.embedding.isnot(None),
+        )
+        .all()
+    )
+
+    if not rows:
+        title_author_matches.sort(key=lambda x: x.score, reverse=True)
+        return title_author_matches[:top_k]
+
+    try:
+        query_vector = embed_single(q, settings_obj.EMBEDDING_MODEL)
+    except Exception:
+        title_author_matches.sort(key=lambda x: x.score, reverse=True)
+        return title_author_matches[:top_k]
+
+    candidates = [(cid, emb) for cid, emb, _, _ in rows]
+    top = search_chunks(query_vector, candidates, top_k=max(top_k * 3, 20))
+
+    chunk_book_map = {cid: bid for cid, _, bid, _ in rows}
+    chunk_text_map = {cid: (text or "") for cid, _, _, text in rows}
+    book_hits = {}
+    for cid, score in top:
+        bid = chunk_book_map.get(cid)
+        if bid is None:
+            continue
+        if bid not in book_hits or score > book_hits[bid][0]:
+            snippet = chunk_text_map.get(cid, "")[:200]
+            book_hits[bid] = (score, snippet)
+
+    seen_books = {b.book_id for b in title_author_matches}
+    semantic_results = []
+    for b in books:
+        if b.id in book_hits and b.id not in seen_books:
+            score, snippet = book_hits[b.id]
+            semantic_results.append(BookSearchResult(
+                book_id=b.id,
+                title=b.title,
+                author=getattr(b, "author", None),
+                file_type=getattr(b, "file_type", None),
+                score=round(score, 4),
+                snippet=snippet,
+            ))
+
+    semantic_results.sort(key=lambda x: x.score, reverse=True)
+    results = title_author_matches + semantic_results
+    return results[:top_k]
+
+
+@router.get("/stats")
+async def get_reading_stats(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    """获取用户的阅读统计数据"""
+    file_service = FileService(db)
+    stats = file_service.get_user_reading_stats(user['id'])
+    return stats
+
+
 @router.post("/", response_model=Book)
 async def create_book(book: BookCreate, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     # 实现创建书籍功能
@@ -170,98 +265,6 @@ async def add_book_notes(book_id: int, notes_data: AddNotesRequest, user: dict =
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
     return book
-
-
-@router.get("/stats")
-async def get_reading_stats(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    """获取用户的阅读统计数据"""
-    file_service = FileService(db)
-    stats = file_service.get_user_reading_stats(user['id'])
-    return stats
-
-
-@router.get("/search", response_model=List[BookSearchResult])
-def search_books(
-    q: str = Query(..., min_length=1),
-    top_k: int = Query(10, ge=1, le=50),
-    user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Semantic search across all user books. Returns matched books with snippets."""
-    from app.services.embedding_service import embed_single, search_chunks
-
-    file_service = FileService(db)
-    books = file_service.get_user_books(user["id"])
-
-    if not books:
-        return []
-
-    book_ids = [b.id for b in books]
-    settings_obj = get_settings()
-
-    rows = (
-        db.query(DocumentChunk)
-        .filter(
-            DocumentChunk.book_id.in_(book_ids),
-            DocumentChunk.embedding.isnot(None),
-        )
-        .all()
-    )
-
-    if not rows:
-        q_lower = q.lower()
-        results = []
-        for b in books:
-            title_match = q_lower in (b.title or "").lower()
-            author_match = q_lower in (b.author or "").lower()
-            if title_match or author_match:
-                results.append(BookSearchResult(
-                    book_id=b.id,
-                    title=b.title,
-                    author=b.author,
-                    file_type=b.file_type,
-                    score=1.0 if title_match else 0.5,
-                    snippet=b.title or "",
-                ))
-        results.sort(key=lambda x: x.score, reverse=True)
-        return results[:top_k]
-
-    try:
-        query_vector = embed_single(q, settings_obj.EMBEDDING_MODEL)
-    except Exception:
-        return []
-
-    candidates = [(c.id, c.embedding) for c in rows]
-    top = search_chunks(query_vector, candidates, top_k=max(top_k * 3, 20))
-    top_ids = {chunk_id: score for chunk_id, score in top}
-
-    chunk_map = {c.id: c for c in rows}
-    book_hits = {}
-    for cid, score in top:
-        if cid not in chunk_map:
-            continue
-        chunk = chunk_map[cid]
-        bid = chunk.book_id
-        if bid not in book_hits or score > book_hits[bid][0]:
-            snippet = (chunk.text or "")[:200]
-            book_hits[bid] = (score, snippet, chunk.page_start)
-
-    results = []
-    for b in books:
-        if b.id in book_hits:
-            score, snippet, page = book_hits[b.id]
-            results.append(BookSearchResult(
-                book_id=b.id,
-                title=b.title,
-                author=b.author,
-                file_type=b.file_type,
-                score=round(score, 4),
-                snippet=snippet,
-                chunk_page=page,
-            ))
-
-    results.sort(key=lambda x: x.score, reverse=True)
-    return results[:top_k]
 
 
 @router.delete("/{book_id}")

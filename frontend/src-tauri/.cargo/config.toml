@@ -4,6 +4,7 @@
 [env]
 ANDROID_NDK_HOME = "C:\\Users\\Sunia\\AppData\\Local\\Android\\Sdk\\ndk\\29.0.13599879"
 ANDROID_HOME = "C:\\Users\\Sunia\\AppData\\Local\\Android\\Sdk"
+LIBRSQLITE3_SYS_USE_BUNDLED = "1"
 
 [target.aarch64-linux-android]
 linker = "C:\\Users\\Sunia\\AppData\\Local\\Android\\Sdk\\ndk\\29.0.13599879\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\aarch64-linux-android-clang.cmd"

@@ -73,17 +73,6 @@ type ToolInsight = SearchInsight | ReadInsight | WebInsight;
 
 const OUTPUT_TOOLS: Set<string> = new Set(["summary", "quiz", "flashcards", "list_notes"]);
 
-const TOOL_LABELS: Record<AgentToolName, string> = {
-  read: "Read page",
-  search: "Search book",
-  write: "Save note",
-  web_search: "Web",
-  quiz: "Quiz",
-  flashcards: "Cards",
-  summary: "Summary",
-  list_notes: "Notes",
-};
-
 const ALL_AGENT_TOOLS: AgentToolName[] = ["read", "search", "write", "web_search", "quiz", "flashcards", "summary", "list_notes"];
 
 const STORAGE_PREFIX = "smart-reader:agent-chat:v1";
@@ -264,6 +253,17 @@ export default function BookAgentChat({
     flashcards: "Creating flashcards",
     summary: "Generating summary",
     list_notes: "Retrieving notes",
+  };
+
+  const TOOL_SHORT: Record<string, string> = {
+    read: "Read page",
+    search: "Search book",
+    write: "Save note",
+    web_search: "Web",
+    quiz: "Quiz",
+    flashcards: "Cards",
+    summary: "Summary",
+    list_notes: "Notes",
   };
 
   const selectedSnippet = useMemo(
@@ -955,7 +955,7 @@ export default function BookAgentChat({
                 onChange={() => toggleTool(tool)}
                 className="sr-only"
               />
-              {TOOL_LABELS[tool] || tool}
+              {TOOL_SHORT[tool] || tool}
             </label>
           );
         })}

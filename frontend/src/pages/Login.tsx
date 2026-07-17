@@ -46,8 +46,9 @@ const Login: React.FC = () => {
         
         navigate('/library', { replace: true });
       } else {
-                const data = await response.json().catch(() => ({}));
-                setError(data.detail || t('login.error'));
+        const data = await response.json().catch(() => ({}));
+        const msg = Array.isArray(data.detail) ? data.detail[0]?.msg || t('login.error') : data.detail || t('login.error');
+        setError(msg);
       }
     } catch {
       setError(t('login.error'));
