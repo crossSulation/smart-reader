@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useMemo, type ChangeEvent } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowBack, AutoAwesomeOutlined, LocalOfferOutlined, SettingsOutlined, UploadFileOutlined, ViewSidebarOutlined } from "@mui/icons-material";
+import { ArrowBack, AutoAwesomeOutlined, LocalOfferOutlined, SettingsOutlined, UploadFileOutlined, ViewSidebarOutlined, PlayArrow, Pause, Stop, SkipNext, SkipPrevious } from "@mui/icons-material";
 import {
   Dialog, DialogTitle, DialogContent, Slider, FormControl,
   InputLabel, Select, MenuItem, Switch, FormControlLabel, IconButton,
@@ -14,6 +14,7 @@ import EPUBViewer, { type EPUBViewerHandle } from "../components/EPUBViewer";
 import AIPanel, { type AIPanelLearningNote } from "../components/AIPanel";
 import BareTitleBar from "../components/BareTitleBar";
 import { useKeyboardShortcuts, type ShortcutBinding } from "../hooks/useKeyboardShortcuts";
+import useTTS from "../hooks/useTTS";
 import { useThemeContext } from "../contexts/ThemeContext";
 import { SkeletonText } from "../components/Skeleton";
 import type { Book } from "../types/Book";
@@ -91,6 +92,23 @@ function Reader() {
   const localFileInputRef = useRef<HTMLInputElement>(null);
   const previousLocalUrlRef = useRef<string | null>(null);
   const [showMobilePanel, setShowMobilePanel] = useState(false);
+  const readerContentRef = useRef<HTMLDivElement>(null);
+  const tts = useTTS();
+  const fileTypeRef = useRef<string | null>(null);
+
+  const handleTTSPlay = useCallback(() => {
+    const container = readerContentRef.current;
+    if (!container) return;
+    const ft = fileTypeRef.current;
+    if (ft === "pdf") {
+      const textLayer = container.querySelector(".react-pdf__Page__textContent");
+      const text = textLayer?.textContent ?? "";
+      if (text.trim()) tts.play(text);
+    } else {
+      const text = container.textContent ?? "";
+      if (text.trim()) tts.play(text);
+    }
+  }, [tts]);
 
   const handleTextSelected = useCallback((text: string) => {
     const clean = text.trim().replace(/\s+/g, " ");
@@ -418,6 +436,7 @@ function Reader() {
 
   const normalizedFileType = resolveBookFileType(book);
   const activeFileType = localFile?.type ?? normalizedFileType;
+  fileTypeRef.current = activeFileType;
   const activeTitle = localFile?.name ?? book?.title ?? "Untitled";
 
   const activeBookIdForAi = localFile
@@ -846,6 +865,20 @@ function Reader() {
                   <SettingsOutlined fontSize="small" />
                 </button>
               )}
+              <button
+                type="button"
+                onClick={handleTTSPlay}
+                disabled={tts.status === "playing" || tts.status === "paused"}
+                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition ${
+                  tts.status !== "idle"
+                    ? "border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300"
+                    : "border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                }`}
+                title="Read aloud"
+              >
+                <PlayArrow fontSize="small" />
+                Read
+              </button>
             </div>
           </div>
         </div>
@@ -854,10 +887,99 @@ function Reader() {
         )}
       </header>
 
+      {tts.status !== "idle" && (
+        <div className="border-b border-gray-200 bg-white px-4 py-2 dark:border-gray-700 dark:bg-gray-900">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => tts.skipBackward()}
+              className="rounded p-1 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+              title="Skip backward"
+            >
+              <SkipPrevious fontSize="small" />
+            </button>
+
+            {tts.status === "playing" ? (
+              <button
+                type="button"
+                onClick={() => tts.pause()}
+                className="rounded-full bg-blue-600 p-1.5 text-white hover:bg-blue-700"
+                title="Pause"
+              >
+                <Pause fontSize="small" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => tts.resume()}
+                className="rounded-full bg-blue-600 p-1.5 text-white hover:bg-blue-700"
+                title="Resume"
+              >
+                <PlayArrow fontSize="small" />
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => tts.skipForward()}
+              className="rounded p-1 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+              title="Skip forward"
+            >
+              <SkipNext fontSize="small" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => tts.stop()}
+              className="rounded p-1 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+              title="Stop"
+            >
+              <Stop fontSize="small" />
+            </button>
+
+            <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+              {tts.sentenceIndex + 1} / {tts.totalSentences}
+            </span>
+
+            <select
+              value={tts.speed}
+              onChange={(e) => tts.changeSpeed(Number(e.target.value))}
+              className="ml-auto rounded border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
+              title="Speed"
+            >
+              <option value={0.5}>0.5x</option>
+              <option value={0.75}>0.75x</option>
+              <option value={1}>1x</option>
+              <option value={1.25}>1.25x</option>
+              <option value={1.5}>1.5x</option>
+              <option value={2}>2x</option>
+            </select>
+
+            {tts.voices.length > 1 && (
+              <select
+                value={tts.voice?.voiceURI ?? ""}
+                onChange={(e) => {
+                  const v = tts.voices.find((v) => v.voiceURI === e.target.value);
+                  if (v) tts.changeVoice(v);
+                }}
+                className="rounded border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
+                title="Voice"
+              >
+                {tts.voices.map((v) => (
+                  <option key={v.voiceURI} value={v.voiceURI}>
+                    {v.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 min-h-0">
       {!isDesktop ? (
         <div className="relative flex h-full flex-col overflow-hidden">
-          <div className="min-w-0 flex-1 overflow-y-auto" style={readerContentStyle}>{renderReaderContent()}</div>
+          <div ref={readerContentRef} className="min-w-0 flex-1 overflow-y-auto" style={readerContentStyle}>{renderReaderContent()}</div>
 
           {!showMobilePanel && (
             <button
@@ -996,7 +1118,7 @@ function Reader() {
             </>
           )}
 
-          <div className="min-w-0 flex-1 overflow-y-auto" style={readerContentStyle}>{renderReaderContent()}</div>
+          <div ref={readerContentRef} className="min-w-0 flex-1 overflow-y-auto" style={readerContentStyle}>{renderReaderContent()}</div>
 
           <aside
             className="relative h-full shrink-0 border-l border-gray-200 dark:border-gray-700"

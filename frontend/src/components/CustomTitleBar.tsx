@@ -14,8 +14,15 @@ const CustomTitleBar: React.FC = () => {
   const [profileOpen, setProfileOpen] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const [searchValue, setSearchValue] = useState(searchParams.get('q') || '');
+  const [isDesktop, setIsDesktop] = useState(true);
 
   useEffect(() => {
+    const ua = navigator.userAgent || '';
+    setIsDesktop(!/android|iphone|ipad/i.test(ua));
+  }, []);
+
+  useEffect(() => {
+    if (!isDesktop) return;
     const appWindow = getCurrentWindow();
 
     appWindow.isMaximized().then(setIsMaximized);
@@ -131,6 +138,7 @@ const CustomTitleBar: React.FC = () => {
           </div>
         </nav>
       </div>
+      {isDesktop && (
       <div className="titlebar-controls">
         <ThemeToggleButton />
         <span className="titlebar-button" style={{ pointerEvents: 'none', width: 2 }} />
@@ -160,6 +168,7 @@ const CustomTitleBar: React.FC = () => {
           </svg>
         </button>
       </div>
+      )}
     </div>
   );
 };
