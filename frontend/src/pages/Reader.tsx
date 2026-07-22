@@ -10,6 +10,7 @@ import { Document, Page, pdfjs } from "react-pdf";
 import { invoke } from "@tauri-apps/api/core";
 import MarkdownViewer, { type MarkdownSidebarEntry, type MarkdownViewerHandle } from "../components/MarkdownViewer";
 import PDFViewer from "../components/PDFViewer";
+import NativePDFViewer from "../components/NativePDFViewer";
 import EPUBViewer, { type EPUBViewerHandle } from "../components/EPUBViewer";
 import AIPanel, { type AIPanelLearningNote } from "../components/AIPanel";
 import BareTitleBar from "../components/BareTitleBar";
@@ -95,19 +96,32 @@ function Reader() {
   const readerContentRef = useRef<HTMLDivElement>(null);
   const tts = useTTS();
   const fileTypeRef = useRef<string | null>(null);
+  const useNativePdf = (() => {
+    try {
+      return typeof OffscreenCanvas === 'undefined';
+    } catch {
+      return true;
+    }
+  })();
 
   const handleTTSPlay = useCallback(() => {
     const container = readerContentRef.current;
     if (!container) return;
     const ft = fileTypeRef.current;
     if (ft === "pdf") {
-      const textLayer = container.querySelector(".react-pdf__Page__textContent");
-      const text = textLayer?.textContent ?? "";
-      if (text.trim()) tts.play(text);
-    } else {
-      const text = container.textContent ?? "";
-      if (text.trim()) tts.play(text);
+      const reactPdfLayer = container.querySelector(".react-pdf__Page__textContent");
+      if (reactPdfLayer) {
+        const text = reactPdfLayer.textContent ?? "";
+        if (text.trim()) { tts.play(text); return; }
+      }
+      const nativeLayer = container.querySelector("[data-reader-content]");
+      if (nativeLayer) {
+        const text = nativeLayer.textContent ?? "";
+        if (text.trim()) { tts.play(text); return; }
+      }
     }
+    const text = container.textContent ?? "";
+    if (text.trim()) tts.play(text);
   }, [tts]);
 
   const handleTextSelected = useCallback((text: string) => {
@@ -771,15 +785,26 @@ function Reader() {
 
   const renderReaderContent = () =>
     activeFileType === "pdf" ? (
-      <PDFViewer
-        bookId={localFile ? undefined : id!}
-        fileUrlOverride={localFile?.type === "pdf" ? localFile.url : undefined}
-        initPage={jumpToPage ?? book.current_page ?? 1}
-        jumpToPage={jumpToPage}
-        onTextSelected={handleTextSelected}
-        onPageChange={setCurrentPdfPage}
-        onTotalPagesChange={setPdfTotalPages}
-      />
+      useNativePdf && !localFile ? (
+        <NativePDFViewer
+          bookId={id}
+          initPage={jumpToPage ?? book.current_page ?? 1}
+          jumpToPage={jumpToPage}
+          onTextSelected={handleTextSelected}
+          onPageChange={setCurrentPdfPage}
+          onTotalPagesChange={setPdfTotalPages}
+        />
+      ) : (
+        <PDFViewer
+          bookId={localFile ? undefined : id!}
+          fileUrlOverride={localFile?.type === "pdf" ? localFile.url : undefined}
+          initPage={jumpToPage ?? book.current_page ?? 1}
+          jumpToPage={jumpToPage}
+          onTextSelected={handleTextSelected}
+          onPageChange={setCurrentPdfPage}
+          onTotalPagesChange={setPdfTotalPages}
+        />
+      )
     ) : activeFileType === "markdown" ? (
       (localFile?.type === "markdown" ? localFile.url : book.file_url) ? (
         <MarkdownViewer

@@ -336,3 +336,34 @@ def extract_book_knowledge(book_id: int, user: dict = Depends(get_current_user),
 
     logger.info("Manual knowledge extraction | book_id=%s user=%s kp=%d links=%d", book_id, user["id"], count, links)
     return {"book_id": book_id, "knowledge_points_extracted": count, "relationships_created": links}
+
+
+@router.get("/{book_id}/pages/{page_number}")
+def get_pdf_page(book_id: int, page_number: int, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Render a PDF page as an image with text overlay data (for native mobile rendering)."""
+    book = FileService(db).get_book(book_id, user["id"])
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    file_service = FileService(db)
+    file_info = file_service.get_file_by_original_name(book.title, user["id"])
+    if not file_info:
+        raise HTTPException(status_code=404, detail="Source file not found")
+
+    from urllib.parse import urlparse, urlunparse
+    import os
+    parsed = urlparse(file_info.file_url)
+    clean_path = urlunparse(parsed._replace(query=""))
+
+    base_dir = os.path.join(os.path.dirname(__file__), "..", "..")
+    local_path = os.path.normpath(os.path.join(base_dir, clean_path.lstrip("/")))
+
+    if not os.path.exists(local_path):
+        raise HTTPException(status_code=404, detail="File not accessible")
+
+    from app.services.pdf_render_service import render_pdf_page
+    result = render_pdf_page(local_path, page_number)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Page not found")
+
+    return result
