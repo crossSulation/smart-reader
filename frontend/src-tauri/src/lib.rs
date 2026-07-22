@@ -7,7 +7,7 @@ struct CacheDb(sqlx::SqlitePool);
 
 #[tauri::command]
 fn is_desktop() -> bool {
-    true
+    cfg!(not(any(target_os = "android", target_os = "ios")))
 }
 
 #[tauri::command]

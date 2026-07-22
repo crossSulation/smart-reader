@@ -14,12 +14,10 @@ const CustomTitleBar: React.FC = () => {
   const [profileOpen, setProfileOpen] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const [searchValue, setSearchValue] = useState(searchParams.get('q') || '');
-  const [isDesktop, setIsDesktop] = useState(true);
-
-  useEffect(() => {
+  const [isDesktop, setIsDesktop] = useState(() => {
     const ua = navigator.userAgent || '';
-    setIsDesktop(!/android|iphone|ipad/i.test(ua));
-  }, []);
+    return !/android|iphone|ipad/i.test(ua);
+  });
 
   useEffect(() => {
     if (!isDesktop) return;
