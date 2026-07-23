@@ -1,6 +1,7 @@
 import { AutoAwesomeOutlined, HubOutlined } from "@mui/icons-material";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import BookAgentChat from "./BookAgentChat";
 import SelectionPopup from "./SelectionPopup";
 import RecentNotesList from "./RecentNotesList";
@@ -92,6 +93,7 @@ export default function AIPanel({
   onNoteSaved,
   isMobile = false,
 }: AIPanelProps) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [showRecentNotes, setShowRecentNotes] = useState(false);
   const [showKnowledge, setShowKnowledge] = useState(false);
@@ -259,8 +261,8 @@ export default function AIPanel({
                 ) : knowledgePoints.length === 0 ? (
                   <div className="rounded border border-dashed border-gray-300 p-3 text-center text-xs text-gray-500 dark:border-gray-600 dark:text-gray-400">
                     <HubOutlined sx={{ fontSize: 24 }} className="mb-1 text-gray-300 dark:text-gray-600" />
-                    <div>No knowledge points extracted yet for this book.</div>
-                    <div className="mt-1">Index the book to auto-extract concepts.</div>
+                    <div>{t("knowledge.noPointsForBook", "No knowledge points extracted yet for this book.")}</div>
+                    <div className="mt-1">{t("knowledge.indexToExtract", "Index the book to auto-extract concepts.")}</div>
                   </div>
                 ) : (
                   <div className="space-y-1.5">

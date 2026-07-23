@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { CloudUploadOutlined, PictureAsPdfOutlined, MenuBookOutlined, DescriptionOutlined } from '@mui/icons-material';
 
 interface NoBooksProps {
   onUploadClick?: () => void;
@@ -12,78 +13,58 @@ const NoBooks: React.FC<NoBooksProps> = ({ onUploadClick }) => {
     if (onUploadClick) {
       onUploadClick();
     } else {
-      // 触发父组件中的上传功能
       const uploadBtn = document.querySelector('button[aria-label="upload-book"]');
       if (uploadBtn) {
         (uploadBtn as HTMLButtonElement).click();
-      } else {
-        console.log("请在父组件中添加上传按钮");
       }
     }
   };
 
   return (
-    <div 
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '32px',
-        textAlign: 'center',
-        minHeight: '400px',
-        backgroundColor: '#fafafa',
-        borderRadius: '8px',
-        border: '2px dashed #e0e0e0',
-        margin: '16px',
-        width: '100%',
-      }}
-    >
-      <div style={{ marginBottom: '24px' }}>
-        <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: '#666', marginBottom: '8px' }}>
-          {t('noBooks.title')}
-        </h2>
-        <h3 style={{ fontSize: '18px', color: '#333', marginBottom: '16px' }}>
-          {t('noBooks.subtitle')}
-        </h3>
-        <p style={{ color: '#666', maxWidth: '600px' }}>
-          {t('noBooks.description')}
-        </p>
+    <div className="flex flex-col items-center justify-center px-6 py-16 text-center min-h-[420px] w-full">
+      <div className="relative mb-8">
+        <div className="w-28 h-28 rounded-full bg-blue-50 flex items-center justify-center dark:bg-blue-900/20">
+          <CloudUploadOutlined sx={{ fontSize: 52 }} className="text-blue-500 dark:text-blue-400" />
+        </div>
+        <div className="absolute -bottom-1 -right-1 w-10 h-10 rounded-full bg-green-50 border-2 border-white flex items-center justify-center dark:bg-green-900/20 dark:border-gray-900">
+          <MenuBookOutlined sx={{ fontSize: 20 }} className="text-green-500 dark:text-green-400" />
+        </div>
       </div>
-      
+
+      <h2 className="text-2xl font-bold text-gray-800 mb-2 dark:text-gray-100">
+        {t('noBooks.title')}
+      </h2>
+      <p className="text-gray-500 mb-1 max-w-md dark:text-gray-400">
+        {t('noBooks.subtitle')}
+      </p>
+      <p className="text-sm text-gray-400 mb-8 max-w-md leading-relaxed dark:text-gray-500">
+        {t('noBooks.description')}
+      </p>
+
       <button
         onClick={handleClick}
-        style={{
-          marginTop: '16px',
-          padding: '12px 24px',
-          backgroundColor: '#1976d2',
-          color: 'white',
-          border: 'none',
-          borderRadius: '4px',
-          fontSize: '16px',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px'
-        }}
+        className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 active:bg-blue-800 transition-colors shadow-lg shadow-blue-200 dark:shadow-blue-900/30"
       >
-        <span>📤</span>
+        <CloudUploadOutlined sx={{ fontSize: 20 }} />
         {t('noBooks.uploadButton')}
       </button>
-      
-      <div style={{ marginTop: '32px', textAlign: 'left', maxWidth: '600px' }}>
-        <p style={{ fontWeight: 'bold', color: '#666', marginBottom: '8px' }}>
+
+      <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+        <span className="text-xs text-gray-400 dark:text-gray-500 mr-1">
           {t('noBooks.supportedFormatsTitle')}
-        </p>
-        <p style={{ color: '#666', marginBottom: '4px' }}>
-          {t('noBooks.supportedFormats.pdf')}
-        </p>
-        <p style={{ color: '#666', marginBottom: '4px' }}>
-          {t('noBooks.supportedFormats.epub')}
-        </p>
-        <p style={{ color: '#666' }}>
-          {t('noBooks.supportedFormats.doc')}
-        </p>
+        </span>
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 text-xs text-red-600 border border-red-100 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900/30">
+          <PictureAsPdfOutlined sx={{ fontSize: 14 }} />
+          PDF
+        </span>
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-xs text-amber-600 border border-amber-100 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-900/30">
+          <MenuBookOutlined sx={{ fontSize: 14 }} />
+          EPUB
+        </span>
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 text-xs text-indigo-600 border border-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 dark:border-indigo-900/30">
+          <DescriptionOutlined sx={{ fontSize: 14 }} />
+          DOC / DOCX
+        </span>
       </div>
     </div>
   );

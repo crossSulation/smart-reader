@@ -1,5 +1,5 @@
-import { useState, useCallback } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useState, useCallback, useEffect } from "react";
+import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { SearchOutlined, ImportContactsOutlined, AssignmentOutlined, HubOutlined, PersonOutlined } from "@mui/icons-material";
 import { useTranslation } from "react-i18next";
 import CreditIndicator from "./CreditIndicator";
@@ -28,7 +28,12 @@ export default function MobileNav() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [searchValue, setSearchValue] = useState("");
+
+  useEffect(() => {
+    setSearchValue(searchParams.get('q') || '');
+  }, [searchParams]);
 
   const activeTab = tabs.find((tab) => location.pathname.startsWith(tab.path))?.path ?? "/library";
 

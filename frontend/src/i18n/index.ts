@@ -30,7 +30,9 @@ i18n
     detection: {
       order: ['localStorage', 'navigator', 'htmlTag', 'path', 'subdomain'],
       caches: ['localStorage'],
-    }
+      lookupLocalStorage: 'i18nextLng',
+    },
+    load: 'languageOnly',
   });
 
 export default i18n;

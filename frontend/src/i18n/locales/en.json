@@ -39,6 +39,15 @@
       "author": "Author",
       "progress": "Reading Progress",
       "dateAdded": "Date Added"
+    },
+    "groupBy": {
+      "none": "No Grouping",
+      "status": "By Status"
+    },
+    "groups": {
+      "reading": "Reading",
+      "unread": "Unread",
+      "finished": "Finished"
     }
   },
   "login": {
@@ -123,6 +132,14 @@
     "of": "of",
     "swipeHint": "Swipe left/right to navigate pages"
   },
+  "review": {
+    "title": "Review",
+    "flashcards": "Flashcards",
+    "notes": "Notes",
+    "refresh": "Refresh",
+    "empty": "No due cards right now. Great job!",
+    "noNotes": "No notes yet. Save notes while reading and they will appear here."
+  },
   "search": {
     "title": "Search in Book",
     "placeholder": "Search passages…",
@@ -152,6 +169,7 @@
   },
   "knowledge": {
     "title": "Knowledge Base",
+    "points": "Knowledge Points",
     "resetview": "Reset View",
     "nodes": "nodes",
     "edges": "edges",
@@ -163,10 +181,14 @@
     "detailDescription": "Description",
     "sourceChunks": "Source Chunks",
     "linkedPoints": "Linked",
-    "noKnowledgePoints": "No knowledge points yet. Index a book to get started.",
-    "related": "Related",
-    "prerequisite": "Prerequisite",
-    "derived": "Derived from",
+    "noKnowledgePoints": "No knowledge points yet",
+    "noKnowledgePointsDesc": "Index a book to automatically extract concepts, and they will appear here as an interactive graph.",
+    "noPointsForBook": "No knowledge points extracted yet for this book.",
+    "indexToExtract": "Index the book to auto-extract concepts.",
+    "goToLibrary": "Go to Library",
+    "related_to": "Related",
+    "prerequisite_of": "Prerequisite",
+    "derived_from": "Derived from",
     "contradicts": "Contradicts",
     "extends": "Extends",
     "noResults": "No knowledge points found. Try expanding your search?"

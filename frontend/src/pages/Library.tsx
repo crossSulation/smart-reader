@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from 'react-i18next';
-import { SortOutlined, GridViewOutlined, ViewListOutlined, ArrowForwardOutlined, DeleteOutlineOutlined } from '@mui/icons-material';
+import { SortOutlined, GridViewOutlined, ViewListOutlined, ArrowForwardOutlined, DeleteOutlineOutlined, SearchOffOutlined, LibraryBooksOutlined } from '@mui/icons-material';
 import BookCard from "../components/BookCard";
 import FileUpload from "../components/FileUpload";
 import type { Book } from "../types/Book";
@@ -10,6 +10,8 @@ import { SkeletonGrid, SkeletonCard } from "../components/Skeleton";
 
 type SortOption = 'title' | 'author' | 'current_page' | 'date_added';
 type SortOrder = 'asc' | 'desc';
+type GroupOption = 'none' | 'status';
+type BookStatus = 'reading' | 'unread' | 'finished';
 
 type SearchResultItem = {
   book_id: number;
@@ -32,6 +34,7 @@ function Library() {
   const [showUpload, setShowUpload] = useState(false);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [groupBy, setGroupBy] = useState<GroupOption>('none');
   const [searchResults, setSearchResults] = useState<SearchResultItem[] | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const hasFetchedRef = useRef(false);
@@ -144,6 +147,23 @@ function Library() {
     return result;
   }, [books, sortBy, sortOrder]);
 
+  const groupedBooks = useMemo(() => {
+    if (groupBy === 'none') return null;
+
+    const getStatus = (book: Book): BookStatus => {
+      if (book.progress_percentage === 100) return 'finished';
+      if (book.current_page && book.current_page > 0) return 'reading';
+      return 'unread';
+    };
+
+    const groups: Record<BookStatus, Book[]> = { reading: [], unread: [], finished: [] };
+    filteredBooks.forEach((book) => {
+      groups[getStatus(book)].push(book);
+    });
+
+    return groups;
+  }, [filteredBooks, groupBy]);
+
   const isSearchMode = !!searchQuery.trim();
 
   const [deletedBook, setDeletedBook] = useState<Book | null>(null);
@@ -191,7 +211,9 @@ function Library() {
   const BookListRow = ({ book }: { book: Book }) => {
     const [kpCount, setKpCount] = useState(book.knowledge_count ?? 0);
     const [extracting, setExtracting] = useState(false);
-    const [indexed] = useState(book.indexed ?? false);
+    const [extractError, setExtractError] = useState<string | null>(null);
+    const [extractDone, setExtractDone] = useState(false);
+    const indexed = book.indexed ?? false;
     const fileType = (book.file_type || "").toLowerCase();
     const isEpub = fileType.includes("epub") || book.title.toLowerCase().endsWith(".epub");
     const isMarkdown = fileType.includes("markdown") || fileType === "md" ||
@@ -204,6 +226,8 @@ function Library() {
     const handleExtractKnowledge = async (e: React.MouseEvent) => {
       e.stopPropagation();
       setExtracting(true);
+      setExtractError(null);
+      setExtractDone(false);
       try {
         const res = await fetch(`/api/books/${book.id}/extract-knowledge`, {
           method: 'POST',
@@ -211,9 +235,19 @@ function Library() {
         });
         if (res.ok) {
           const data = await res.json();
-          setKpCount(data.knowledge_points_extracted);
+          if (data.knowledge_points_extracted > 0) {
+            setKpCount(data.knowledge_points_extracted);
+          } else {
+            setExtractDone(true);
+            setTimeout(() => setExtractDone(false), 4000);
+          }
+        } else {
+          const err = await res.json().catch(() => ({ detail: res.statusText }));
+          setExtractError(err.detail || 'Failed to extract knowledge points');
         }
-      } catch { /* ignore */ }
+      } catch {
+        setExtractError('Network error. Please try again.');
+      }
       setExtracting(false);
     };
 
@@ -256,6 +290,8 @@ function Library() {
               {extracting ? "Extracting..." : "Extract KP"}
             </button>
           )}
+          {extractDone && <p className="text-[10px] text-amber-600">Already extracted</p>}
+          {extractError && <p className="text-[10px] text-red-500">{extractError}</p>}
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); navigate(`/reader/${book.id}`); }}
@@ -279,13 +315,15 @@ function Library() {
     <div className="flex flex-col flex-1 h-full px-8 py-6 overflow-y-auto">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">{t('library.pageTitle')}</h1>
-        <button
-          onClick={() => setShowUpload(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-          aria-label="upload-book"
-        >
-          {t('library.uploadButton')}
-        </button>
+        {books.length > 0 && (
+          <button
+            onClick={() => setShowUpload(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+            aria-label="upload-book"
+          >
+            {t('library.uploadButton')}
+          </button>
+        )}
       </div>
 
       {deletedBook && (
@@ -304,58 +342,71 @@ function Library() {
       )}
 
       {/* Toolbar */}
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        {isSearchMode && !searchLoading && searchResults && (
-          <div className="text-sm text-gray-600 dark:text-gray-400">
-            Found {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for "{searchQuery}"
-          </div>
-        )}
-        <div className="flex-1" />
-        {/* Sort — hidden during search */}
-        {!isSearchMode && (
-          <div className="flex items-center gap-2">
-            <SortOutlined className="text-gray-400" fontSize="small" />
+      {books.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          {isSearchMode && !searchLoading && searchResults && (
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              Found {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for "{searchQuery}"
+            </div>
+          )}
+          <div className="flex-1" />
+          {/* Group by — hidden during search */}
+          {!isSearchMode && (
             <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              value={groupBy}
+              onChange={(e) => setGroupBy(e.target.value as GroupOption)}
               className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200"
             >
-              <option value="title">{t('library.sortBy.title')}</option>
-              <option value="author">{t('library.sortBy.author')}</option>
-              <option value="current_page">{t('library.sortBy.progress')}</option>
-              <option value="date_added">{t('library.sortBy.dateAdded')}</option>
+              <option value="none">{t('library.groupBy.none')}</option>
+              <option value="status">{t('library.groupBy.status')}</option>
             </select>
+          )}
+          {/* Sort — hidden during search */}
+          {!isSearchMode && (
+            <div className="flex items-center gap-2">
+              <SortOutlined className="text-gray-400" fontSize="small" />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortOption)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200"
+              >
+                <option value="title">{t('library.sortBy.title')}</option>
+                <option value="author">{t('library.sortBy.author')}</option>
+                <option value="current_page">{t('library.sortBy.progress')}</option>
+                <option value="date_added">{t('library.sortBy.dateAdded')}</option>
+              </select>
+              <button
+                onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                className="w-9 h-9 flex items-center justify-center border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300"
+                aria-label="toggle-sort-order"
+                title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+              >
+                {sortOrder === 'asc' ? '↑' : '↓'}
+              </button>
+            </div>
+          )}
+
+          {/* View mode toggle */}
+          <div className="flex items-center rounded-lg border border-gray-300 bg-white overflow-hidden dark:border-gray-600 dark:bg-gray-800">
             <button
-              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-              className="w-9 h-9 flex items-center justify-center border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300"
-              aria-label="toggle-sort-order"
-              title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+              onClick={() => setViewMode('grid')}
+              className={`p-2 transition ${viewMode === 'grid' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+              aria-label="grid-view"
+              title="Grid"
             >
-              {sortOrder === 'asc' ? '↑' : '↓'}
+              <GridViewOutlined fontSize="small" />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-2 transition ${viewMode === 'list' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+              aria-label="list-view"
+              title="List"
+            >
+              <ViewListOutlined fontSize="small" />
             </button>
           </div>
-        )}
-
-        {/* View mode toggle */}
-        <div className="flex items-center rounded-lg border border-gray-300 bg-white overflow-hidden dark:border-gray-600 dark:bg-gray-800">
-          <button
-            onClick={() => setViewMode('grid')}
-            className={`p-2 transition ${viewMode === 'grid' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-            aria-label="grid-view"
-            title="Grid"
-          >
-            <GridViewOutlined fontSize="small" />
-          </button>
-          <button
-            onClick={() => setViewMode('list')}
-            className={`p-2 transition ${viewMode === 'list' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-            aria-label="list-view"
-            title="List"
-          >
-            <ViewListOutlined fontSize="small" />
-          </button>
         </div>
-      </div>
+      )}
 
       {showUpload && (
         <FileUpload
@@ -394,12 +445,18 @@ function Library() {
             ))}
           </div>
         ) : (
-          <div className="flex justify-center items-center h-64">
-            <div className="text-center">
-              <p className="text-gray-600 mb-4">No results found for "{searchQuery}"</p>
+          <div className="flex justify-center items-center py-20">
+            <div className="text-center max-w-sm">
+              <div className="w-20 h-20 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-6 dark:bg-gray-800">
+                <SearchOffOutlined sx={{ fontSize: 40 }} className="text-gray-300 dark:text-gray-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-700 mb-1 dark:text-gray-200">No results found</h3>
+              <p className="text-sm text-gray-400 mb-6 dark:text-gray-500">
+                We couldn't find anything for "{searchQuery}"
+              </p>
               <button
                 onClick={() => navigate('/library')}
-                className="text-blue-600 hover:underline"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-800 transition dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
               >
                 Clear search
               </button>
@@ -408,7 +465,28 @@ function Library() {
         )
       ) : filteredBooks.length > 0 ? (
         <>
-          {viewMode === 'grid' ? (
+          {groupedBooks ? (
+            <div className="flex flex-col gap-8">
+              {(['reading', 'unread', 'finished'] as BookStatus[]).map((status) =>
+                groupedBooks[status].length === 0 ? null : (
+                  <section key={status}>
+                    <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                      {t(`library.groups.${status}`)} · {groupedBooks[status].length}
+                    </h2>
+                    {viewMode === 'grid' ? (
+                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                        {groupedBooks[status].map((book) => <BookCard key={book.id} book={book} onDelete={handleDeleteBook} />)}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-3">
+                        {groupedBooks[status].map((book) => <BookListRow key={book.id} book={book} />)}
+                      </div>
+                    )}
+                  </section>
+                )
+              )}
+            </div>
+          ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
               {filteredBooks.map((book) => <BookCard key={book.id} book={book} onDelete={handleDeleteBook} />)}
             </div>
@@ -421,9 +499,15 @@ function Library() {
       ) : books.length === 0 ? (
         <NoBooks onUploadClick={() => setShowUpload(true)} />
       ) : (
-        <div className="flex justify-center items-center h-64">
-          <div className="text-center">
-            <p className="text-gray-600 mb-4 dark:text-gray-400">No books found</p>
+        <div className="flex justify-center items-center py-20">
+          <div className="text-center max-w-sm">
+            <div className="w-20 h-20 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-6 dark:bg-gray-800">
+              <LibraryBooksOutlined sx={{ fontSize: 40 }} className="text-gray-300 dark:text-gray-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-700 mb-1 dark:text-gray-200">No books found</h3>
+            <p className="text-sm text-gray-400 dark:text-gray-500">
+              Try adjusting your filters or upload a new book
+            </p>
           </div>
         </div>
       )}

@@ -10,68 +10,98 @@ A multi-format reader with AI-powered knowledge features. Supports PDF, EPUB and
 - UI (TypeScript) + backend/processing (Python) components
 
 ## Stack
-- Languages: TypeScript (frontend / UI), Python (backend / processing)
-- Common runtimes: Node.js for the frontend, Python 3.8+ for server/processing
-- Notable libraries (examples; confirm exact dependencies from package.json / requirements.txt):
-  - Frontend: React / Next.js or similar (TypeScript)
-  - Backend: FastAPI or Flask for REST endpoints (Python)
-  - AI / NLP: transformers / sentence-transformers / OpenAI-style clients
-  - Persistence / storage: SQLite / PostgreSQL or vector DB (e.g., FAISS, Milvus) for embeddings
+- Languages: TypeScript (frontend / UI), Python 3.11+ (backend / processing)
+- Common runtimes: Node.js for the frontend, Python 3.11+ for server/processing
+- Frontend: React + Vite + TypeScript + MUI + Tailwind CSS
+- Backend: FastAPI + SQLAlchemy + SQLite
+- AI / NLP: LangChain Agent, sentence-transformers, BM25 + vector hybrid retrieval
+- Desktop: Tauri 2.0
 
-> Note: The exact frameworks and dependency names are placeholders — replace them after scanning package.json, pyproject.toml, or requirements.txt.
+## Quick start
 
-## Quick start (example)
-1. Clone the repo
-   git clone https://github.com/crossSulation/smart-reader.git
-   cd smart-reader
+### 1. Backend setup
+```bash
+cd backend
+python3.11 -m venv fresh_env
+source fresh_env/bin/activate
+pip install -r requirements.txt
 
-2. Frontend (TypeScript)
-   - Install:
-     cd frontend
-     npm install
-   - Run dev server:
-     npm run dev
-   - Build:
-     npm run build
-   - Start:
-     npm start
+# Initialize database and create test user
+python -c "
+import os; os.environ['ENVIRONMENT'] = 'development'
+from app.database import SessionLocal, sync_engine, Base
+from app.models import User, CreditPack
+from passlib.context import CryptContext
+Base.metadata.create_all(bind=sync_engine)
+db = SessionLocal()
+pwd = CryptContext(schemes=['bcrypt'], deprecated='auto')
+if not db.query(User).filter(User.username == 'testuser').first():
+    db.add(User(username='testuser', email='test@example.com',
+        hashed_password=pwd.hash('test123456'), credits=1000000,
+        explanation_level='intermediate'))
+    db.add_all([CreditPack(id=1,name='Starter',credits=100000,price_cents=199,is_active=True,sort_order=1),
+        CreditPack(id=2,name='Standard',credits=500000,price_cents=899,is_active=True,sort_order=2),
+        CreditPack(id=3,name='Premium',credits=2000000,price_cents=2999,is_active=True,sort_order=3)])
+    db.commit()
+db.close()
+print('Done.')
+"
 
-3. Backend / Processor (Python)
-   - Create virtualenv:
-     python -m venv .venv
-     source .venv/bin/activate
-   - Install requirements:
-     pip install -r requirements.txt
-   - Run server (example):
-     uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# Start backend
+python run_dev.py
+# or: ./start_server.sh
+```
 
-4. Environment variables
-   - Typical vars (add to .env):
-     - OPENAI_API_KEY (or MODEL_API_KEY)
-     - DATABASE_URL
-     - VECTOR_DB_URL or local vector DB settings
-   - Replace names with actual variables found in the code/config.
+### 2. Frontend setup
+```bash
+cd frontend
+yarn install
+yarn dev
+# or: ./start_frontend.sh
+```
+
+### 3. Desktop (Tauri)
+```bash
+cd frontend
+npm run tauri:dev
+# or: ./start_desktop.sh
+```
+
+### Test user
+| Field | Value |
+|---|---|
+| Username | `testuser` |
+| Password | `test123456` |
+| Credits | 1,000,000 |
+
+Access the app at `http://localhost:5173` (frontend) with backend running on `http://localhost:8000`.
+
+### Environment variables
+Create `backend/.env.dev`:
+```
+ENVIRONMENT=development
+DATABASE_URL=sqlite:///./smart_reader.db
+SECRET_KEY=your-secret-key-change-in-production
+OPENAI_API_KEY=sk-...
+```
 
 ## Example usage
 - Upload file (PDF / EPUB / Markdown) via the UI or send it to the ingestion API.
 - The ingestion service extracts text, creates embeddings, and updates the knowledge graph.
-- Use the UI search or the knowledge-review endpoint to generate summaries, Q&A, and study prompts.
+- Use the unified AI panel to ask questions, create notes, generate quizzes, and review flashcards.
+- Browse the Knowledge Graph at `/knowledge` (desktop only).
 
-## Project layout (high level)
-- frontend/        TypeScript UI (React/Next)
-- backend/         Python API & ingestion (FastAPI/Flask)
-- docs/            Documentation and architecture notes
-- scripts/         Dev utilities (build, data ingestion)
-- tests/           Unit/integration tests (frontend and backend)
-
-(Replace these sections with the actual top-level directories after scanning the repository.)
+## Project layout
+- `frontend/`          TypeScript UI (React + Vite + Tauri)
+- `backend/`           Python API & ingestion (FastAPI)
+- `backend/init_data.sql`  Database schema reference
+- `PLAN.md`            Execution plan & feature roadmap
+- `ARCHITECTURE.md`    AI capability routing architecture
+- `DB_RELATIONSHIP.md` Database entity relationship map
 
 ## Contributing
 - Please open issues for bugs or feature requests.
 - Fork → branch → pull request. Describe changes and add tests where applicable.
-
-## License
-- Add license file (e.g., MIT) and update here.
 
 ## Contact
 - Maintainer: crossSulation

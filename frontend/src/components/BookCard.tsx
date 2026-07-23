@@ -9,6 +9,8 @@ function BookCard({ book, onDelete }: { book: Book; onDelete?: (id: number) => v
   const { t } = useTranslation();
   const [kpCount, setKpCount] = useState(book.knowledge_count ?? 0);
   const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const [extractDone, setExtractDone] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const indexed = book.indexed ?? false;
 
@@ -43,6 +45,8 @@ function BookCard({ book, onDelete }: { book: Book; onDelete?: (id: number) => v
   const handleExtractKnowledge = async (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     setExtracting(true);
+    setExtractError(null);
+    setExtractDone(false);
     try {
       const res = await fetch(`/api/books/${book.id}/extract-knowledge`, {
         method: 'POST',
@@ -50,9 +54,19 @@ function BookCard({ book, onDelete }: { book: Book; onDelete?: (id: number) => v
       });
       if (res.ok) {
         const data = await res.json();
-        setKpCount(data.knowledge_points_extracted);
+        if (data.knowledge_points_extracted > 0) {
+          setKpCount(data.knowledge_points_extracted);
+        } else {
+          setExtractDone(true);
+          setTimeout(() => setExtractDone(false), 4000);
+        }
+      } else {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        setExtractError(err.detail || 'Failed to extract knowledge points');
       }
-    } catch { /* ignore */ }
+    } catch {
+      setExtractError('Network error. Please try again.');
+    }
     setExtracting(false);
   };
 
@@ -112,6 +126,10 @@ function BookCard({ book, onDelete }: { book: Book; onDelete?: (id: number) => v
             {extracting ? "Extracting..." : "Extract Knowledge"}
           </button>
         )}
+        {extractDone && (
+          <p className="mt-1 text-[10px] text-amber-600">All knowledge points already extracted</p>
+        )}
+        {extractError && <p className="mt-1 text-[10px] text-red-500">{extractError}</p>}
 
         <button
           type="button"

@@ -91,3 +91,4 @@ Thumbs.db
 backend/uploads/
 .opencode
 .npm-cache
+fresh_env/
