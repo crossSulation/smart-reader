@@ -441,14 +441,6 @@ export default function NativePDFViewer({
         )}
       </div>
 
-      {/* Navigation */}
-      <div className="mt-2 flex justify-center">
-        <button onClick={handlePrev} disabled={pageNumber <= 1}
-          className="rounded px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 disabled:opacity-30 dark:bg-gray-800 dark:hover:bg-gray-700">Prev</button>
-        <span className="mx-3 text-sm text-gray-500 dark:text-gray-400 self-center">{pageNumber} / {totalPages || '?'}</span>
-        <button onClick={handleNext} disabled={pageNumber >= totalPages}
-          className="rounded px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 disabled:opacity-30 dark:bg-gray-800 dark:hover:bg-gray-700">Next</button>
-      </div>
     </div>
   );
 }
