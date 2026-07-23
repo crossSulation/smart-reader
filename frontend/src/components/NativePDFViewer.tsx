@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, useMemo, type TouchEvent } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, type TouchEvent, type PointerEvent } from "react";
 import Skeleton from "./Skeleton";
 
 type AnnotationType = 'highlight' | 'underline';
@@ -13,21 +13,13 @@ interface Annotation {
   rects: AnnotationRect[];
 }
 
-interface TextLine {
-  text: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
 interface PageData {
   page: number;
   total_pages: number;
   image: string;
   width: number;
   height: number;
-  text_lines: TextLine[];
+  text_lines: { text: string; x: number; y: number; w: number; h: number }[];
 }
 
 const HIGHLIGHT_COLORS = [
@@ -41,7 +33,6 @@ const UNDERLINE_COLORS = ['#2563eb', '#dc2626', '#16a34a', '#d97706'];
 
 type NativePDFViewerProps = {
   bookId?: string;
-  fileUrlOverride?: string;
   initPage?: number;
   jumpToPage?: number;
   onTextSelected?: (text: string) => void;
@@ -69,9 +60,11 @@ export default function NativePDFViewer({
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
 
   const viewerRef = useRef<HTMLDivElement>(null);
-  const textLayerRef = useRef<HTMLDivElement>(null);
+  const pageContainerRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const [previewRect, setPreviewRect] = useState<AnnotationRect | null>(null);
   const pageNumberRef = useRef(pageNumber);
   const totalPagesRef = useRef(totalPages);
   const lastSavedPageRef = useRef<number | null>(null);
@@ -121,11 +114,7 @@ export default function NativePDFViewer({
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
-        if (res.status === 404) {
-          setError("Page not found");
-        } else {
-          setError("Failed to load page");
-        }
+        setError(res.status === 404 ? "Page not found" : "Failed to load page");
         return;
       }
       const data: PageData = await res.json();
@@ -146,9 +135,7 @@ export default function NativePDFViewer({
   }, [pageNumber, fetchPage]);
 
   useEffect(() => {
-    if (totalPages > 0 && bookId) {
-      saveProgress(pageNumber);
-    }
+    if (totalPages > 0 && bookId) saveProgress(pageNumber);
   }, [pageNumber, totalPages, bookId]);
 
   useEffect(() => {
@@ -180,48 +167,96 @@ export default function NativePDFViewer({
 
   const handleTouchEnd = useCallback((e: TouchEvent) => {
     if (!touchStartX.current) return;
+    if (dragStartRef.current) return; // ignore pagination during annotation drag
     const deltaX = touchStartX.current - e.changedTouches[0].clientX;
     const deltaY = touchStartY.current - e.changedTouches[0].clientY;
-    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 60) {
       if (deltaX > 0) handleNext();
       else handlePrev();
+    } else if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
+      if (viewerRef.current) {
+        const rect = viewerRef.current.getBoundingClientRect();
+        const xRatio = (touchStartX.current - rect.left) / rect.width;
+        if (xRatio < 0.15) handlePrev();
+        else if (xRatio > 0.85) handleNext();
+      }
     }
     touchStartX.current = 0;
     touchStartY.current = 0;
   }, [handleNext, handlePrev]);
 
-  const handleMouseUpSelection = useCallback(() => {
-    const selection = window.getSelection();
-    const text = selection?.toString().trim() || "";
-    if (text) onTextSelected?.(text);
+  // --- Rectangle drag annotation ---
+  const getRelativeCoords = useCallback((clientX: number, clientY: number): { x: number; y: number } | null => {
+    if (!pageContainerRef.current) return null;
+    const r = pageContainerRef.current.getBoundingClientRect();
+    return {
+      x: (clientX - r.left) / r.width,
+      y: (clientY - r.top) / r.height,
+    };
+  }, []);
 
-    if (activeToolRef.current !== 'none' && text && selection && selection.rangeCount > 0 && textLayerRef.current) {
-      const range = selection.getRangeAt(0);
-      const layerRect = textLayerRef.current.getBoundingClientRect();
-      const clientRects = Array.from(range.getClientRects()).filter(r => r.width > 1 && r.height > 1);
-      const rects: AnnotationRect[] = clientRects.map(rect => ({
-        x: (rect.left - layerRect.left) / layerRect.width,
-        y: (rect.top - layerRect.top) / layerRect.height,
-        width: rect.width / layerRect.width,
-        height: rect.height / layerRect.height,
-      }));
-      if (rects.length > 0) {
-        setAnnotations(prev => [...prev, {
-          id: crypto.randomUUID(),
-          page: pageNumberRef.current,
-          type: activeToolRef.current as AnnotationType,
-          color: activeColorRef.current,
-          rects,
-        }]);
-        selection.removeAllRanges();
+  const handlePointerDown = useCallback((e: PointerEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
+    if (activeToolRef.current === 'none') return;
+    const clientX = 'clientX' in e ? e.clientX : e.touches[0].clientX;
+    const clientY = 'clientY' in e ? e.clientY : e.touches[0].clientY;
+    const coords = getRelativeCoords(clientX, clientY);
+    if (!coords) return;
+    dragStartRef.current = coords;
+    if ('setPointerCapture' in (e as PointerEvent).target) {
+      ((e as PointerEvent).target as HTMLElement).setPointerCapture((e as PointerEvent).pointerId);
+    }
+  }, [getRelativeCoords]);
+
+  const handlePointerMove = useCallback((e: PointerEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
+    if (!dragStartRef.current) return;
+    const clientX = 'clientX' in e ? e.clientX : e.touches[0].clientX;
+    const clientY = 'clientY' in e ? e.clientY : e.touches[0].clientY;
+    const coords = getRelativeCoords(clientX, clientY);
+    if (!coords) return;
+    const sx = dragStartRef.current.x;
+    const sy = dragStartRef.current.y;
+    setPreviewRect({
+      x: Math.min(sx, coords.x),
+      y: Math.min(sy, coords.y),
+      width: Math.abs(coords.x - sx),
+      height: Math.abs(coords.y - sy),
+    });
+  }, [getRelativeCoords]);
+
+  const handleDragEnd = useCallback(() => {
+    if (!dragStartRef.current || !previewRect) {
+      dragStartRef.current = null;
+      setPreviewRect(null);
+      return;
+    }
+    const rect = previewRect;
+    if (rect.width > 0.01 && rect.height > 0.01) {
+      const newAnnotation: Annotation = {
+        id: crypto.randomUUID(),
+        page: pageNumberRef.current,
+        type: activeToolRef.current as AnnotationType,
+        color: activeColorRef.current,
+        rects: [rect],
+      };
+      setAnnotations(prev => [...prev, newAnnotation]);
+
+      if (onTextSelected && pageData) {
+        const hitTexts: string[] = [];
+        for (const line of pageData.text_lines) {
+          const lx = line.x, ly = line.y, lw = line.w, lh = line.h;
+          const ox = Math.max(rect.x, lx);
+          const oy = Math.max(rect.y, ly);
+          const ox2 = Math.min(rect.x + rect.width, lx + lw);
+          const oy2 = Math.min(rect.y + rect.height, ly + lh);
+          if (ox < ox2 && oy < oy2) hitTexts.push(line.text);
+        }
+        if (hitTexts.length > 0) onTextSelected(hitTexts.join(" "));
       }
     }
-  }, [onTextSelected]);
-
-  useEffect(() => {
-    document.addEventListener('mouseup', handleMouseUpSelection);
-    return () => document.removeEventListener('mouseup', handleMouseUpSelection);
-  }, [handleMouseUpSelection]);
+    dragStartRef.current = null;
+    setPreviewRect(null);
+  }, [previewRect, onTextSelected, pageData]);
 
   useEffect(() => {
     const updateWidth = () => {
@@ -253,22 +288,17 @@ export default function NativePDFViewer({
   return (
     <div className="flex w-full min-h-full flex-col items-stretch px-4 md:px-6 pt-4 pb-4">
       {/* Annotation toolbar */}
-      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-800">
+      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <span className="text-xs text-gray-500 dark:text-gray-400">Draw:</span>
         <button
-          onClick={() => setActiveTool('none')}
-          className={`rounded px-2 py-0.5 text-xs font-medium transition ${activeTool === 'none' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'}`}
-        >
-          Select
-        </button>
-        <button
-          onClick={() => { setActiveTool('highlight'); setActiveColor(HIGHLIGHT_COLORS[0]); }}
-          className={`rounded px-2 py-0.5 text-xs font-medium transition ${activeTool === 'highlight' ? 'bg-yellow-400 text-black' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'}`}
+          onClick={() => setActiveTool('highlight')}
+          className={`rounded px-3 py-1 text-xs font-medium transition ${activeTool === 'highlight' ? 'bg-yellow-400 text-black' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}
         >
           Highlight
         </button>
         <button
-          onClick={() => { setActiveTool('underline'); setActiveColor(UNDERLINE_COLORS[0]); }}
-          className={`rounded px-2 py-0.5 text-xs font-medium transition ${activeTool === 'underline' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'}`}
+          onClick={() => setActiveTool('underline')}
+          className={`rounded px-3 py-1 text-xs font-medium transition ${activeTool === 'underline' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}
         >
           Underline
         </button>
@@ -277,7 +307,7 @@ export default function NativePDFViewer({
           <div className="flex gap-1 ml-1">
             {HIGHLIGHT_COLORS.map((c, i) => (
               <button key={i} onClick={() => setActiveColor(c)}
-                className={`w-5 h-5 rounded-full border-2 transition ${activeColor === c ? 'border-blue-600 scale-110' : 'border-gray-300'}`}
+                className={`w-6 h-6 rounded-full border-2 transition ${activeColor === c ? 'border-blue-600 scale-110' : 'border-gray-300'}`}
                 style={{ backgroundColor: c.replace('0.5', '0.7').replace('0.55', '0.8').replace('0.45', '0.7') }}
               />
             ))}
@@ -288,7 +318,8 @@ export default function NativePDFViewer({
           <div className="flex gap-1 ml-1">
             {UNDERLINE_COLORS.map((c, i) => (
               <button key={i} onClick={() => setActiveColor(c)}
-                className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition ${activeColor === c ? 'border-blue-600 scale-110' : 'border-gray-300'}`}
+                className="w-6 h-6 rounded-full border-2 flex items-center justify-center transition"
+                style={{ borderColor: activeColor === c ? '#2563eb' : '#d1d5db' }}
               >
                 <span className="w-3 border-b-2" style={{ borderColor: c }} />
               </button>
@@ -299,20 +330,13 @@ export default function NativePDFViewer({
         <span className="ml-auto text-xs text-gray-400 dark:text-gray-500">
           {pageNumber} / {totalPages || '?'}
         </span>
-
-        <button
-          onClick={undoAnnotation}
-          disabled={pageAnnotations.length === 0}
-          className="rounded px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40 dark:bg-gray-700 dark:text-gray-300"
-        >
+        <button onClick={undoAnnotation} disabled={pageAnnotations.length === 0}
+          className="rounded px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40 dark:bg-gray-700 dark:text-gray-300">
           Undo
         </button>
-        <button
-          onClick={clearAnnotations}
-          disabled={pageAnnotations.length === 0}
-          className="rounded px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40 dark:bg-gray-700 dark:text-gray-300"
-        >
-          Clear page
+        <button onClick={clearAnnotations} disabled={pageAnnotations.length === 0}
+          className="rounded px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40 dark:bg-gray-700 dark:text-gray-300">
+          Clear
         </button>
       </div>
 
@@ -332,46 +356,56 @@ export default function NativePDFViewer({
         {error && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-gray-500 dark:text-gray-400">
             <p className="text-sm">{error}</p>
-            <button
-              onClick={() => fetchPage(pageNumber)}
-              className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
-            >
-              Retry
-            </button>
+            <button onClick={() => fetchPage(pageNumber)}
+              className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700">Retry</button>
           </div>
         )}
 
         {pageData && !loading && (
-          <div className="relative" style={{ width: pageWidth, aspectRatio: containerRatio }}>
+          <div
+            ref={pageContainerRef}
+            className="relative select-none"
+            style={{ width: pageWidth, aspectRatio: containerRatio, touchAction: activeTool !== 'none' ? 'none' : 'auto' }}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handleDragEnd}
+            onTouchStartCapture={(e) => {
+              if (activeToolRef.current !== 'none') {
+                handlePointerDown(e as any);
+              }
+            }}
+            onTouchMoveCapture={(e) => {
+              if (dragStartRef.current) {
+                e.preventDefault();
+                handlePointerMove(e as any);
+              }
+            }}
+            onTouchEndCapture={() => handleDragEnd()}
+          >
             <img
               src={pageData.image}
               alt={`Page ${pageData.page}`}
-              className="w-full h-full object-contain select-none"
+              className="absolute inset-0 w-full h-full object-contain pointer-events-none"
               draggable={false}
+              style={{ zIndex: 0 }}
             />
 
-            {/* Annotation overlays */}
-            <div className="absolute inset-0 pointer-events-none">
+            {/* Saved annotations */}
+            <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 1 }}>
               {pageAnnotations.map((a) => (
                 a.type === 'highlight' ? (
                   a.rects.map((r, i) => (
-                    <div
-                      key={`${a.id}-${i}`}
-                      className="absolute"
+                    <div key={`${a.id}-${i}`} className="absolute"
                       style={{
-                        left: `${r.x * 100}%`,
-                        top: `${r.y * 100}%`,
-                        width: `${r.width * 100}%`,
-                        height: `${r.height * 100}%`,
+                        left: `${r.x * 100}%`, top: `${r.y * 100}%`,
+                        width: `${r.width * 100}%`, height: `${r.height * 100}%`,
                         backgroundColor: a.color,
                       }}
                     />
                   ))
                 ) : (
                   a.rects.map((r, i) => (
-                    <div
-                      key={`${a.id}-${i}`}
-                      className="absolute"
+                    <div key={`${a.id}-${i}`} className="absolute"
                       style={{
                         left: `${r.x * 100}%`,
                         top: `${(r.y + r.height) * 100}%`,
@@ -382,50 +416,38 @@ export default function NativePDFViewer({
                   ))
                 )
               ))}
-            </div>
 
-            {/* Text overlay for selection (transparent, positioned text) */}
-            <div
-              ref={textLayerRef}
-              className="absolute inset-0 select-text"
-              style={{ zIndex: 2 }}
-              data-reader-content
-            >
-              {pageData.text_lines.map((line, idx) => (
-                <span
-                  key={idx}
-                  className="absolute text-transparent select-text whitespace-pre"
-                  style={{
-                    left: `${line.x * 100}%`,
-                    top: `${line.y * 100}%`,
-                    width: `${line.w * 100}%`,
-                    height: `${line.h * 100}%`,
-                    fontSize: `${line.h * 100 * 0.7}vw`,
-                    lineHeight: 1.2,
-                    overflow: 'hidden',
-                  }}
-                >
-                  {line.text}
-                </span>
-              ))}
+              {/* Live drag preview */}
+              {previewRect && (
+                activeToolRef.current === 'highlight' ? (
+                  <div className="absolute" style={{
+                    left: `${previewRect.x * 100}%`, top: `${previewRect.y * 100}%`,
+                    width: `${previewRect.width * 100}%`, height: `${previewRect.height * 100}%`,
+                    backgroundColor: activeColorRef.current,
+                    opacity: 0.7,
+                  }} />
+                ) : activeToolRef.current === 'underline' ? (
+                  <div className="absolute" style={{
+                    left: `${previewRect.x * 100}%`,
+                    top: `${(previewRect.y + previewRect.height) * 100}%`,
+                    width: `${previewRect.width * 100}%`,
+                    borderBottom: `2px solid ${activeColorRef.current}`,
+                    opacity: 0.7,
+                  }} />
+                ) : null
+              )}
             </div>
           </div>
         )}
       </div>
 
-      {/* Navigation buttons (hover) */}
+      {/* Navigation */}
       <div className="mt-2 flex justify-center">
         <button onClick={handlePrev} disabled={pageNumber <= 1}
-          className="rounded px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 disabled:opacity-30 dark:bg-gray-800 dark:hover:bg-gray-700">
-          Prev
-        </button>
-        <span className="mx-3 text-sm text-gray-500 dark:text-gray-400 self-center">
-          {pageNumber} / {totalPages || '?'}
-        </span>
+          className="rounded px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 disabled:opacity-30 dark:bg-gray-800 dark:hover:bg-gray-700">Prev</button>
+        <span className="mx-3 text-sm text-gray-500 dark:text-gray-400 self-center">{pageNumber} / {totalPages || '?'}</span>
         <button onClick={handleNext} disabled={pageNumber >= totalPages}
-          className="rounded px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 disabled:opacity-30 dark:bg-gray-800 dark:hover:bg-gray-700">
-          Next
-        </button>
+          className="rounded px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 disabled:opacity-30 dark:bg-gray-800 dark:hover:bg-gray-700">Next</button>
       </div>
     </div>
   );

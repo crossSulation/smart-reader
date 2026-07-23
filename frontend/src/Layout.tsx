@@ -7,6 +7,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { ThemeToggleButton } from './components/ThemeToggle';
 import CreditIndicator from './components/CreditIndicator';
 import CustomTitleBar from './components/CustomTitleBar';
+import MobileNav from './components/MobileNav';
 
 const Layout: React.FC = () => {
   const { t } = useTranslation();
@@ -47,8 +48,10 @@ const Layout: React.FC = () => {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-      {!isNativeDesktop ? (
-        <AppBar position="static">
+      {isNativeDesktop ? (
+        <CustomTitleBar />
+      ) : isDesktop ? (
+        <AppBar position="static" className="safe-padding-top">
           <Toolbar>
             <Tooltip title={t('common.appName')}>
                 <IconButton color="inherit" component={Link} to="/library" sx={{ mr: 1 }}>
@@ -85,13 +88,11 @@ const Layout: React.FC = () => {
                   <AssignmentOutlined />
                 </IconButton>
               </Tooltip>
-              {isDesktop && (
               <Tooltip title={t('common.knowledge', 'Knowledge')}>
                 <IconButton color="inherit" component={Link} to="/knowledge">
                   <HubOutlined />
                 </IconButton>
               </Tooltip>
-              )}
               <Tooltip title={t('common.settings')}>
                 <IconButton color="inherit" component={Link} to="/settings">
                   <SettingsOutlined />
@@ -112,7 +113,7 @@ const Layout: React.FC = () => {
           </Toolbar>
         </AppBar>
       ) : (
-        <CustomTitleBar />
+        <MobileNav />
       )}
 
       <Box component="main" sx={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>

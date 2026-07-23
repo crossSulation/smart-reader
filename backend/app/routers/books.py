@@ -5,9 +5,10 @@ from pydantic import BaseModel, model_validator
 import logging
 
 from app.database import get_db
-from app.models import DocumentChunk, KnowledgePoint
+from app.models import DocumentChunk, FileMetadata, KnowledgePoint
 from app.schemas import Book, BookCreate
 from app.services.file_service import FileService
+from app.services.oss_service import OSSManager
 from app.config import get_settings
 from app.routers.auth import get_current_user
 
@@ -345,21 +346,25 @@ def get_pdf_page(book_id: int, page_number: int, user: dict = Depends(get_curren
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
 
-    file_service = FileService(db)
-    file_info = file_service.get_file_by_original_name(book.title, user["id"])
-    if not file_info:
+    from app.models import FileMetadata
+    file_record = db.query(FileMetadata).filter(
+        FileMetadata.original_name == book.title,
+        FileMetadata.uploaded_by == user["id"],
+    ).first()
+    if not file_record:
         raise HTTPException(status_code=404, detail="Source file not found")
 
-    from urllib.parse import urlparse, urlunparse
     import os
-    parsed = urlparse(file_info.file_url)
-    clean_path = urlunparse(parsed._replace(query=""))
+    import tempfile
 
-    base_dir = os.path.join(os.path.dirname(__file__), "..", "..")
-    local_path = os.path.normpath(os.path.join(base_dir, clean_path.lstrip("/")))
-
+    local_path = os.path.join("uploads", file_record.stored_name)
     if not os.path.exists(local_path):
-        raise HTTPException(status_code=404, detail="File not accessible")
+        oss = OSSManager()
+        tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        tmp.close()
+        if not oss.download_file(file_record.stored_name, tmp.name):
+            raise HTTPException(status_code=404, detail="File not accessible")
+        local_path = tmp.name
 
     from app.services.pdf_render_service import render_pdf_page
     result = render_pdf_page(local_path, page_number)

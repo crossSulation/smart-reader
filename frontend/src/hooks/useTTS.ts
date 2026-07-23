@@ -1,10 +1,15 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 
+const isSupported = typeof window !== "undefined"
+  && typeof window.speechSynthesis !== "undefined"
+  && typeof window.SpeechSynthesisUtterance !== "undefined";
+
 const CHINESE_VOICE_PATTERN = /zh[-_]CN|chinese|mandarin|中文/i;
 
 let voicesCache: SpeechSynthesisVoice[] | null = null;
 
 function getVoices(): SpeechSynthesisVoice[] {
+  if (!isSupported) return [];
   if (voicesCache && voicesCache.length > 0) return voicesCache;
   voicesCache = speechSynthesis.getVoices();
   return voicesCache;
@@ -43,6 +48,7 @@ export interface TTSState {
   speed: number;
   voice: SpeechSynthesisVoice | null;
   voices: SpeechSynthesisVoice[];
+  supported: boolean;
 }
 
 export default function useTTS() {
@@ -58,6 +64,7 @@ export default function useTTS() {
   const isStoppedRef = useRef(false);
 
   useEffect(() => {
+    if (!isSupported) return;
     const updateVoices = () => {
       voicesCache = speechSynthesis.getVoices();
       const zh = getChineseVoices();
@@ -110,6 +117,7 @@ export default function useTTS() {
 
   const play = useCallback(
     (text: string, startIndex = 0) => {
+      if (!isSupported) return;
       speechSynthesis.cancel();
       isStoppedRef.current = false;
 
@@ -126,16 +134,19 @@ export default function useTTS() {
   );
 
   const pause = useCallback(() => {
+    if (!isSupported) return;
     speechSynthesis.pause();
     setStatus("paused");
   }, []);
 
   const resume = useCallback(() => {
+    if (!isSupported) return;
     speechSynthesis.resume();
     setStatus("playing");
   }, []);
 
   const stop = useCallback(() => {
+    if (!isSupported) return;
     isStoppedRef.current = true;
     speechSynthesis.cancel();
     setStatus("idle");
@@ -144,6 +155,7 @@ export default function useTTS() {
   }, []);
 
   const skipForward = useCallback(() => {
+    if (!isSupported) return;
     const idx = Math.min(currentIndexRef.current + 1, sentencesRef.current.length - 1);
     isStoppedRef.current = true;
     speechSynthesis.cancel();
@@ -152,6 +164,7 @@ export default function useTTS() {
   }, [speakImpl]);
 
   const skipBackward = useCallback(() => {
+    if (!isSupported) return;
     const idx = Math.max(currentIndexRef.current - 2, 0);
     isStoppedRef.current = true;
     speechSynthesis.cancel();
@@ -206,5 +219,6 @@ export default function useTTS() {
     speed,
     voice,
     voices,
+    supported: isSupported,
   };
 }

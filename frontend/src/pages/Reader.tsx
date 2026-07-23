@@ -97,11 +97,8 @@ function Reader() {
   const tts = useTTS();
   const fileTypeRef = useRef<string | null>(null);
   const useNativePdf = (() => {
-    try {
-      return typeof OffscreenCanvas === 'undefined';
-    } catch {
-      return true;
-    }
+    const ua = navigator.userAgent || '';
+    return /android|iphone|ipad/i.test(ua);
   })();
 
   const handleTTSPlay = useCallback(() => {
@@ -128,7 +125,10 @@ function Reader() {
     const clean = text.trim().replace(/\s+/g, " ");
     if (!clean) return;
     setSelectedExcerpt(clean.slice(0, 400));
-  }, []);
+    if (!isDesktop && !showMobilePanel) {
+      setShowMobilePanel(true);
+    }
+  }, [isDesktop, showMobilePanel]);
 
   const createNoteFromSelection = async (kpIds: number[] = []) => {
     if (!selectedExcerpt.trim() || !activeBookIdForAi) return;
@@ -833,7 +833,7 @@ function Reader() {
     <>
     <div className="h-screen overflow-hidden flex flex-col">
       {isTauri && <BareTitleBar />}
-      <header className="border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-900">
+      <header className="border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-900 safe-padding-top">
         <div className="grid grid-cols-[1fr_auto_1fr] items-center">
           <div className="justify-self-start">
             <button onClick={() => navigate("/")} className="text-blue-600 hover:underline dark:text-blue-400">
@@ -890,6 +890,7 @@ function Reader() {
                   <SettingsOutlined fontSize="small" />
                 </button>
               )}
+              {tts.supported && (
               <button
                 type="button"
                 onClick={handleTTSPlay}
@@ -904,6 +905,7 @@ function Reader() {
                 <PlayArrow fontSize="small" />
                 Read
               </button>
+              )}
             </div>
           </div>
         </div>

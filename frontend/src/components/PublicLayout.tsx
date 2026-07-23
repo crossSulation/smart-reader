@@ -14,7 +14,7 @@ const PublicLayout: React.FC = () => {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       {isDesktop && <BareTitleBar />}
-      <Box component="main" sx={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+      <Box component="main" sx={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }} className="safe-padding-top">
         <Outlet />
       </Box>
     </Box>

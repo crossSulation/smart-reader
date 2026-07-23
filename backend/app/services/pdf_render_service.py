@@ -43,22 +43,17 @@ def render_pdf_page(
             if block.get("type") != 0:
                 continue
             for line in block.get("lines", []):
-                line_text = ""
-                x0, y0, x1, y1 = float("inf"), float("inf"), 0, 0
                 for span in line.get("spans", []):
-                    line_text += span["text"]
+                    sp = span["text"]
+                    if not sp.strip():
+                        continue
                     bbox = span["bbox"]
-                    x0 = min(x0, bbox[0])
-                    y0 = min(y0, bbox[1])
-                    x1 = max(x1, bbox[2])
-                    y1 = max(y1, bbox[3])
-                if line_text.strip():
                     texts.append({
-                        "text": line_text,
-                        "x": x0 / page.rect.width,
-                        "y": y0 / page.rect.height,
-                        "w": (x1 - x0) / page.rect.width,
-                        "h": (y1 - y0) / page.rect.height,
+                        "text": sp,
+                        "x": bbox[0] / page.rect.width,
+                        "y": bbox[1] / page.rect.height,
+                        "w": (bbox[2] - bbox[0]) / page.rect.width,
+                        "h": (bbox[3] - bbox[1]) / page.rect.height,
                     })
 
         total = len(doc)

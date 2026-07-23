@@ -14,9 +14,14 @@ function getDevHost(): string {
 }
 
 // https://vitejs.dev/config/
-export default defineConfig(() => ({
+export default defineConfig(() => {
+  const devHost = getDevHost();
+  return {
   clearScreen: false,
   envPrefix: ['VITE_', 'TAURI_'],
+  define: {
+    __DEV_HOST__: JSON.stringify(devHost),
+  },
   plugins: [
     react(),
     {
@@ -39,7 +44,7 @@ export default defineConfig(() => ({
     strictPort: true,
     hmr: {
       protocol: "ws",
-      host: getDevHost(),
+      host: devHost,
       port: 1420,
     },
     watch: {
@@ -60,4 +65,5 @@ export default defineConfig(() => ({
     minify: process.env.TAURI_DEBUG ? false : 'esbuild',
     sourcemap: !!process.env.TAURI_DEBUG,
   },
-}))
+  };
+})

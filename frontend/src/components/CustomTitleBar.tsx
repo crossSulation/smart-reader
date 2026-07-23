@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useTranslation } from 'react-i18next';
@@ -14,10 +14,10 @@ const CustomTitleBar: React.FC = () => {
   const [profileOpen, setProfileOpen] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const [searchValue, setSearchValue] = useState(searchParams.get('q') || '');
-  const [isDesktop, setIsDesktop] = useState(() => {
+  const isDesktop = useMemo(() => {
     const ua = navigator.userAgent || '';
     return !/android|iphone|ipad/i.test(ua);
-  });
+  }, []);
 
   useEffect(() => {
     if (!isDesktop) return;
