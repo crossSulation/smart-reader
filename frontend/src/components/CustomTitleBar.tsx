@@ -20,6 +20,10 @@ const CustomTitleBar: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    setSearchValue(searchParams.get('q') || '');
+  }, [searchParams]);
+
+  useEffect(() => {
     if (!isDesktop) return;
     const appWindow = getCurrentWindow();
 

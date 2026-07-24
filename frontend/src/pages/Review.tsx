@@ -224,14 +224,14 @@ function Review() {
               className={`rounded px-3 py-1 text-xs font-medium transition ${
                 tab === "flashcards" ? "bg-white text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-400" : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
               }`}
-            >Flashcards</button>
+            >{t("review.flashcards", "Flashcards")}</button>
             <button
               type="button"
               onClick={() => setTab("notes")}
               className={`rounded px-3 py-1 text-xs font-medium transition ${
                 tab === "notes" ? "bg-white text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-400" : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
               }`}
-            >Notes</button>
+            >{t("review.notes", "Notes")}</button>
           </div>
           {books.length > 0 && (
             <select
@@ -293,7 +293,7 @@ function Review() {
             <SkeletonList count={4} />
           ) : notes.length === 0 ? (
             <div className="rounded border border-green-200 bg-green-50 p-4 text-sm text-green-800">
-              No notes yet. Save notes while reading and they will appear here.
+              {t("review.noNotes", "No notes yet. Save notes while reading and they will appear here.")}
             </div>
           ) : (
             notes.map((note) => (

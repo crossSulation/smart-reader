@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
+import { HubOutlined, AutoAwesomeOutlined } from "@mui/icons-material";
 import type { GraphData, GraphNode } from "../types/KnowledgeGraph";
 import Skeleton from "./Skeleton";
 
@@ -24,14 +27,6 @@ const ENTITY_COLORS: Record<string, string> = {
   event: "#ef4444",
 };
 
-const RELATION_LABELS: Record<string, string> = {
-  related_to: "related",
-  prerequisite_of: "prerequisite",
-  derived_from: "derived",
-  contradicts: "contradicts",
-  extends: "extends",
-};
-
 const MAX_SIM_NODES = 200;
 
 export default function KnowledgeGraphCanvas({
@@ -41,6 +36,8 @@ export default function KnowledgeGraphCanvas({
   onNodeClick,
   onNodeDblClick,
 }: Props) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef<number>(0);
   const nodesRef = useRef<Map<number, PositionedNode>>(new Map());
@@ -139,21 +136,21 @@ export default function KnowledgeGraphCanvas({
     ctx.lineCap = "round";
     data.edges.forEach((e) => {
       const s = nodesRef.current.get(e.source);
-      const t = nodesRef.current.get(e.target);
-      if (!s || !t) return;
+      const target = nodesRef.current.get(e.target);
+      if (!s || !target) return;
       if (!visibleNodeIds.has(e.source) && !visibleNodeIds.has(e.target)) return;
 
-      const dx = t.x - s.x;
-      const dy = t.y - s.y;
+      const dx = target.x - s.x;
+      const dy = target.y - s.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist === 0) return;
 
       const sr = nodeR(s);
-      const tr = nodeR(t);
+      const tr = nodeR(target);
       const sx = s.x + (dx / dist) * sr;
       const sy = s.y + (dy / dist) * sr;
-      const tx = t.x - (dx / dist) * tr;
-      const ty = t.y - (dy / dist) * tr;
+      const tx = target.x - (dx / dist) * tr;
+      const ty = target.y - (dy / dist) * tr;
 
       const color = e.weight > 0.6
         ? (isDark ? "#94a3b8" : "#64748b")
@@ -188,7 +185,7 @@ export default function KnowledgeGraphCanvas({
       ctx.font = "9px system-ui";
       ctx.fillStyle = isDark ? "#64748b" : "#94a3b8";
       ctx.textAlign = "center";
-      const relLabel = RELATION_LABELS[e.relation_type] || e.relation_type;
+      const relLabel = t(`knowledge.${e.relation_type}`, e.relation_type);
       ctx.fillText(relLabel, mx, my);
     });
 
@@ -227,9 +224,9 @@ export default function KnowledgeGraphCanvas({
       ctx.fillStyle = isDark ? "#475569" : "#94a3b8";
       ctx.textAlign = "right";
       ctx.textBaseline = "bottom";
-      ctx.fillText(`${drawnCount} / ${arr.length} nodes`, rectW - 12, rectH - 8);
+      ctx.fillText(`${drawnCount} / ${arr.length} ${t("knowledge.nodes", "nodes")}`, rectW - 12, rectH - 8);
     }
-  }, [data, selectedNodeId, isDark]);
+  }, [data, selectedNodeId, isDark, t]);
 
   // ── Force simulation + canvas render loop ────────────────
 
@@ -446,8 +443,27 @@ export default function KnowledgeGraphCanvas({
 
   if (!data || data.nodes.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center text-gray-400 dark:text-gray-500">
-        No knowledge points yet. Index a book to get started.
+      <div className="flex h-full flex-col items-center justify-center px-6 py-12 text-center">
+        <div className="relative mb-6">
+          <div className="w-24 h-24 rounded-full bg-purple-50 flex items-center justify-center dark:bg-purple-900/20">
+            <HubOutlined sx={{ fontSize: 44 }} className="text-purple-500 dark:text-purple-400" />
+          </div>
+          <div className="absolute -bottom-1 -right-1 w-9 h-9 rounded-full bg-amber-50 border-2 border-white flex items-center justify-center dark:bg-amber-900/20 dark:border-gray-900">
+            <AutoAwesomeOutlined sx={{ fontSize: 18 }} className="text-amber-500 dark:text-amber-400" />
+          </div>
+        </div>
+        <h3 className="text-lg font-semibold text-gray-700 mb-2 dark:text-gray-200">
+          {t("knowledge.noKnowledgePoints", "No knowledge points yet")}
+        </h3>
+        <p className="text-sm text-gray-400 max-w-xs mb-6 dark:text-gray-500">
+          {t("knowledge.noKnowledgePointsDesc", "Index a book to automatically extract concepts, and they will appear here as an interactive graph.")}
+        </p>
+        <button
+          onClick={() => navigate("/library")}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-800 transition dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+        >
+          {t("knowledge.goToLibrary", "Go to Library")}
+        </button>
       </div>
     );
   }

@@ -162,13 +162,65 @@ def build_summary_prompt(
 # Providers
 # ---------------------------------------------------------------------------
 
-def _mock_complete(prompt: str, system: Optional[str]) -> CompletionResult:
+def _knowledge_extraction_mock(prompt: str) -> CompletionResult:
+    """Return realistic knowledge points from mock chunks for development/testing."""
+    import json as _json
+    try:
+        data = _json.loads(prompt)
+        chunks = data.get("chunks", [])
+    except (_json.JSONDecodeError, TypeError):
+        chunks = []
+
+    labels = [
+        "Machine Learning", "Neural Networks", "Deep Learning", "Supervised Learning",
+        "Reinforcement Learning", "Gradient Descent", "Backpropagation", "Overfitting",
+        "Feature Engineering", "Data Preprocessing", "Model Evaluation", "Cross-validation",
+        "Transformer Architecture", "Attention Mechanism", "Natural Language Processing",
+    ]
+    types = ["concept", "concept", "concept", "concept", "concept", "concept", "concept",
+             "concept", "term", "term", "term", "term", "concept", "concept", "concept"]
+    descs = [
+        "A subset of artificial intelligence that enables systems to learn from data",
+        "Computing systems inspired by biological neural networks",
+        "Machine learning using multi-layered neural networks",
+        "Learning from labeled training data to make predictions",
+        "Learning through trial and error interactions with an environment",
+        "An optimization algorithm for finding the minimum of a function",
+        "Algorithm for training neural networks by propagating errors backward",
+        "When a model learns noise instead of the underlying pattern",
+        "Process of selecting and transforming variables for model training",
+        "Cleaning and organizing raw data before analysis",
+        "Measuring how well a model performs on unseen data",
+        "Technique for assessing model generalizability using data splits",
+        "Neural architecture using self-attention for sequence processing",
+        "Mechanism allowing models to focus on relevant parts of input",
+        "AI field focused on computer-human language interaction",
+    ]
+
+    results = []
+    for i, chunk in enumerate(chunks[:len(labels)]):
+        results.append({
+            "label": labels[i],
+            "entity_type": types[i],
+            "description": descs[i],
+            "aliases": [labels[i].replace(" ", "").lower()],
+            "chunk_id": chunk.get("id", i),
+        })
+
+    return CompletionResult(
+        text=_json.dumps({"results": results}),
+        model="mock",
+        provider="mock",
+    )
     """Offline deterministic stub — useful for dev/test without API keys."""
     logger.debug("LLM mock provider called (prompt length=%d)", len(prompt))
     system_text = (system or "").lower()
 
     def _result(text: str) -> CompletionResult:
         return CompletionResult(text=text, model="mock", provider="mock")
+
+    if "knowledge extraction engine" in system_text:
+        return _knowledge_extraction_mock(prompt)
 
     if "simple terms" in system_text:
         return _result(

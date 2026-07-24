@@ -17,6 +17,10 @@ const Layout: React.FC = () => {
   const [isDesktop, setIsDesktop] = useState(false);
   const [searchValue, setSearchValue] = useState(searchParams.get('q') || '');
 
+  useEffect(() => {
+    setSearchValue(searchParams.get('q') || '');
+  }, [searchParams]);
+
   const handleSearch = useCallback(() => {
     const q = searchValue.trim();
     if (q) {

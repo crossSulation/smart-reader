@@ -39,6 +39,15 @@
       "author": "作者",
       "progress": "阅读进度",
       "dateAdded": "添加日期"
+    },
+    "groupBy": {
+      "none": "不分组",
+      "status": "按阅读状态"
+    },
+    "groups": {
+      "reading": "阅读中",
+      "unread": "未读",
+      "finished": "已读完"
     }
   },
   "login": {
@@ -123,6 +132,14 @@
     "of": "/",
     "swipeHint": "左右滑动切换页面"
   },
+  "review": {
+    "title": "复习",
+    "flashcards": "闪卡",
+    "notes": "笔记",
+    "refresh": "刷新",
+    "empty": "暂无待复习卡片，干得漂亮！",
+    "noNotes": "暂无笔记。在阅读时保存笔记，它们将显示在这里。"
+  },
   "search": {
     "title": "书中搜索",
     "placeholder": "搜索段落…",
@@ -152,6 +169,7 @@
   },
     "knowledge": {
     "title": "知识库",
+    "points": "知识点",
     "description": "基于您的阅读和笔记构建的个人知识库。在这里，您可以复习和整理所学的关键概念，创建用于间隔重复的闪卡，并跟踪您的学习进度。",
     "resetview": "重置视图",
     "nodes": "节点",
@@ -164,10 +182,14 @@
     "detailDescription": "描述",
     "sourceChunks": "来源片段",
     "linkedPoints": "关联知识点",
-    "noKnowledgePoints": "尚无知识点。请先为一本书建立索引。",
-    "related": "相关",
-    "prerequisite": "前置知识",
-    "derived": "派生自",
+    "noKnowledgePoints": "尚无知识点",
+    "noKnowledgePointsDesc": "为一本书建立索引即可自动提取概念，它们将以交互式图谱的形式呈现在这里。",
+    "noPointsForBook": "此书尚未提取知识点。",
+    "indexToExtract": "为书籍建立索引可自动提取概念。",
+    "goToLibrary": "前往书架",
+    "related_to": "相关",
+    "prerequisite_of": "前置知识",
+    "derived_from": "派生自",
     "contradicts": "矛盾",
     "extends": "扩展",
     "noResults": "未找到知识点。尝试扩大搜索范围？"
