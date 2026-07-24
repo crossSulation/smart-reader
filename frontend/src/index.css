@@ -171,6 +171,27 @@ a:hover {
   background-size: 200% 100%;
 }
 
+/* Reading themes */
+[data-reading-theme="wechat"] {
+  background-color: #f5ecd7 !important;
+}
+
+[data-reading-theme="wechat"] img,
+[data-reading-theme="wechat"] canvas,
+[data-reading-theme="wechat"] .react-pdf__Page {
+  filter: sepia(0.3);
+}
+
+[data-reading-theme="kindle"] {
+  background-color: #2a2a2a !important;
+}
+
+[data-reading-theme="kindle"] img,
+[data-reading-theme="kindle"] canvas,
+[data-reading-theme="kindle"] .react-pdf__Page {
+  filter: invert(0.9) hue-rotate(180deg) brightness(0.85);
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
