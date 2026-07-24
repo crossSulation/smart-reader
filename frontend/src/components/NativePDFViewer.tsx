@@ -58,6 +58,9 @@ export default function NativePDFViewer({
   const [activeTool, setActiveTool] = useState<'none' | AnnotationType>('none');
   const [activeColor, setActiveColor] = useState(HIGHLIGHT_COLORS[0]);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [readingTheme, setReadingTheme] = useState<'default' | 'wechat' | 'kindle'>(() => {
+    return (localStorage.getItem('pdf-reading-theme') as any) || 'default';
+  });
 
   const viewerRef = useRef<HTMLDivElement>(null);
   const pageContainerRef = useRef<HTMLDivElement>(null);
@@ -330,6 +333,19 @@ export default function NativePDFViewer({
         <span className="ml-auto text-xs text-gray-400 dark:text-gray-500">
           {pageNumber} / {totalPages || '?'}
         </span>
+        <select
+          value={readingTheme}
+          onChange={(e) => {
+            const v = e.target.value as any;
+            setReadingTheme(v);
+            localStorage.setItem('pdf-reading-theme', v);
+          }}
+          className="rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
+        >
+          <option value="default">默认</option>
+          <option value="wechat">护眼</option>
+          <option value="kindle">墨水屏</option>
+        </select>
         <button onClick={undoAnnotation} disabled={pageAnnotations.length === 0}
           className="rounded px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40 dark:bg-gray-700 dark:text-gray-300">
           Undo
@@ -344,6 +360,7 @@ export default function NativePDFViewer({
       <div
         ref={viewerRef}
         className="relative flex flex-1 items-center justify-center"
+        data-reading-theme={readingTheme}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >

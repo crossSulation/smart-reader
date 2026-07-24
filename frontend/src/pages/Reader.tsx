@@ -894,17 +894,6 @@ function Reader() {
                   <SettingsOutlined fontSize="small" />
                 </button>
               )}
-              {(activeFileType === "pdf" || activeFileType === "epub") && (
-                <select
-                  value={readingTheme}
-                  onChange={(e) => { const v = e.target.value as any; setReadingTheme(v); localStorage.setItem('pdf-reading-theme', v); }}
-                  className="rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
-                >
-                  <option value="default">默认</option>
-                  <option value="wechat">护眼</option>
-                  <option value="kindle">墨水屏</option>
-                </select>
-              )}
               {tts.supported && (
               <button
                 type="button"
