@@ -4,7 +4,7 @@ import type { Book } from "../types/Book";
 import { useTranslation } from 'react-i18next';
 import { BoltOutlined, AutoAwesomeOutlined, DeleteOutlineOutlined } from '@mui/icons-material';
 
-function BookCard({ book, onDelete }: { book: Book; onDelete?: (id: number) => void }) {
+function BookCard({ book, onDelete }: { book: Book; onDelete?: (id: number, skipConfirm?: boolean) => void }) {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const [kpCount, setKpCount] = useState(book.knowledge_count ?? 0);
@@ -145,7 +145,7 @@ function BookCard({ book, onDelete }: { book: Book; onDelete?: (id: number) => v
               <div className="flex gap-1">
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); onDelete(book.id); setConfirmDelete(false); }}
+                  onClick={(e) => { e.stopPropagation(); onDelete(book.id, true); setConfirmDelete(false); }}
                   className="flex-1 rounded bg-red-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-red-700 transition"
                 >
                   Confirm

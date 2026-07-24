@@ -257,3 +257,31 @@ class CreditPack(Base):
     is_active = Column(Integer, default=1)
     sort_order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class BookShare(Base):
+    __tablename__ = "book_shares"
+
+    id = Column(Integer, primary_key=True, index=True)
+    book_id = Column(Integer, ForeignKey("books.id"), nullable=False, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    shared_with_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    book = relationship("Book", backref="shares")
+    owner = relationship("User", foreign_keys=[owner_id])
+    shared_with = relationship("User", foreign_keys=[shared_with_id])
+
+
+class BookComment(Base):
+    __tablename__ = "book_comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    book_id = Column(Integer, ForeignKey("books.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    content = Column(Text, nullable=False)
+    page = Column(Integer, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    book = relationship("Book", backref="comments")
+    user = relationship("User")

@@ -96,6 +96,13 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
+# Auto-create tables on startup
+@app.on_event("startup")
+def on_startup():
+    from app.database import Base, sync_engine
+    from app.models import BookShare, BookComment, User, Book, FileMetadata, DocumentChunk, AIInteraction, AICitation, Note, Flashcard, ReviewItem, KnowledgePoint, KnowledgeLink, AgentMemory, TokenUsageLog, CreditTransaction, CreditPack  # noqa
+    Base.metadata.create_all(bind=sync_engine)
+
 # CORS中间件
 app.add_middleware(
     CORSMiddleware,
