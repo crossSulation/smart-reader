@@ -31,7 +31,14 @@ function Library() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [showUpload, setShowUpload] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
+    const saved = localStorage.getItem('library-view-mode');
+    return saved === 'list' ? 'list' : 'grid';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('library-view-mode', viewMode);
+  }, [viewMode]);
   const [searchResults, setSearchResults] = useState<SearchResultItem[] | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const hasFetchedRef = useRef(false);

@@ -13,11 +13,7 @@ export default function KnowledgeGraphPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.innerWidth < 1024) {
-      navigate("/library", { replace: true });
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 1024;
 
   const urlKpId = searchParams.get("kp_id");
   const urlBookId = searchParams.get("book_id");
@@ -178,34 +174,58 @@ export default function KnowledgeGraphPage() {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Left panel: list */}
-        <div className="w-64 shrink-0 overflow-hidden border-r border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
-          <KnowledgeList
-            items={points}
-            loading={pointsLoading}
-            selectedId={selectedNodeId}
-            bookId={bookId}
-            entityFilter={entityFilter}
-            search={search}
-            onSelect={handleListSelect}
-            onSearchChange={setSearch}
-            onEntityFilterChange={setEntityFilter}
-          />
-        </div>
+        {!isMobile && (
+          /* Left panel: list */
+          <div className="w-64 shrink-0 overflow-hidden border-r border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
+            <KnowledgeList
+              items={points}
+              loading={pointsLoading}
+              selectedId={selectedNodeId}
+              bookId={bookId}
+              entityFilter={entityFilter}
+              search={search}
+              onSelect={handleListSelect}
+              onSearchChange={setSearch}
+              onEntityFilterChange={setEntityFilter}
+            />
+          </div>
+        )}
 
-        {/* Center: graph canvas */}
+        {/* Center: graph canvas (desktop) / list (mobile) */}
         <div className="relative flex-1 overflow-hidden bg-gray-50/30 dark:bg-gray-900/30">
-          <KnowledgeGraphCanvas
-            data={graph}
-            loading={graphLoading}
-            selectedNodeId={selectedNodeId}
-            onNodeClick={handleNodeClick}
-            onNodeDblClick={handleNodeDblClick}
-          />
+          {isMobile ? (
+            rightPanel === "detail" && selectedNodeId ? (
+              <KnowledgeDetail
+                kpId={selectedNodeId}
+                onClose={() => { setSelectedNodeId(null); setRightPanel("none"); }}
+                onNavigateTo={handleNavigateTo}
+              />
+            ) : (
+              <KnowledgeList
+                items={points}
+                loading={pointsLoading}
+                selectedId={selectedNodeId}
+                bookId={bookId}
+                entityFilter={entityFilter}
+                search={search}
+                onSelect={(id) => { setSelectedNodeId(id); setRightPanel("detail"); }}
+                onSearchChange={setSearch}
+                onEntityFilterChange={setEntityFilter}
+              />
+            )
+          ) : (
+            <KnowledgeGraphCanvas
+              data={graph}
+              loading={graphLoading}
+              selectedNodeId={selectedNodeId}
+              onNodeClick={handleNodeClick}
+              onNodeDblClick={handleNodeDblClick}
+            />
+          )}
         </div>
 
-        {/* Right panel: detail */}
-        {rightPanel !== "none" && (
+        {/* Right panel: detail (desktop only) */}
+        {!isMobile && rightPanel !== "none" && (
           <div className="w-72 shrink-0 overflow-hidden border-l border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
             <KnowledgeDetail
               kpId={selectedNodeId}
