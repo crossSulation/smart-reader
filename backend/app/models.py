@@ -257,3 +257,18 @@ class CreditPack(Base):
     is_active = Column(Integer, default=1)
     sort_order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class OfflineQueue(Base):
+    __tablename__ = "offline_queue"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    task_type = Column(String, nullable=False)
+    payload_json = Column(Text, nullable=False)
+    status = Column(String, default="pending")  # pending | processing | done | failed
+    attempts = Column(Integer, default=0)
+    result_json = Column(Text, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())

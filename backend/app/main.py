@@ -167,3 +167,20 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+
+@app.on_event("startup")
+async def startup_event():
+    from app.providers.registry import init_providers
+    from app.middleware.capability_scanner import scan_backend_capabilities
+    settings = get_settings()
+    init_providers(settings)
+    await scan_backend_capabilities(settings)
+    logging.getLogger(__name__).info("AI providers and middleware initialized")
+
+
+@app.post("/api/capabilities/report")
+async def report_frontend_capabilities(payload: dict):
+    from app.middleware.capability_scanner import update_frontend_capabilities
+    update_frontend_capabilities(payload)
+    return {"ok": True}

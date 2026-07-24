@@ -212,6 +212,9 @@ def _knowledge_extraction_mock(prompt: str) -> CompletionResult:
         model="mock",
         provider="mock",
     )
+
+
+def _mock_complete(prompt: str, system: Optional[str]) -> CompletionResult:
     """Offline deterministic stub — useful for dev/test without API keys."""
     logger.debug("LLM mock provider called (prompt length=%d)", len(prompt))
     system_text = (system or "").lower()

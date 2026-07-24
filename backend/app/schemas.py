@@ -119,6 +119,16 @@ class QAResponse(BaseModel):
     provider: str
 
 
+class ProviderResult(BaseModel):
+    """Unified AI provider result wrapper for all capabilities."""
+    content: str
+    confidence: float = 1.0
+    provider: str = "unknown"
+    model: str = ""
+    metadata: dict = {}
+    fallback_used: bool = False
+
+
 class SummaryBulletSection(BaseModel):
     heading: str
     bullets: List[str]
