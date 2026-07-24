@@ -101,6 +101,10 @@ function Reader() {
     return /android|iphone|ipad/i.test(ua);
   })();
 
+  const [readingTheme, setReadingTheme] = useState<'default' | 'wechat' | 'kindle'>(() => {
+    return (localStorage.getItem('pdf-reading-theme') as any) || 'default';
+  });
+
   const handleTTSPlay = useCallback(() => {
     const container = readerContentRef.current;
     if (!container) return;
@@ -1006,7 +1010,7 @@ function Reader() {
       <div className="flex-1 min-h-0">
       {!isDesktop ? (
         <div className="relative flex h-full flex-col overflow-hidden">
-          <div ref={readerContentRef} className="min-w-0 flex-1 overflow-y-auto" style={readerContentStyle}>{renderReaderContent()}</div>
+          <div ref={readerContentRef} className="min-w-0 flex-1 overflow-y-auto" style={readerContentStyle} data-reading-theme={readingTheme}>{renderReaderContent()}</div>
 
           {!showMobilePanel && (
             <button
@@ -1145,7 +1149,7 @@ function Reader() {
             </>
           )}
 
-          <div ref={readerContentRef} className="min-w-0 flex-1 overflow-y-auto" style={readerContentStyle}>{renderReaderContent()}</div>
+          <div ref={readerContentRef} className="min-w-0 flex-1 overflow-y-auto" style={readerContentStyle} data-reading-theme={readingTheme}>{renderReaderContent()}</div>
 
           <aside
             className="relative h-full shrink-0 border-l border-gray-200 dark:border-gray-700"

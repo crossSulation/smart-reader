@@ -5,7 +5,8 @@ from pydantic import BaseModel, model_validator
 import logging
 
 from app.database import get_db
-from app.models import DocumentChunk, FileMetadata, KnowledgePoint
+from app.models import BookShare, BookComment, DocumentChunk, FileMetadata, KnowledgePoint, User
+from app.models import Book as BookModel
 from app.schemas import Book, BookCreate
 from app.services.file_service import FileService
 from app.services.oss_service import OSSManager
@@ -372,3 +373,99 @@ def get_pdf_page(book_id: int, page_number: int, user: dict = Depends(get_curren
         raise HTTPException(status_code=404, detail="Page not found")
 
     return result
+
+
+# ── Sharing ──
+
+class ShareBookRequest(BaseModel):
+    username: str
+
+
+@router.post("/{book_id}/share")
+def share_book(book_id: int, body: ShareBookRequest, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    book = FileService(db).get_book(book_id, user["id"])
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    target = db.query(User).filter(User.username == body.username).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target.id == user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot share with yourself")
+
+    existing = db.query(BookShare).filter(
+        BookShare.book_id == book_id,
+        BookShare.owner_id == user["id"],
+        BookShare.shared_with_id == target.id,
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Already shared with this user")
+
+    share = BookShare(book_id=book_id, owner_id=user["id"], shared_with_id=target.id)
+    db.add(share)
+    db.commit()
+    return {"message": "Book shared", "shared_with": target.username}
+
+
+@router.get("/{book_id}/shares")
+def list_shares(book_id: int, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    book = FileService(db).get_book(book_id, user["id"])
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    shares = db.query(BookShare).filter(BookShare.book_id == book_id, BookShare.owner_id == user["id"]).all()
+    return [{"id": s.id, "username": s.shared_with.username, "created_at": s.created_at.isoformat()} for s in shares]
+
+
+@router.delete("/{book_id}/shares/{share_id}")
+def unshare_book(book_id: int, share_id: int, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    share = db.query(BookShare).filter(BookShare.id == share_id, BookShare.owner_id == user["id"]).first()
+    if not share:
+        raise HTTPException(status_code=404, detail="Share not found")
+    db.delete(share)
+    db.commit()
+    return {"message": "Unshared"}
+
+
+@router.get("/shared-with-me")
+def shared_with_me(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    shares = db.query(BookShare).filter(BookShare.shared_with_id == user["id"]).all()
+    result = []
+    for s in shares:
+        book = db.query(BookModel).filter(BookModel.id == s.book_id).first()
+        if book:
+            result.append({
+                "share_id": s.id, "book_id": book.id, "title": book.title,
+                "owner_username": s.owner.username, "created_at": s.created_at.isoformat(),
+            })
+    return result
+
+
+# ── Comments ──
+
+class AddCommentRequest(BaseModel):
+    content: str
+    page: int | None = None
+
+
+@router.get("/{book_id}/comments")
+def get_comments(book_id: int, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    book = FileService(db).get_book(book_id, user["id"])
+    if not book:
+        share = db.query(BookShare).filter(BookShare.book_id == book_id, BookShare.shared_with_id == user["id"]).first()
+        if not share:
+            raise HTTPException(status_code=403, detail="Access denied")
+    comments = db.query(BookComment).filter(BookComment.book_id == book_id).order_by(BookComment.created_at.asc()).all()
+    return [{"id": c.id, "username": c.user.username, "content": c.content, "page": c.page, "created_at": c.created_at.isoformat()} for c in comments]
+
+
+@router.post("/{book_id}/comments")
+def add_comment(book_id: int, body: AddCommentRequest, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    book = FileService(db).get_book(book_id, user["id"])
+    if not book:
+        share = db.query(BookShare).filter(BookShare.book_id == book_id, BookShare.shared_with_id == user["id"]).first()
+        if not share:
+            raise HTTPException(status_code=403, detail="Access denied")
+    comment = BookComment(book_id=book_id, user_id=user["id"], content=body.content, page=body.page)
+    db.add(comment)
+    db.commit()
+    return {"id": comment.id, "message": "Comment added"}

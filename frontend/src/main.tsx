@@ -4,7 +4,7 @@ import App from './App.tsx'
 import './index.css'
 
 // Polyfill Promise.withResolvers for older WebViews (needed by pdfjs-dist)
-if (typeof Promise.withResolvers !== "function") {
+if (typeof (Promise as any).withResolvers !== "function") {
   (Promise as any).withResolvers = function () {
     let resolve: any, reject: any;
     const promise = new Promise((res, rej) => {
@@ -16,7 +16,7 @@ if (typeof Promise.withResolvers !== "function") {
 }
 
 // Polyfill URL.parse for older WebViews
-if (typeof URL.parse !== "function") {
+if (typeof (URL as any).parse !== "function") {
   (URL as any).parse = function (url: string, base?: string) {
     try {
       return new URL(url, base);

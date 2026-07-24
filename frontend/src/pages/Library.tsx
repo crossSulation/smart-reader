@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from 'react-i18next';
-import { SortOutlined, GridViewOutlined, ViewListOutlined, ArrowForwardOutlined, DeleteOutlineOutlined, SearchOffOutlined, LibraryBooksOutlined } from '@mui/icons-material';
+import { SortOutlined, GridViewOutlined, ViewListOutlined, ArrowForwardOutlined, DeleteOutlineOutlined, SearchOffOutlined, LibraryBooksOutlined, ShareOutlined } from '@mui/icons-material';
 import BookCard from "../components/BookCard";
 import FileUpload from "../components/FileUpload";
 import type { Book } from "../types/Book";
@@ -33,11 +33,65 @@ function Library() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [showUpload, setShowUpload] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
+    const saved = localStorage.getItem('library-view-mode');
+    return saved === 'list' ? 'list' : 'grid';
+  });
   const [groupBy, setGroupBy] = useState<GroupOption>('none');
   const [searchResults, setSearchResults] = useState<SearchResultItem[] | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const hasFetchedRef = useRef(false);
+
+  // Share
+  const [shareTarget, setShareTarget] = useState<Book | null>(null);
+  const [shareUsername, setShareUsername] = useState("");
+  const [shareStatus, setShareStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
+  const [shareMsg, setShareMsg] = useState("");
+  const [sharedBooks, setSharedBooks] = useState<{ share_id: number; book_id: number; title: string; owner_username: string; created_at: string }[]>([]);
+  const [sharedBooksLoading, setSharedBooksLoading] = useState(true);
+
+  const fetchSharedBooks = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch("/api/books/shared-with-me", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) setSharedBooks(await res.json());
+    } catch { /* ignore */ }
+    setSharedBooksLoading(false);
+  }, []);
+
+  useEffect(() => { fetchSharedBooks(); }, [fetchSharedBooks]);
+
+  const handleShare = useCallback(async () => {
+    if (!shareTarget || !shareUsername.trim()) return;
+    setShareStatus("loading");
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/books/${shareTarget.id}/share`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ username: shareUsername.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setShareStatus("ok");
+        setShareMsg(`Shared with ${shareUsername.trim()}`);
+        setTimeout(() => { setShareTarget(null); setShareUsername(""); setShareStatus("idle"); }, 2000);
+      } else {
+        setShareStatus("error");
+        setShareMsg(data.detail || "Failed");
+      }
+    } catch {
+      setShareStatus("error");
+      setShareMsg("Network error");
+    }
+  }, [shareTarget, shareUsername]);
+  
+  useEffect(() => {
+    localStorage.setItem('library-view-mode', viewMode);
+  }, [viewMode]);
+  
 
   const fetchBooks = useCallback(async () => {
     try {
@@ -167,17 +221,16 @@ function Library() {
   const isSearchMode = !!searchQuery.trim();
 
   const [deletedBook, setDeletedBook] = useState<Book | null>(null);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [, setDeletingId] = useState<number | null>(null);
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<Book | null>(null);
 
-  const handleDeleteBook = useCallback(async (bookId: number) => {
-    const book = books.find((b) => b.id === bookId);
-    if (!book) return;
-    setDeletingId(bookId);
+  const confirmDeleteBook = useCallback(async (book: Book) => {
+    setDeletingId(book.id);
     setDeletedBook(book);
-    setBooks((prev) => prev.filter((b) => b.id !== bookId));
+    setBooks((prev) => prev.filter((b) => b.id !== book.id));
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`/api/books/${bookId}`, {
+      const res = await fetch(`/api/books/${book.id}`, {
         method: "DELETE",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -191,7 +244,22 @@ function Library() {
     } finally {
       setDeletingId(null);
     }
-  }, [books]);
+  }, []);
+
+  const handleDeleteBook = useCallback(async (bookId: number, skipConfirm = false) => {
+    const book = books.find((b) => b.id === bookId);
+    if (!book) return;
+    if (!skipConfirm) {
+      setDeleteConfirmTarget(book);
+      return;
+    }
+    confirmDeleteBook(book);
+  }, [books, confirmDeleteBook]);
+
+  const confirmDelete = useCallback(() => {
+    if (deleteConfirmTarget) confirmDeleteBook(deleteConfirmTarget);
+    setDeleteConfirmTarget(null);
+  }, [deleteConfirmTarget, confirmDeleteBook]);
 
   const handleUndoDelete = useCallback(() => {
     if (deletedBook) {
@@ -305,6 +373,14 @@ function Library() {
             className="rounded border border-gray-200 px-2 py-1 text-[10px] text-gray-400 hover:border-red-300 hover:text-red-500 dark:border-gray-600 dark:text-gray-500 dark:hover:border-red-400 dark:hover:text-red-400"
           >
             <DeleteOutlineOutlined sx={{ fontSize: 12 }} />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setShareTarget(book); setShareStatus("idle"); setShareUsername(""); setShareMsg(""); }}
+            className="rounded border border-gray-200 px-2 py-1 text-[10px] text-gray-400 hover:border-blue-300 hover:text-blue-500 dark:border-gray-600 dark:text-gray-500 dark:hover:border-blue-400 dark:hover:text-blue-400"
+            title="Share"
+          >
+            <ShareOutlined sx={{ fontSize: 12 }} />
           </button>
         </div>
       </div>
@@ -508,6 +584,76 @@ function Library() {
             <p className="text-sm text-gray-400 dark:text-gray-500">
               Try adjusting your filters or upload a new book
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Shared with me */}
+      {!sharedBooksLoading && sharedBooks.length > 0 && (
+        <div className="mt-6">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Shared with me</h2>
+          <div className="flex flex-col gap-2">
+            {sharedBooks.map((sb) => (
+              <div key={sb.share_id} className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 dark:border-blue-800 dark:bg-blue-900/20">
+                <span className="text-sm font-medium text-blue-900 dark:text-blue-200 flex-1">{sb.title}</span>
+                <span className="text-xs text-blue-600 dark:text-blue-400">by {sb.owner_username}</span>
+                <button
+                  onClick={() => navigate(`/reader/${sb.book_id}`)}
+                  className="rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700"
+                >
+                  Read
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation */}
+      {deleteConfirmTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setDeleteConfirmTarget(null)}>
+          <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl dark:bg-gray-900" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-3 text-lg font-semibold text-gray-900 dark:text-gray-100">Delete Book</h3>
+            <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+              Are you sure you want to delete "{deleteConfirmTarget.title}"? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDeleteConfirmTarget(null)} className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800">
+                Cancel
+              </button>
+              <button onClick={confirmDelete} className="rounded bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700">
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share dialog */}
+      {shareTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShareTarget(null)}>
+          <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl dark:bg-gray-900" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-3 text-lg font-semibold text-gray-900 dark:text-gray-100">Share "{shareTarget.title}"</h3>
+            <input
+              type="text"
+              placeholder="Enter username"
+              value={shareUsername}
+              onChange={(e) => setShareUsername(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleShare(); }}
+              disabled={shareStatus === "loading"}
+              className="mb-3 w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+            />
+            {shareMsg && (
+              <p className={`mb-3 text-xs ${shareStatus === "error" ? "text-red-600" : "text-green-600"}`}>{shareMsg}</p>
+            )}
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShareTarget(null)} className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800">
+                Cancel
+              </button>
+              <button onClick={handleShare} disabled={shareStatus === "loading" || !shareUsername.trim()} className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                {shareStatus === "loading" ? "Sharing..." : "Share"}
+              </button>
+            </div>
           </div>
         </div>
       )}
