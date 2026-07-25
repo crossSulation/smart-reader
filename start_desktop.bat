@@ -22,7 +22,7 @@ if errorlevel 1 (
 
 echo.
 echo Starting backend server in a new terminal...
-start "Smart Reader Backend" cmd /k "cd /d %BACKEND_DIR% && call fresh_env\Scripts\activate.bat && python run_dev.py"
+start "Smart Reader Backend" cmd /k "cd /d %BACKEND_DIR% && call .venv\Scripts\activate.bat && python run_dev.py"
 
 echo Waiting for backend boot...
 timeout /t 3 /nobreak >nul
@@ -44,9 +44,9 @@ if not exist "%BACKEND_DIR%\run_dev.py" (
     exit /b 1
 )
 
-if not exist "%BACKEND_DIR%\fresh_env\Scripts\activate.bat" (
+if not exist "%BACKEND_DIR%\.venv\Scripts\activate.bat" (
     echo Error: backend virtual environment activation script not found.
-    echo Expected: %BACKEND_DIR%\fresh_env\Scripts\activate.bat
+    echo Expected: %BACKEND_DIR%\.venv\Scripts\activate.bat
     exit /b 1
 )
 

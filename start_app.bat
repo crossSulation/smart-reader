@@ -35,7 +35,7 @@ echo.
 echo starting backend server (Development)...
 echo.
 cd /d "%BACKEND_DIR%"
-call fresh_env\Scripts\activate.bat
+call .venv\Scripts\activate.bat
 python run_dev.py
 pause
 goto menu
@@ -45,7 +45,7 @@ echo.
 echo starting backend server (Staging)...
 echo.
 cd /d "%BACKEND_DIR%"
-call fresh_env\Scripts\activate.bat
+call .venv\Scripts\activate.bat
 python run_stage.py
 pause
 goto menu
@@ -55,7 +55,7 @@ echo.
 echo starting backend server (Production)...
 echo.
 cd /d "%BACKEND_DIR%"
-call fresh_env\Scripts\activate.bat
+call .venv\Scripts\activate.bat
 python run_prod.py
 pause
 goto menu
@@ -89,7 +89,7 @@ goto menu
 echo.
 echo starting backend server (Development)...
 echo.
-start cmd /k "cd /d %BACKEND_DIR% && call fresh_env\Scripts\activate.bat && python run_dev.py"
+start cmd /k "cd /d %BACKEND_DIR% && call .venv\Scripts\activate.bat && python run_dev.py"
 
 timeout /t 3 /nobreak >nul
 

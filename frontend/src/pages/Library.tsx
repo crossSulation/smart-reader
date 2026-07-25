@@ -46,6 +46,10 @@ function Library() {
   // Share
   const [shareTarget, setShareTarget] = useState<Book | null>(null);
   const [shareUsername, setShareUsername] = useState("");
+  const [userSearch, setUserSearch] = useState("");
+  const [userSearchResults, setUserSearchResults] = useState<{ id: number; username: string }[]>([]);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [userSearchLoading, setUserSearchLoading] = useState(false);
   const [shareStatus, setShareStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
   const [shareMsg, setShareMsg] = useState("");
   const [sharedBooks, setSharedBooks] = useState<{ share_id: number; book_id: number; title: string; owner_username: string; created_at: string }[]>([]);
@@ -63,6 +67,23 @@ function Library() {
   }, []);
 
   useEffect(() => { fetchSharedBooks(); }, [fetchSharedBooks]);
+
+  const searchUsers = useCallback(async (query: string) => {
+    if (!query.trim()) { setUserSearchResults([]); setShowUserDropdown(false); return; }
+    setUserSearchLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/auth/users/search?q=${encodeURIComponent(query)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUserSearchResults(data);
+        setShowUserDropdown(data.length > 0);
+      }
+    } catch { /* ignore */ }
+    setUserSearchLoading(false);
+  }, []);
 
   const handleShare = useCallback(async () => {
     if (!shareTarget || !shareUsername.trim()) return;
@@ -521,23 +542,47 @@ function Library() {
 
       {/* Share dialog */}
       {shareTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShareTarget(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { setShareTarget(null); setShowUserDropdown(false); }}>
           <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl dark:bg-gray-900" onClick={(e) => e.stopPropagation()}>
             <h3 className="mb-3 text-lg font-semibold text-gray-900 dark:text-gray-100">Share "{shareTarget.title}"</h3>
-            <input
-              type="text"
-              placeholder="Enter username"
-              value={shareUsername}
-              onChange={(e) => setShareUsername(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleShare(); }}
-              disabled={shareStatus === "loading"}
-              className="mb-3 w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-            />
+            <div className="relative mb-3">
+              <input
+                type="text"
+                placeholder="Search users..."
+                value={shareUsername || userSearch}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (shareUsername) { setShareUsername(""); setUserSearch(v); }
+                  else { setUserSearch(v); }
+                  searchUsers(v);
+                }}
+                onFocus={() => { if (userSearchResults.length > 0) setShowUserDropdown(true); }}
+                disabled={shareStatus === "loading"}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+              />
+              {showUserDropdown && userSearchResults.length > 0 && (
+                <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-40 overflow-y-auto rounded border border-gray-200 bg-white shadow-lg dark:border-gray-600 dark:bg-gray-800">
+                  {userSearchResults.map((u) => (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => { setShareUsername(u.username); setUserSearch(""); setShowUserDropdown(false); }}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 dark:text-gray-300 dark:hover:bg-blue-900/20"
+                    >
+                      {u.username}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {userSearchLoading && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">...</span>
+              )}
+            </div>
             {shareMsg && (
               <p className={`mb-3 text-xs ${shareStatus === "error" ? "text-red-600" : "text-green-600"}`}>{shareMsg}</p>
             )}
             <div className="flex justify-end gap-2">
-              <button onClick={() => setShareTarget(null)} className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800">
+              <button onClick={() => { setShareTarget(null); setShowUserDropdown(false); }} className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800">
                 Cancel
               </button>
               <button onClick={handleShare} disabled={shareStatus === "loading" || !shareUsername.trim()} className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">

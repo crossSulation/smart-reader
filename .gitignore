@@ -92,3 +92,5 @@ backend/uploads/
 .opencode
 .npm-cache
 fresh_env/
+.venv
+.venv2

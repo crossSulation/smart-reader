@@ -188,6 +188,12 @@ def get_current_user_info(current_user: dict = Depends(get_current_user), db: Se
     )
 
 
+@router.get("/users/search")
+def search_users(q: str, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    users = db.query(User).filter(User.username.ilike(f"%{q}%")).limit(20).all()
+    return [{"id": u.id, "username": u.username} for u in users if u.id != current_user["id"]]
+
+
 @router.post("/forgot-password")
 def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db)):
     """Reset password by username without requiring authentication."""

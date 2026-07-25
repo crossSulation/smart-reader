@@ -9,7 +9,7 @@ REM 切换到脚本所在目录
 cd /d %~dp0
 
 REM 激活虚拟环境
-call fresh_env\Scripts\activate.bat
+call .venv\Scripts\activate.bat
 
 if errorlevel 1 (
     echo Error: Could not activate virtual environment

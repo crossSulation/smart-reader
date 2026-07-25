@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR" || exit 1
 
 # 激活虚拟环境
-source fresh_env/bin/activate
+source .venv/bin/activate
 
 if [ $? -ne 0 ]; then
   echo "Error: Could not activate virtual environment"

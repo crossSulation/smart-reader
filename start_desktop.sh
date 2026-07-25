@@ -13,9 +13,9 @@ check_requirements() {
     has_error=1
   fi
 
-  if [ ! -f "$BACKEND_DIR/fresh_env/bin/activate" ]; then
+  if [ ! -f "$BACKEND_DIR/.venv/bin/activate" ]; then
     echo "Error: backend virtual environment activation script not found."
-    echo "Expected: $BACKEND_DIR/fresh_env/bin/activate"
+    echo "Expected: $BACKEND_DIR/.venv/bin/activate"
     has_error=1
   fi
 
@@ -59,7 +59,7 @@ fi
 echo ""
 echo "Starting backend server..."
 cd "$BACKEND_DIR" || exit 1
-source fresh_env/bin/activate
+source .venv/bin/activate
 python run_dev.py &
 BACKEND_PID=$!
 cd "$SCRIPT_DIR" || exit 1
