@@ -7,7 +7,7 @@ import json
 import logging
 from typing import List, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
@@ -246,6 +246,7 @@ def _validate_summary_json(template: str, payload: dict) -> dict:
 def ask_book(
     book_id: int,
     body: QARequest,
+    request: Request,
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
     credit_status: dict = Depends(check_credit_gate),
@@ -381,14 +382,21 @@ def ask_book(
             for c in citations
         ],
     )
+    from app.middleware.privacy_guard import extract_privacy_context
+    privacy = extract_privacy_context(request)
+
+    provider_label = settings.LLM_PROVIDER
+    if privacy.enabled:
+        provider_label = f"local-{provider_label}"
+
     return QAResponse(
         question=body.question,
         answer=answer,
         citations=citations,
         confidence=round(confidence, 3),
         insufficient_evidence=insufficient_evidence,
-        sources=sources,  # Keep for backwards compatibility
-        provider=settings.LLM_PROVIDER,
+        sources=sources,
+        provider=provider_label,
     )
 
 
@@ -399,6 +407,7 @@ def ask_book(
 @router.get("/{book_id}/summary", response_model=SummaryResponse)
 def get_book_summary(
     book_id: int,
+    request: Request,
     max_chunks: int = Query(20, ge=1, le=100, description="Number of chunks to summarise"),
     template: str = Query("bullet_points", description="Summary template: cornell | bullet_points | sq3r"),
     user: dict = Depends(get_current_user),
@@ -470,13 +479,17 @@ def get_book_summary(
         db, user["id"], book_id, "summary", summary_raw,
         settings.LLM_PROVIDER, chunks_used=len(context_texts),
     )
+    from app.middleware.privacy_guard import extract_privacy_context
+    privacy = extract_privacy_context(request)
+    provider_label = f"local-{settings.LLM_PROVIDER}" if privacy.enabled else settings.LLM_PROVIDER
+
     return SummaryResponse(
         book_id=book_id,
         title=book.title,
         template=normalized_template,
         summary_json=summary_json,
         raw_output=summary_raw,
-        provider=settings.LLM_PROVIDER,
+        provider=provider_label,
         chunks_used=len(context_texts),
     )
 
@@ -485,11 +498,15 @@ def get_book_summary(
 def run_book_agent(
     book_id: int,
     payload: AgentRequest,
+    request: Request,
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """LangChain tool-calling agent endpoint for read/write/search/web_search/quiz."""
     settings = get_settings()
+    from app.middleware.privacy_guard import extract_privacy_context
+    privacy = extract_privacy_context(request)
+    provider_label = f"local-{settings.LLM_PROVIDER}" if privacy.enabled else settings.LLM_PROVIDER
     _get_book_or_404(book_id, user["id"], db)
 
     tool: AgentToolName = payload.tool or _resolve_agent_tool(payload.message)
@@ -517,7 +534,7 @@ def run_book_agent(
             message="LangChain agent completed.",
             session_id=agent_result.get("session_id", payload.session_id),
             result=result,
-            provider=settings.LLM_PROVIDER,
+            provider=provider_label,
         )
 
     except HTTPException:
@@ -529,7 +546,7 @@ def run_book_agent(
             message="Agent tool execution failed.",
             session_id=payload.session_id,
             result=AgentToolResult(tool=tool, status="error", error=str(exc), data={}),
-            provider=settings.LLM_PROVIDER,
+            provider=provider_label,
         )
 
 
@@ -537,11 +554,15 @@ def run_book_agent(
 async def run_book_agent_stream(
     book_id: int,
     payload: AgentRequest,
+    request: Request,
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """SSE stream for real-time LangChain tool execution events and final output."""
     settings = get_settings()
+    from app.middleware.privacy_guard import extract_privacy_context
+    privacy = extract_privacy_context(request)
+    provider_label = f"local-{settings.LLM_PROVIDER}" if privacy.enabled else settings.LLM_PROVIDER
     _get_book_or_404(book_id, user["id"], db)
 
     tool: AgentToolName = payload.tool or _resolve_agent_tool(payload.message)
@@ -556,12 +577,13 @@ async def run_book_agent_stream(
             ):
                 if event.get("type") == "final":
                     event["tool"] = tool
+                    event["provider"] = provider_label
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as exc:
             error_event = {
                 "type": "error",
                 "tool": tool,
-                "provider": settings.LLM_PROVIDER,
+                "provider": provider_label,
                 "message": str(exc),
             }
             yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"

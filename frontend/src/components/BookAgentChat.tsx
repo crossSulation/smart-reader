@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
+import { getPrivacyMode } from "../hooks/usePrivacyMode";
 import "katex/dist/katex.min.css";
 import Skeleton from "./Skeleton";
 
@@ -18,6 +19,7 @@ type AgentStreamEvent = {
   allowed_tools?: AgentToolName[];
   message?: string;
   interaction_id?: number;
+  provider?: string;
 };
 
 type ChatMessage = {
@@ -28,6 +30,7 @@ type ChatMessage = {
   insights: ToolInsight[];
   interaction_id?: number;
   feedback?: "up" | "down";
+  provider?: string;
 };
 
 type BookAgentChatProps = {
@@ -584,6 +587,7 @@ export default function BookAgentChat({
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Privacy-Mode": String(getPrivacyMode()),
         },
         body: JSON.stringify(payload),
       });
@@ -668,11 +672,15 @@ export default function BookAgentChat({
             if (eventPayload.session_id) {
               setSessionId(eventPayload.session_id);
             }
-            if (eventPayload.interaction_id) {
+            if (eventPayload.interaction_id || eventPayload.provider) {
               setChat((prev) =>
-                prev.map((item) =>
-                  item.id === assistantId ? { ...item, interaction_id: eventPayload.interaction_id } : item,
-                ),
+                prev.map((item) => {
+                  if (item.id !== assistantId) return item;
+                  const updates: Partial<ChatMessage> = {};
+                  if (eventPayload.interaction_id) updates.interaction_id = eventPayload.interaction_id;
+                  if (eventPayload.provider) updates.provider = eventPayload.provider;
+                  return { ...item, ...updates };
+                }),
               );
             }
             if (Array.isArray(eventPayload.allowed_tools) && eventPayload.allowed_tools.length > 0) {
@@ -1050,17 +1058,28 @@ export default function BookAgentChat({
                     )
                   )}
                   {item.role === "assistant" && item.content && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSaveAsNote(item.id, item.content);
-                      }}
-                      disabled={savingNoteIds.has(item.id)}
-                      className="text-right text-[10px] text-gray-400 hover:text-blue-600 disabled:opacity-50 dark:text-gray-500 dark:hover:text-blue-400"
-                    >
-                      {savingNoteIds.has(item.id) ? "Saving..." : "+ Save as note"}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {item.provider && (
+                        <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                          item.provider === "mock" ? "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400" :
+                          item.provider === "ollama" ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400" :
+                          "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400"
+                        }`}>
+                          {item.provider === "mock" ? "Mock" : item.provider === "ollama" ? "Local" : "Cloud"}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSaveAsNote(item.id, item.content);
+                        }}
+                        disabled={savingNoteIds.has(item.id)}
+                        className="text-[10px] text-gray-400 hover:text-blue-600 disabled:opacity-50 dark:text-gray-500 dark:hover:text-blue-400"
+                      >
+                        {savingNoteIds.has(item.id) ? "Saving..." : "+ Save as note"}
+                      </button>
+                    </div>
                   )}
                   {item.role === "assistant" && item.interaction_id && (
                     <div className="flex gap-1">

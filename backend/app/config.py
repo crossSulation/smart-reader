@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     # Billing / Credits
     FREE_MONTHLY_CREDITS: int = 1000000
     CREDIT_RESET_DAY: int = 1
+    # AI Router
+    ENABLE_AI_ROUTER: bool = False  # Feature flag for Phase 1+2 middleware
+    PROVIDER_PREFER: str = "cloud"  # "cloud" | "local" | "mock"
 
 
 class DevelopmentSettings(Settings):

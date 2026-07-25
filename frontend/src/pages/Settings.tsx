@@ -12,11 +12,14 @@ import {
   TableRow,
   Button,
   Alert,
+  Switch,
+  FormControlLabel,
 } from "@mui/material";
 import LanguageSwitcher from "../components/LanguageSwitcher";
 import { ThemeSegmentedToggle } from "../components/ThemeToggle";
 import { READER_SHORTCUTS, type ShortcutDef } from "../constants/shortcuts";
 import { clearCache } from "../utils/fileCache";
+import { usePrivacyMode } from "../hooks/usePrivacyMode";
 
 const shortcutActionLabels: Record<string, { zh: string; en: string }> = {
   "reader.nextPage": { zh: "下一页", en: "Next page" },
@@ -46,6 +49,7 @@ function formatShortcutKey(def: ShortcutDef): string {
 export default function Settings() {
   const { t, i18n } = useTranslation();
   const lang = (i18n.language || "zh").startsWith("zh") ? "zh" : "en";
+  const { enabled: privacyMode, toggle: togglePrivacyMode } = usePrivacyMode();
   const [exportingNotes, setExportingNotes] = useState(false);
   const [exportingFlashcards, setExportingFlashcards] = useState(false);
   const [clearingCache, setClearingCache] = useState(false);
@@ -163,6 +167,13 @@ export default function Settings() {
             </Typography>
             <ThemeSegmentedToggle />
           </Box>
+        </Box>
+
+        <Box mt={2}>
+          <FormControlLabel
+            control={<Switch checked={privacyMode} onChange={togglePrivacyMode} />}
+            label="Privacy Mode — keep all data local, never send to cloud"
+          />
         </Box>
       </Paper>
 
