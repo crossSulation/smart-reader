@@ -59,8 +59,7 @@ fi
 echo ""
 echo "Starting backend server..."
 cd "$BACKEND_DIR" || exit 1
-source .venv/bin/activate
-python run_dev.py &
+uv run python run_dev.py &
 BACKEND_PID=$!
 cd "$SCRIPT_DIR" || exit 1
 

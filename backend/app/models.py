@@ -63,6 +63,8 @@ class Book(Base):
     progress_percentage = Column(Integer, default=0)  # 阅读进度百分比
     last_read_time = Column(DateTime(timezone=True), server_default=func.now())  # 最后阅读时间
     notes = Column(Text)  # 笔记
+    shared_by = Column(String, nullable=True)  # sharing owner username
+    original_book_id = Column(Integer, ForeignKey("books.id"), nullable=True)  # original book for shared copies
     chunks = relationship("DocumentChunk", back_populates="book", cascade="all, delete-orphan")
     learning_notes = relationship("Note", back_populates="book", cascade="all, delete-orphan")
     flashcards = relationship("Flashcard", back_populates="book", cascade="all, delete-orphan")

@@ -78,7 +78,7 @@ function BookCard({ book, onDelete, onShare }: { book: Book; onDelete?: (id: num
       className="rounded-lg overflow-hidden hover:shadow-lg transition cursor-pointer border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900 dark:hover:shadow-gray-900/40 hover:shadow-gray-200/60 shadow-sm"
     >
       <div className="h-48 bg-gray-100 dark:bg-gray-800 flex items-center justify-center relative">
-        {onShare && (
+        {onShare && !book.shared_by && (
           <button
             onClick={(e) => { e.stopPropagation(); onShare(book); }}
             className="absolute top-2 right-2 rounded-full bg-white/80 p-1.5 text-gray-600 shadow hover:bg-white hover:text-blue-600 dark:bg-gray-800/80 dark:text-gray-400 dark:hover:text-blue-400"
@@ -96,11 +96,21 @@ function BookCard({ book, onDelete, onShare }: { book: Book; onDelete?: (id: num
         ) : (
           <span className="text-4xl">📚</span>
         )}
+        {book.shared_by && (
+          <span className="absolute bottom-2 left-2 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+            Shared by @{book.shared_by}
+          </span>
+        )}
       </div>
       <div className="p-4">
         <div className="mb-2 flex items-center gap-2">
           <h3 className="font-semibold truncate text-gray-900 dark:text-gray-100 flex-1">{book.title}</h3>
           <div className="flex shrink-0 items-center gap-1">
+            {book.shared_by && (
+              <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                Shared
+              </span>
+            )}
             {indexed && (
               <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300">
                 <BoltOutlined sx={{ fontSize: 10 }} className="mr-0.5" />

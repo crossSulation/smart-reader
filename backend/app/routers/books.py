@@ -66,15 +66,34 @@ def _attach_file_fields(file_service: FileService, user_id: int, book: Book):
     return book
 
 
+def _get_book_for_user(book_id: int, user_id: int, db: Session) -> Optional[BookModel]:
+    return db.query(BookModel).filter(BookModel.id == book_id, BookModel.owner_id == user_id).first()
+
+
 @router.get("/", response_model=List[Book])
 async def list_books(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    # 实现书籍列表功能
     file_service = FileService(db)
     books = file_service.get_user_books(user['id'])
+
     logger.info("list_books called | user_id=%s | count=%s", user["id"], len(books))
 
     for book in books:
-        _attach_file_fields(file_service, user['id'], book)
+        if book.shared_by and book.original_book_id:
+            # Shared copy: find the original file by matching owner + filename
+            original_file = (
+                db.query(FileMetadata)
+                .join(BookModel, BookModel.owner_id == FileMetadata.uploaded_by)
+                .filter(
+                    BookModel.id == book.original_book_id,
+                    FileMetadata.original_name == book.title,
+                )
+                .first()
+            )
+            if original_file:
+                setattr(book, "file_url", original_file.file_url)
+                setattr(book, "file_type", _normalize_file_type(original_file.file_type))
+        else:
+            _attach_file_fields(file_service, user['id'], book)
 
     # Attach indexed status and knowledge count per book
     if books:
@@ -226,12 +245,28 @@ async def create_book(book: BookCreate, user: dict = Depends(get_current_user), 
 
 @router.get("/{book_id}", response_model=Book)
 async def get_book(book_id: int, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    # 实现获取特定书籍功能
     file_service = FileService(db)
-    book = file_service.get_book(book_id, user['id'])
+    book = _get_book_for_user(book_id, user["id"], db)
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
-    return _attach_file_fields(file_service, user['id'], book)
+
+    if book.shared_by and book.original_book_id:
+        original_file = (
+            db.query(FileMetadata)
+            .join(BookModel, BookModel.owner_id == FileMetadata.uploaded_by)
+            .filter(
+                BookModel.id == book.original_book_id,
+                FileMetadata.original_name == book.title,
+            )
+            .first()
+        )
+        if original_file:
+            setattr(book, "file_url", original_file.file_url)
+            setattr(book, "file_type", _normalize_file_type(original_file.file_type))
+    else:
+        _attach_file_fields(file_service, book.owner_id, book)
+
+    return book
 
 
 @router.put("/{book_id}/progress")
@@ -252,8 +287,7 @@ async def update_book_progress(book_id: int, progress_data: UpdateProgressReques
 @router.get("/{book_id}/progress", response_model=Book)
 async def get_book_progress(book_id: int, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     """获取书籍阅读进度"""
-    file_service = FileService(db)
-    book = file_service.get_book(book_id, user['id'])
+    book = _get_book_for_user(book_id, user["id"], db)
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
     return book
@@ -282,7 +316,7 @@ async def delete_book(book_id: int, user: dict = Depends(get_current_user), db: 
 @router.get("/{book_id}/status")
 def get_book_status(book_id: int, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     """Return indexing and knowledge extraction status for a book."""
-    book = FileService(db).get_book(book_id, user["id"])
+    book = _get_book_for_user(book_id, user["id"], db)
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
 
@@ -314,7 +348,7 @@ def get_book_status(book_id: int, user: dict = Depends(get_current_user), db: Se
 @router.post("/{book_id}/extract-knowledge")
 def extract_book_knowledge(book_id: int, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     """Manually trigger knowledge point extraction for a book."""
-    book = FileService(db).get_book(book_id, user["id"])
+    book = _get_book_for_user(book_id, user["id"], db)
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
 
@@ -387,6 +421,10 @@ def share_book(book_id: int, body: ShareBookRequest, user: dict = Depends(get_cu
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
 
+    # Cannot re-share a book you received from someone else
+    if book.original_book_id is not None:
+        raise HTTPException(status_code=403, detail="Cannot re-share a book shared with you")
+
     target = db.query(User).filter(User.username == body.username).first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
@@ -401,10 +439,23 @@ def share_book(book_id: int, body: ShareBookRequest, user: dict = Depends(get_cu
     if existing:
         raise HTTPException(status_code=400, detail="Already shared with this user")
 
-    share = BookShare(book_id=book_id, owner_id=user["id"], shared_with_id=target.id)
+    # Create a copy of the book for the shared user (independent progress & notes)
+    shared_book = BookModel(
+        title=book.title,
+        owner_id=target.id,
+        current_page=0,
+        progress_percentage=0,
+        notes=None,
+        shared_by=user["username"],
+        original_book_id=book.id,
+    )
+    db.add(shared_book)
+    db.flush()
+
+    share = BookShare(book_id=book.id, owner_id=user["id"], shared_with_id=target.id)
     db.add(share)
     db.commit()
-    return {"message": "Book shared", "shared_with": target.username}
+    return {"message": "Book shared", "shared_with": target.username, "shared_book_id": shared_book.id}
 
 
 @router.get("/{book_id}/shares")
@@ -421,6 +472,15 @@ def unshare_book(book_id: int, share_id: int, user: dict = Depends(get_current_u
     share = db.query(BookShare).filter(BookShare.id == share_id, BookShare.owner_id == user["id"]).first()
     if not share:
         raise HTTPException(status_code=404, detail="Share not found")
+
+    # Delete the shared copy
+    shared_book = db.query(BookModel).filter(
+        BookModel.original_book_id == share.book_id,
+        BookModel.owner_id == share.shared_with_id,
+    ).first()
+    if shared_book:
+        db.delete(shared_book)
+
     db.delete(share)
     db.commit()
     return {"message": "Unshared"}
@@ -428,15 +488,18 @@ def unshare_book(book_id: int, share_id: int, user: dict = Depends(get_current_u
 
 @router.get("/shared-with-me")
 def shared_with_me(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    shares = db.query(BookShare).filter(BookShare.shared_with_id == user["id"]).all()
+    shared_books = db.query(BookModel).filter(
+        BookModel.owner_id == user["id"],
+        BookModel.shared_by.isnot(None),
+    ).all()
     result = []
-    for s in shares:
-        book = db.query(BookModel).filter(BookModel.id == s.book_id).first()
-        if book:
-            result.append({
-                "share_id": s.id, "book_id": book.id, "title": book.title,
-                "owner_username": s.owner.username, "created_at": s.created_at.isoformat(),
-            })
+    for book in shared_books:
+        result.append({
+            "book_id": book.id,
+            "title": book.title,
+            "shared_by": book.shared_by,
+            "original_book_id": book.original_book_id,
+        })
     return result
 
 

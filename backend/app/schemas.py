@@ -41,6 +41,9 @@ class Book(BookBase):
     file_url: Optional[str] = None
     indexed: bool = False
     knowledge_count: int = 0
+    shared_by: Optional[str] = None
+    share_id: Optional[int] = None
+    original_book_id: Optional[int] = None
 
     class Config:
         from_attributes = True

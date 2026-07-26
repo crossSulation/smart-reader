@@ -20,4 +20,6 @@ export type Book = {
   file_url?: string | null;
   indexed?: boolean;
   knowledge_count?: number;
+  shared_by?: string;
+  share_id?: number;
 };

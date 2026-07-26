@@ -70,6 +70,11 @@ export default function BookListRow({ book, onDelete, onShare }: BookListRowProp
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <h3 className="font-semibold truncate text-sm text-gray-900 dark:text-gray-100">{book.title}</h3>
+          {book.shared_by && (
+            <span className="shrink-0 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+              Shared
+            </span>
+          )}
           {indexed && (
             <span className="shrink-0 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300">Indexed</span>
           )}
@@ -77,7 +82,10 @@ export default function BookListRow({ book, onDelete, onShare }: BookListRowProp
             <span className="shrink-0 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">{kpCount} KP</span>
           )}
         </div>
-        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{book.author || "unknown"}</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+          {book.author || "unknown"}
+          {book.shared_by && <span className="ml-2 text-blue-500">by @{book.shared_by}</span>}
+        </p>
       </div>
       <div className="hidden sm:flex sm:flex-col sm:items-end shrink-0 text-xs text-gray-500 dark:text-gray-400 min-w-[80px]">
         <div>{t('bookCard.readingProgress')}: {progressText}</div>
@@ -110,14 +118,16 @@ export default function BookListRow({ book, onDelete, onShare }: BookListRowProp
         >
           <DeleteOutlineOutlined sx={{ fontSize: 12 }} />
         </button>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onShare(book); }}
-          className="rounded border border-gray-200 px-2 py-1 text-[10px] text-gray-400 hover:border-blue-300 hover:text-blue-500 dark:border-gray-600 dark:text-gray-500 dark:hover:border-blue-400 dark:hover:text-blue-400"
-          title="Share"
-        >
-          <ShareOutlined sx={{ fontSize: 12 }} />
-        </button>
+        {!book.shared_by && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onShare(book); }}
+            className="rounded border border-gray-200 px-2 py-1 text-[10px] text-gray-400 hover:border-blue-300 hover:text-blue-500 dark:border-gray-600 dark:text-gray-500 dark:hover:border-blue-400 dark:hover:text-blue-400"
+            title="Share"
+          >
+            <ShareOutlined sx={{ fontSize: 12 }} />
+          </button>
+        )}
       </div>
     </div>
   );

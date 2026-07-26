@@ -5,11 +5,25 @@ from typing import Optional
 import os
 
 from app.database import get_db
-from app.models import FileMetadata
+from app.models import FileMetadata, BookShare
 from app.routers.auth import get_current_user
 from app.services.oss_service import OSSManager
 
 router = APIRouter(prefix="/files", tags=["files"])
+
+
+def _get_shared_file(db: Session, stored_name: str, user_id: int):
+    book = (
+        db.query(FileMetadata)
+        .join(BookShare, BookShare.owner_id == FileMetadata.uploaded_by)
+        .filter(
+            FileMetadata.stored_name == stored_name,
+            BookShare.shared_with_id == user_id,
+        )
+        .first()
+    )
+    return book
+
 
 @router.get("/download/{file_path:path}")
 async def download_file(
@@ -18,11 +32,13 @@ async def download_file(
     db: Session = Depends(get_db)
 ):
     """下载文件 - 本地直接返回文件，云存储重定向到OSS URL"""
-    # 查找文件记录
     file_record = db.query(FileMetadata).filter(
         FileMetadata.stored_name == file_path,
         FileMetadata.uploaded_by == user['id']
     ).first()
+
+    if not file_record:
+        file_record = _get_shared_file(db, file_path, user["id"])
 
     if not file_record:
         raise HTTPException(status_code=404, detail="File not found")
@@ -47,7 +63,17 @@ async def get_file_info(
         FileMetadata.id == file_id,
         FileMetadata.uploaded_by == user['id']
     ).first()
-    
+
+    if not file_record:
+        file_record = (
+            db.query(FileMetadata)
+            .join(BookShare, BookShare.owner_id == FileMetadata.uploaded_by)
+            .filter(
+                FileMetadata.id == file_id,
+                BookShare.shared_with_id == user["id"],
+            ).first()
+        )
+
     if not file_record:
         raise HTTPException(status_code=404, detail="File not found")
     

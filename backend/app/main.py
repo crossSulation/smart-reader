@@ -96,12 +96,25 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
-# Auto-create tables on startup
+# Auto-create tables + migrate on startup
 @app.on_event("startup")
 def on_startup():
     from app.database import Base, sync_engine
     from app.models import BookShare, BookComment, User, Book, FileMetadata, DocumentChunk, AIInteraction, AICitation, Note, Flashcard, ReviewItem, KnowledgePoint, KnowledgeLink, AgentMemory, TokenUsageLog, CreditTransaction, CreditPack  # noqa
     Base.metadata.create_all(bind=sync_engine)
+
+    # Migration: add columns to existing books table
+    import sqlalchemy as sa
+    from sqlalchemy import inspect, text
+    inspector = inspect(sync_engine)
+    existing_cols = {c["name"] for c in inspector.get_columns("books")}
+    with sync_engine.connect() as conn:
+        if "shared_by" not in existing_cols:
+            conn.execute(text("ALTER TABLE books ADD COLUMN shared_by TEXT"))
+            conn.commit()
+        if "original_book_id" not in existing_cols:
+            conn.execute(text("ALTER TABLE books ADD COLUMN original_book_id INTEGER REFERENCES books(id)"))
+            conn.commit()
 
 # CORS中间件
 app.add_middleware(

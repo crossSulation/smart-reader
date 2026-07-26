@@ -28,8 +28,7 @@ start_backend_dev() {
   echo "Starting backend server (Development)..."
   echo ""
   cd "$BACKEND_DIR" || exit 1
-  source .venv/bin/activate
-  python run_dev.py
+  uv run python run_dev.py
   read -p "Press Enter to continue..."
 }
 
@@ -38,8 +37,7 @@ start_backend_stage() {
   echo "Starting backend server (Staging)..."
   echo ""
   cd "$BACKEND_DIR" || exit 1
-  source .venv/bin/activate
-  python run_stage.py
+  uv run python run_stage.py
   read -p "Press Enter to continue..."
 }
 
@@ -48,8 +46,7 @@ start_backend_prod() {
   echo "Starting backend server (Production)..."
   echo ""
   cd "$BACKEND_DIR" || exit 1
-  source .venv/bin/activate
-  python run_prod.py
+  uv run python run_prod.py
   read -p "Press Enter to continue..."
 }
 
@@ -81,8 +78,7 @@ start_both() {
   echo "Starting backend server (Development) in background..."
   echo ""
   cd "$BACKEND_DIR" || return
-  source .venv/bin/activate
-  python run_dev.py &
+  uv run python run_dev.py &
   BACKEND_PID=$!
   cd "$SCRIPT_DIR" || return
 

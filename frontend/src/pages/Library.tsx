@@ -52,21 +52,33 @@ function Library() {
   const [userSearchLoading, setUserSearchLoading] = useState(false);
   const [shareStatus, setShareStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
   const [shareMsg, setShareMsg] = useState("");
-  const [sharedBooks, setSharedBooks] = useState<{ share_id: number; book_id: number; title: string; owner_username: string; created_at: string }[]>([]);
-  const [sharedBooksLoading, setSharedBooksLoading] = useState(true);
+  const [currentShares, setCurrentShares] = useState<{ id: number; username: string; created_at: string }[]>([]);
+  const [unsharingId, setUnsharingId] = useState<number | null>(null);
 
-  const fetchSharedBooks = useCallback(async () => {
+  const fetchShares = useCallback(async (bookId: number) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("/api/books/shared-with-me", {
+      const res = await fetch(`/api/books/${bookId}/shares`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) setSharedBooks(await res.json());
-    } catch { /* ignore */ }
-    setSharedBooksLoading(false);
+      if (res.ok) setCurrentShares(await res.json());
+    } catch { setCurrentShares([]); }
   }, []);
 
-  useEffect(() => { fetchSharedBooks(); }, [fetchSharedBooks]);
+  const handleUnshare = useCallback(async (bookId: number, shareId: number) => {
+    setUnsharingId(shareId);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/books/${bookId}/shares/${shareId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setCurrentShares((prev) => prev.filter((s) => s.id !== shareId));
+      }
+    } catch { /* ignore */ }
+    setUnsharingId(null);
+  }, []);
 
   const searchUsers = useCallback(async (query: string) => {
     if (!query.trim()) { setUserSearchResults([]); setShowUserDropdown(false); return; }
@@ -462,11 +474,11 @@ function Library() {
                     </h2>
                     {viewMode === 'grid' ? (
                       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
-                        {groupedBooks[status].map((book) => <BookCard key={book.id} book={book} onDelete={handleDeleteBook} onShare={(b) => { setShareTarget(b); setShareStatus("idle"); setShareUsername(""); setShareMsg(""); }} />)}
+                        {groupedBooks[status].map((book) => <BookCard key={book.id} book={book} onDelete={handleDeleteBook} onShare={(b) => { setShareTarget(b); setShareStatus("idle"); setShareUsername(""); setShareMsg(""); setCurrentShares([]); fetchShares(b.id); }} />)}
                       </div>
                     ) : (
                       <div className="flex flex-col gap-3">
-                        {groupedBooks[status].map((book) => <BookListRow key={book.id} book={book} onDelete={handleDeleteBook} onShare={(b) => { setShareTarget(b); setShareStatus("idle"); setShareUsername(""); setShareMsg(""); }} />)}
+                        {groupedBooks[status].map((book) => <BookListRow key={book.id} book={book} onDelete={handleDeleteBook} onShare={(b) => { setShareTarget(b); setShareStatus("idle"); setShareUsername(""); setShareMsg(""); setCurrentShares([]); fetchShares(b.id); }} />)}
                       </div>
                     )}
                   </section>
@@ -475,11 +487,11 @@ function Library() {
             </div>
           ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
-              {filteredBooks.map((book) => <BookCard key={book.id} book={book} onDelete={handleDeleteBook} onShare={(b) => { setShareTarget(b); setShareStatus("idle"); setShareUsername(""); setShareMsg(""); }} />)}
+              {filteredBooks.map((book) => <BookCard key={book.id} book={book} onDelete={handleDeleteBook} onShare={(b) => { setShareTarget(b); setShareStatus("idle"); setShareUsername(""); setShareMsg(""); setCurrentShares([]); fetchShares(b.id); }} />)}
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              {filteredBooks.map((book) => <BookListRow key={book.id} book={book} onDelete={handleDeleteBook} onShare={(b) => { setShareTarget(b); setShareStatus("idle"); setShareUsername(""); setShareMsg(""); }} />)}
+              {filteredBooks.map((book) => <BookListRow key={book.id} book={book} onDelete={handleDeleteBook} onShare={(b) => { setShareTarget(b); setShareStatus("idle"); setShareUsername(""); setShareMsg(""); setCurrentShares([]); fetchShares(b.id); }} />)}
             </div>
           )}
         </>
@@ -495,27 +507,6 @@ function Library() {
             <p className="text-sm text-gray-400 dark:text-gray-500">
               Try adjusting your filters or upload a new book
             </p>
-          </div>
-        </div>
-      )}
-
-      {/* Shared with me */}
-      {!sharedBooksLoading && sharedBooks.length > 0 && (
-        <div className="mt-6">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Shared with me</h2>
-          <div className="flex flex-col gap-2">
-            {sharedBooks.map((sb) => (
-              <div key={sb.share_id} className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 dark:border-blue-800 dark:bg-blue-900/20">
-                <span className="text-sm font-medium text-blue-900 dark:text-blue-200 flex-1">{sb.title}</span>
-                <span className="text-xs text-blue-600 dark:text-blue-400">by {sb.owner_username}</span>
-                <button
-                  onClick={() => navigate(`/reader/${sb.book_id}`)}
-                  className="rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700"
-                >
-                  Read
-                </button>
-              </div>
-            ))}
           </div>
         </div>
       )}
@@ -545,6 +536,27 @@ function Library() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { setShareTarget(null); setShowUserDropdown(false); }}>
           <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl dark:bg-gray-900" onClick={(e) => e.stopPropagation()}>
             <h3 className="mb-3 text-lg font-semibold text-gray-900 dark:text-gray-100">Share "{shareTarget.title}"</h3>
+
+            {currentShares.length > 0 && (
+              <div className="mb-3">
+                <p className="text-xs font-medium text-gray-500 mb-2 dark:text-gray-400">Shared with</p>
+                <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
+                  {currentShares.map((s) => (
+                    <div key={s.id} className="flex items-center justify-between rounded bg-gray-50 px-2 py-1 dark:bg-gray-800">
+                      <span className="text-sm text-gray-700 dark:text-gray-300">@{s.username}</span>
+                      <button
+                        onClick={() => handleUnshare(shareTarget.id, s.id)}
+                        disabled={unsharingId === s.id}
+                        className="text-[11px] text-red-500 hover:text-red-700 disabled:opacity-50"
+                      >
+                        {unsharingId === s.id ? "Removing..." : "Unshare"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="relative mb-3">
               <input
                 type="text"
