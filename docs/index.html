@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Smart Reader — AI-powered Document Reader</title>
   <link rel="stylesheet" href="styles.css" />
-  <meta name="description" content="Smart Reader — read PDF, EPUB and Markdown with an AI-driven knowledge graph, agent chat, spaced repetition, and credit billing." />
+  <meta name="description" content="Smart Reader — read PDF, EPUB and Markdown with an AI-driven knowledge graph, agent chat, spaced repetition, TTS read-aloud, sharing, and credit billing. Runs on desktop and mobile." />
 </head>
 <body>
   <header class="site-header">
@@ -24,7 +24,7 @@
     <section class="hero">
       <div class="container">
         <h2>Read smarter. Learn faster.</h2>
-        <p>Smart Reader is an AI-powered document reader that ingests PDF, EPUB, and Markdown files, builds a knowledge graph, and uses spaced repetition to help you retain what you learn.</p>
+        <p>Smart Reader is an AI-powered document reader for PDF, EPUB, and Markdown. Built with Tauri 2.0 — runs on desktop (Windows/macOS/Linux) and mobile (Android).</p>
         <div class="cta-row">
           <a class="btn" href="#quickstart">Get started</a>
           <a class="btn secondary" href="https://github.com/crossSulation/smart-reader" target="_blank" rel="noopener">View on GitHub</a>
@@ -38,7 +38,7 @@
 
         <li>
           <strong>Multi-format Reader</strong>
-          <p>Native PDF viewer with page navigation and thumbnails. EPUB reader with contents sidebar and reading themes. Markdown viewer with heading-based TOC, LaTeX math, Mermaid diagrams, and SMILES chemical structures.</p>
+          <p>Native PDF viewer with page navigation and thumbnails. EPUB reader with contents sidebar and reading themes. Markdown viewer with heading-based TOC, LaTeX math, Mermaid diagrams, and SMILES chemical structures. Mobile PDF viewer with server-side page rendering and rectangle-based annotations.</p>
         </li>
 
         <li>
@@ -48,7 +48,7 @@
 
         <li>
           <strong>Knowledge Graph</strong>
-          <p>Automatically extract key concepts, terms, and entities from ingested documents. Visualize relationships as an interactive force-directed graph. Click nodes to view details and linked pages. Supports cross-document relationship inference via embedding similarity + LLM.</p>
+          <p>Automatically extract key concepts, terms, and entities from ingested documents. Visualize relationships as an interactive force-directed graph. Click nodes to view details and linked pages. Supports cross-document relationship inference via embedding similarity + LLM. Responsive mobile view with list/detail navigation.</p>
         </li>
 
         <li>
@@ -62,8 +62,18 @@
         </li>
 
         <li>
+          <strong>Text-to-Speech (TTS)</strong>
+          <p>Built-in read-aloud with system speech synthesis. Sentence-by-sentence playback with play/pause/skip controls. Adjustable speed (0.5x–2x) and voice selection. Supports Chinese voices. Works offline on both desktop and mobile.</p>
+        </li>
+
+        <li>
+          <strong>Book Sharing &amp; Collaboration</strong>
+          <p>Share books with other users by username. Searchable user picker. Shared books appear in "Shared with me" section with one-click read access. View and add comments on shared books. See each other's notes.</p>
+        </li>
+
+        <li>
           <strong>Reading Experience</strong>
-          <p>Dark mode with system preference detection. Keyboard shortcuts (arrow keys for page navigation, Ctrl+B for AI panel, Ctrl+Shift+D for theme). Desktop AIPanel with drag-to-resize. Mobile floating AI panel with slide-out overlay.</p>
+          <p>Dark mode with system preference detection. PDF reading themes (default / eye-care warm / e-ink dark). Keyboard shortcuts for navigation. Desktop AIPanel with drag-to-resize. Mobile floating AI panel with slide-out overlay. Swipe and edge-tap page navigation.</p>
         </li>
 
         <li>
@@ -77,8 +87,8 @@
         </li>
 
         <li>
-          <strong>Desktop App</strong>
-          <p>Built with Tauri 2.0 for Windows, macOS, and Linux. Native title bar with window controls. Offline file caching via IndexedDB. SQLite for local data storage. Full functionality without a browser.</p>
+          <strong>Desktop &amp; Mobile App</strong>
+          <p>Built with Tauri 2.0 for Windows, macOS, Linux, and Android. Mobile bottom tab navigation (Bookshelf / Review / Knowledge / Profile). Native title bar with window controls on desktop. Edge-to-edge display with safe area padding on mobile. Offline file caching via IndexedDB. SQLite for local data storage. Full functionality without a browser.</p>
         </li>
 
       </ul>
@@ -95,8 +105,8 @@ cd smart-reader/frontend && npm install</code></pre>
         <div class="step">
           <h4>2. Backend Setup</h4>
           <pre><code>cd smart-reader/backend
-python -m venv .venv && .venv\Scripts\activate
-pip install -r requirements.txt</code></pre>
+uv venv --python 3.12
+uv pip install -r requirements.txt PyMuPDF</code></pre>
         </div>
         <div class="step">
           <h4>3. Configure Environment</h4>
@@ -106,11 +116,14 @@ pip install -r requirements.txt</code></pre>
         <div class="step">
           <h4>4. Run</h4>
           <pre><code># Web mode
-cd backend && python run_dev.py
+cd backend && .venv\Scripts\python run_dev.py
 cd frontend && npm run dev
 
 # Desktop mode
-start_desktop.bat</code></pre>
+start_desktop.bat
+
+# Android dev mode
+cd frontend && npm run tauri android dev</code></pre>
         </div>
       </div>
     </section>
@@ -124,8 +137,9 @@ start_desktop.bat</code></pre>
             <li>React 18 + TypeScript</li>
             <li>Vite build system</li>
             <li>Tailwind CSS + MUI</li>
-            <li>Tauri 2.0 desktop shell</li>
-            <li>react-pdf, epubjs, react-markdown</li>
+            <li>Tauri 2.0 desktop + mobile shell</li>
+            <li>react-pdf / server-rendered PDF</li>
+            <li>epubjs, react-markdown</li>
             <li>vis-network graph visualization</li>
           </ul>
         </div>
@@ -133,9 +147,10 @@ start_desktop.bat</code></pre>
           <h4>Backend</h4>
           <ul>
             <li>FastAPI + SQLAlchemy</li>
-            <li>SQLite database</li>
-            <li>LangChain agent</li>
+            <li>SQLite database (sync + async)</li>
+            <li>LangChain agent (7+ tools)</li>
             <li>sentence-transformers embeddings</li>
+            <li>PyMuPDF page rendering</li>
             <li>OpenAI / Ollama / DeepSeek LLM</li>
             <li>JWT authentication</li>
           </ul>
@@ -145,10 +160,10 @@ start_desktop.bat</code></pre>
           <ul>
             <li>Hybrid retrieval (BM25 + vector)</li>
             <li>Cross-encoder reranking</li>
-            <li>Tool-calling agent (6 tools)</li>
-            <li>Knowledge extraction + relation inference</li>
+            <li>Tool-calling agent (search / qa / flashcard / summary / note / web-reference / cross-book-search)</li>
+            <li>Knowledge extraction + batch relation inference</li>
             <li>Token counting + credit billing</li>
-            <li>SM-2 spaced repetition scheduling</li>
+            <li>SM-2 spaced repetition + FSRS training</li>
           </ul>
         </div>
       </div>
@@ -163,7 +178,7 @@ start_desktop.bat</code></pre>
 
   <footer class="site-footer">
     <div class="container">
-      <small>Smart Reader — AI-powered reading tools</small>
+      <small>Smart Reader — AI-powered reading on desktop and mobile</small>
     </div>
   </footer>
 
