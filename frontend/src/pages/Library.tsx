@@ -308,16 +308,16 @@ function Library() {
     return () => clearTimeout(timer);
   }, [deletedBook]);
 
-  if (loading) return <div className="flex-1 px-8 py-6"><SkeletonGrid count={6} /></div>;
+  if (loading) return <div className="flex-1 px-4 py-4 md:px-8 md:py-6"><SkeletonGrid count={6} /></div>;
 
   return (
-    <div className="flex flex-col flex-1 h-full px-8 py-6 overflow-y-auto">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">{t('library.pageTitle')}</h1>
+    <div className="flex flex-col flex-1 h-full px-4 py-4 md:px-8 md:py-6 overflow-y-auto">
+      <div className="flex justify-between items-center mb-6 md:mb-8">
+        <h1 className="text-2xl md:text-3xl font-bold">{t('library.pageTitle')}</h1>
         {books.length > 0 && (
           <button
             onClick={() => setShowUpload(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+            className="bg-blue-600 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-xl text-sm font-medium hover:bg-blue-700 transition shadow-sm"
             aria-label="upload-book"
           >
             {t('library.uploadButton')}

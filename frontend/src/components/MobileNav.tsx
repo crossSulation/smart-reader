@@ -8,13 +8,14 @@ interface TabItem {
   path: string;
   label: string;
   icon: React.ReactNode;
+  activeIcon: React.ReactNode;
 }
 
 const tabs: TabItem[] = [
-  { path: "/library", label: "bookshelf", icon: <ImportContactsOutlined /> },
-  { path: "/review", label: "review", icon: <AssignmentOutlined /> },
-  { path: "/knowledge", label: "knowledge", icon: <HubOutlined /> },
-  { path: "/profile", label: "profile", icon: <PersonOutlined /> },
+  { path: "/library", label: "bookshelf", icon: <ImportContactsOutlined />, activeIcon: <ImportContactsOutlined /> },
+  { path: "/review", label: "review", icon: <AssignmentOutlined />, activeIcon: <AssignmentOutlined /> },
+  { path: "/knowledge", label: "knowledge", icon: <HubOutlined />, activeIcon: <HubOutlined /> },
+  { path: "/profile", label: "profile", icon: <PersonOutlined />, activeIcon: <PersonOutlined /> },
 ];
 
 const tabLabelMap: Record<string, string> = {
@@ -44,23 +45,24 @@ export default function MobileNav() {
 
   return (
     <>
-      <header className="flex items-center gap-2 border-b border-gray-200 bg-white px-4 py-2 safe-padding-top dark:border-gray-700 dark:bg-gray-900">
-        <div className="flex flex-1 items-center gap-1.5 rounded-lg bg-gray-100 px-3 py-1.5 dark:bg-gray-800">
-          <SearchOutlined sx={{ fontSize: 18, color: "text.secondary" }} />
+      <header className="flex items-center gap-3 bg-white px-4 py-2.5 safe-padding-top dark:bg-gray-900">
+        <div className="flex flex-1 items-center gap-2 rounded-xl bg-slate-100 px-3.5 py-2 transition dark:bg-slate-800">
+          <SearchOutlined sx={{ fontSize: 18 }} className="text-slate-400 dark:text-slate-500" />
           <input
             type="text"
             placeholder={t("common.search", "Search books...")}
             value={searchValue}
             onChange={(e) => setSearchValue(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
-            className="min-w-0 flex-1 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400 dark:text-gray-100"
+            inputMode="search"
+            className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"
           />
           {searchValue && (
             <button
               onClick={() => { setSearchValue(""); navigate("/library"); }}
-              className="shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              className="shrink-0 rounded-full p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-400"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24">
+              <svg width="16" height="16" viewBox="0 0 24 24">
                 <path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
               </svg>
             </button>
@@ -69,22 +71,23 @@ export default function MobileNav() {
         <CreditIndicator />
       </header>
 
-      <nav className="flex items-center justify-around border-t border-gray-200 bg-white px-2 pb-safe dark:border-gray-700 dark:bg-gray-900"
-        style={{ paddingBottom: "max(8px, env(safe-area-inset-bottom, 0px))" }}>
+      <nav
+        className="flex items-center justify-around border-t border-gray-100 bg-white/95 px-1 py-1 backdrop-blur dark:border-gray-800 dark:bg-gray-900/95"
+        style={{ paddingBottom: "max(4px, env(safe-area-inset-bottom, 0px))" }}
+      >
         {tabs.map((tab) => {
           const isActive = tab.path === activeTab;
           return (
             <Link
               key={tab.path}
               to={tab.path}
-              className={`flex flex-col items-center gap-0.5 px-3 py-1.5 text-xs transition ${
-                isActive
-                  ? "text-blue-600 dark:text-blue-400"
-                  : "text-gray-500 dark:text-gray-400"
-              }`}
+              className="relative flex flex-col items-center justify-center gap-0.5 rounded-xl px-4 py-1.5 text-[11px] font-medium transition-all duration-200 text-slate-400 dark:text-slate-500"
             >
-              <span className={isActive ? "scale-110" : ""}>{tab.icon}</span>
-              <span>{tabLabelMap[tab.label] || tab.label}</span>
+              {isActive && (
+                <span className="absolute inset-x-2 -top-0.5 h-0.5 rounded-full bg-emerald-500 dark:bg-emerald-400" />
+              )}
+              <span className={isActive ? "text-emerald-600 dark:text-emerald-400" : ""}>{tab.icon}</span>
+              <span className={isActive ? "text-emerald-600 dark:text-emerald-400" : ""}>{tabLabelMap[tab.label] || tab.label}</span>
             </Link>
           );
         })}
