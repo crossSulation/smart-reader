@@ -4,7 +4,8 @@ import { useTranslation } from "react-i18next";
 import KnowledgeGraphCanvas from "../components/KnowledgeGraphCanvas";
 import KnowledgeList from "../components/KnowledgeList";
 import KnowledgeDetail from "../components/KnowledgeDetail";
-import type { GraphData, KnowledgePointItem, KnowledgeStats } from "../types/KnowledgeGraph";
+import type { GraphData, KnowledgeStats } from "../types/KnowledgeGraph";
+import { useKnowledgePointsQuery } from "../api";
 
 type PanelMode = "list" | "detail" | "none";
 
@@ -23,8 +24,6 @@ export default function KnowledgeGraphPage() {
 
   const [graph, setGraph] = useState<GraphData | null>(null);
   const [graphLoading, setGraphLoading] = useState(true);
-  const [points, setPoints] = useState<KnowledgePointItem[]>([]);
-  const [pointsLoading, setPointsLoading] = useState(true);
   const [stats, setStats] = useState<KnowledgeStats | null>(null);
 
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(initialKpId);
@@ -55,24 +54,12 @@ export default function KnowledgeGraphPage() {
     finally { setGraphLoading(false); }
   }, [bookId, getAuthHeaders]);
 
-  const loadPoints = useCallback(async () => {
-    setPointsLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (search) params.set("search", search);
-      if (entityFilter) params.set("entity_type", entityFilter);
-      if (bookId) params.set("book_id", String(bookId));
-      params.set("limit", "100");
-      const res = await fetch(`/api/knowledge/points?${params}`, {
-        headers: getAuthHeaders(),
-      });
-      if (res.ok) {
-        const data: KnowledgePointItem[] = await res.json();
-        setPoints(data);
-      }
-    } catch { /* ignore */ }
-    finally { setPointsLoading(false); }
-  }, [search, entityFilter, bookId, getAuthHeaders]);
+  const { data: points = [], isLoading: pointsLoading } = useKnowledgePointsQuery({
+    bookId,
+    search,
+    entityFilter,
+    limit: 100,
+  });
 
   useEffect(() => {
     if (initialKpId) {
@@ -96,11 +83,6 @@ export default function KnowledgeGraphPage() {
       }
     } catch { /* ignore */ }
   }, [bookId, getAuthHeaders]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => loadPoints(), 200);
-    return () => clearTimeout(timer);
-  }, [loadPoints]);
 
   const handleNodeClick = useCallback((nodeId: number) => {
     setSelectedNodeId(nodeId);

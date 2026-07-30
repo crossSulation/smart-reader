@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { SkeletonCard, SkeletonList } from "../components/Skeleton";
+import { SkeletonList } from "../components/Skeleton";
+import { useReviewDue, useReviewNotes, rateReviewItem, useBooks } from "../api";
 
 type ReviewRating = "again" | "hard" | "good" | "easy";
 type ReviewTab = "flashcards" | "notes";
@@ -27,8 +28,6 @@ type NoteItem = {
   tags: string[];
   created_at: string;
 };
-
-type BookOption = { id: number; title: string };
 
 const RATING_LABELS: Record<ReviewRating, string> = {
   again: "Again",
@@ -117,12 +116,16 @@ function Review() {
   const [tab, setTab] = useState<ReviewTab>("flashcards");
   const [items, setItems] = useState<DueReviewItem[]>([]);
   const [notes, setNotes] = useState<NoteItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [notesLoading, setNotesLoading] = useState(false);
+  const [flippedIds, setFlippedIds] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<number | null>(null);
-  const [flippedIds, setFlippedIds] = useState<Set<number>>(new Set());
-  const [books, setBooks] = useState<BookOption[]>([]);
+
+  const { data: dueItems, isLoading: loading, mutate: mutateDue } = useReviewDue(activeTopic ?? undefined, activeBookId);
+  const { data: reviewNotes, isLoading: notesLoading } = useReviewNotes(activeTopic ?? undefined, activeBookId);
+  const { data: books = [] } = useBooks();
+
+  useEffect(() => { if (dueItems) setItems(dueItems); }, [dueItems]);
+  useEffect(() => { if (reviewNotes) setNotes(reviewNotes); }, [reviewNotes]);
 
   const toggleFlip = (id: number) => {
     setFlippedIds((prev) => {
@@ -132,55 +135,6 @@ function Review() {
       return next;
     });
   };
-
-  const loadDueItems = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({ limit: "50" });
-      if (activeTopic) params.set("tag", activeTopic);
-      if (activeBookId) params.set("book_id", String(activeBookId));
-      const res = await fetch(`/api/learning/review/due?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      });
-      if (!res.ok) throw new Error("Failed to load due cards");
-      setItems(await res.json());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load review cards");
-    } finally {
-      setLoading(false);
-    }
-  }, [activeTopic, activeBookId]);
-
-  useEffect(() => { loadDueItems(); }, [loadDueItems]);
-
-  const loadNotes = useCallback(async () => {
-    setNotesLoading(true);
-    try {
-      const params = new URLSearchParams({ limit: "100" });
-      if (activeTopic) params.set("tag", activeTopic);
-      if (activeBookId) params.set("book_id", String(activeBookId));
-      const res = await fetch(`/api/learning/notes?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      });
-      if (res.ok) {
-        const data: NoteItem[] = await res.json();
-        setNotes(Array.isArray(data) ? data : []);
-      }
-    } catch { /* ignore */ }
-    setNotesLoading(false);
-  }, [activeTopic, activeBookId]);
-
-  useEffect(() => { if (tab === "notes") loadNotes(); }, [tab, loadNotes]);
-
-  useEffect(() => {
-    fetch("/api/books/", {
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-    })
-      .then((res) => res.json())
-      .then((data) => { if (Array.isArray(data)) setBooks(data); })
-      .catch(() => {});
-  }, []);
 
   const rateItem = async (itemId: number, rating: ReviewRating) => {
     setFlippedIds((prev) => {
@@ -193,17 +147,9 @@ function Review() {
     setSubmittingId(itemId);
     setError(null);
     try {
-      const res = await fetch(`/api/learning/review/${itemId}/rate`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({ rating }),
-      });
-      if (!res.ok) throw new Error("Failed to rate card");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to submit rating");
+      await rateReviewItem(itemId, rating);
+    } catch (err: any) {
+      setError(err.message || "Failed to submit rating");
       if (removedItem) {
         setItems((prev) => [...prev, removedItem]);
       }
@@ -258,7 +204,7 @@ function Review() {
               <button type="button" onClick={() => setSearchParams({})} className="ml-1 text-blue-500 hover:text-blue-800 dark:hover:text-blue-200">&times;</button>
             </span>
           )}
-          <button type="button" onClick={loadDueItems} className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+          <button type="button" onClick={() => mutateDue()} className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
             {t("review.refresh", "Refresh")}
           </button>
         </div>
