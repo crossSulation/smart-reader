@@ -227,6 +227,39 @@ def search_books(
     return results[:top_k]
 
 
+@router.get("/chunks/embeddings")
+def get_all_chunk_embeddings(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Return all chunk embeddings for the user's books (for local search cache)."""
+    from app.services.file_service import FileService
+    file_service = FileService(db)
+    books = file_service.get_user_books(user["id"])
+    book_ids = [b.id for b in books]
+    if not book_ids:
+        return {"chunks": [], "version": 1}
+
+    rows = (
+        db.query(DocumentChunk.id, DocumentChunk.book_id, DocumentChunk.embedding, DocumentChunk.text, DocumentChunk.page_start)
+        .filter(
+            DocumentChunk.book_id.in_(book_ids),
+            DocumentChunk.embedding.isnot(None),
+        )
+        .all()
+    )
+    return {
+        "chunks": [
+            {
+                "id": r[0],
+                "book_id": r[1],
+                "embedding": r[2],
+                "snippet": (r[3] or "")[:200],
+                "page": r[4],
+            }
+            for r in rows
+        ],
+        "version": 1,
+    }
+
+
 @router.get("/stats")
 async def get_reading_stats(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     """获取用户的阅读统计数据"""
@@ -241,6 +274,29 @@ async def create_book(book: BookCreate, user: dict = Depends(get_current_user), 
     file_service = FileService(db)
     new_book = file_service.create_book(user['id'], book)
     return new_book
+
+
+@router.get("/shared-with-me")
+def shared_with_me(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    shared_books = db.query(BookModel).filter(
+        BookModel.owner_id == user["id"],
+        BookModel.original_book_id.isnot(None),
+    ).all()
+    result = []
+    for book in shared_books:
+        share = db.query(BookShare).filter(
+            BookShare.book_id == book.original_book_id,
+            BookShare.shared_with_id == user["id"],
+        ).first()
+        if share:
+            result.append({
+                "share_id": share.id,
+                "book_id": book.id,
+                "title": book.title,
+                "owner_username": share.owner.username,
+                "created_at": share.created_at.isoformat(),
+            })
+    return result
 
 
 @router.get("/{book_id}", response_model=Book)
@@ -484,23 +540,6 @@ def unshare_book(book_id: int, share_id: int, user: dict = Depends(get_current_u
     db.delete(share)
     db.commit()
     return {"message": "Unshared"}
-
-
-@router.get("/shared-with-me")
-def shared_with_me(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    shared_books = db.query(BookModel).filter(
-        BookModel.owner_id == user["id"],
-        BookModel.shared_by.isnot(None),
-    ).all()
-    result = []
-    for book in shared_books:
-        result.append({
-            "book_id": book.id,
-            "title": book.title,
-            "shared_by": book.shared_by,
-            "original_book_id": book.original_book_id,
-        })
-    return result
 
 
 # ── Comments ──

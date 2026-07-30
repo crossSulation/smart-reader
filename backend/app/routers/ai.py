@@ -618,3 +618,16 @@ def submit_feedback(
     interaction.feedback = body.feedback
     db.commit()
     return {"ok": True}
+
+
+from pydantic import BaseModel as PydanticModel
+
+class EmbedRequest(PydanticModel):
+    texts: list[str]
+
+
+@router.post("/embed")
+def embed_texts(body: EmbedRequest, settings=Depends(get_settings)):
+    from app.services.embedding_service import embed_texts as svc_embed
+    vectors = svc_embed(body.texts, settings.EMBEDDING_MODEL)
+    return {"vectors": vectors}

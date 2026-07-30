@@ -2,7 +2,44 @@
 
 > 基于 `ARCHITECTURE.md` 对比当前代码库实际状态，制定分层改造计划。
 >
-> **进度：** Phase 0 ✅ | Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ | Phase 4 ✅
+> **进度：** Phase 0 ✅ | Phase 1 ✅ | Phase 2 ✅ | Phase 3 ⚠️ | Phase 4 ⚠️ | Phase 5 ⬜ | Phase 6 ⬜
+> **最后更新：** 2026-07-29
+
+## Current Status Snapshot (2026-07-29)
+
+| 维度 | 状态 |
+|------|------|
+| **核心架构** | Provider 抽象层完成，Router/Scheduler/ConfidenceGate 中间件就位 |
+| **本地能力** | Ollama LLM ✅ / Transformers.js Embedding ✅ / FSRS ✅ / TTS ✅ |
+| **移动端** | Android (Tauri) 可用，Native PDF Viewer + 底部导航 + 安全区 + 状态栏隐藏 |
+| **协作** | 书本分享 + 评论 + 用户搜索下拉 |
+| **待补** | ONNX Reranker / OCR / Privacy Guard / 文档防泄漏 / E2E 测试 |
+
+### Phase 3 完成项
+- [x] P3-01 Ollama Provider（真实探测 `is_available()`）
+- [x] P3-02 本地 Embedding（Transformers.js Worker + IndexedDB chunk cache + localSearch 集成）
+- [x] P3-04 FSRS 独立模块（`fsrs_service.py`）
+- [x] P3-06 TTS（Web Speech API `useTTS.ts`）
+
+### Phase 3 未完成项
+- [ ] P3-03 前端 ONNX Reranker
+- [ ] P3-05 Tesseract WASM OCR
+
+### Phase 4 完成项
+- [x] 隐私模式路由（`privacy_mode` 参数贯穿 Agent/QA/Summary 端点）
+- [x] Provider 层抽象隔离（CloudProvider / LocalProvider / MockProvider）
+
+### Phase 4 未完成项
+- [ ] Privacy Guard 中间件
+- [ ] 文档防泄漏策略
+
+### Phase 5-6（H2 规划）
+| Task | Notes |
+|------|-------|
+| Hybrid Provider（本地优先 + 云端兜底） | Embed/LLM/Rerank 三路混合路由 |
+| CapabilityScanner 前端上报 | `POST /api/capabilities/report` |
+| 前端适配（离线指示器、模型下载进度） | Desktop/Web/Mobile 差异检测 |
+| E2E 测试 | Provider 单元测试 + 中间件集成测试 |
 
 ---
 
@@ -304,11 +341,14 @@ def get_registry() -> ProviderRegistry:
 - 支持流式输出 (`stream: true`)
 - `is_available()` → 真实探测 Ollama 健康状态
 
-### P3-02: 本地 Embedding（前端 Transformers.js）
+### P3-02: 本地 Embedding（前端 Transformers.js）✅
 - 安装 `@xenova/transformers`
-- Web Worker 中加载 `Xenova/all-MiniLM-L6-v2`
-- 通过 postMessage 与主线程通信
-- 首次下载后缓存到 IndexedDB
+- Web Worker: `src/workers/embedding.worker.ts` — 加载 `Xenova/all-MiniLM-L6-v2`
+- 服务层: `src/services/localEmbedding.ts` — 桌面/浏览器本地 Worker 优先，移动端走服务端
+- chunk 缓存: `src/services/chunkCache.ts` — IndexedDB 存储服务端 chunk embeddings
+- 本地搜索: `src/services/localSearch.ts` — query→本地 embed→cosine→分组→结果
+- 集成: Library 搜索先走本地（`localSearch`），失败或不可用时降级服务端 API
+- 后端: `GET /api/books/chunks/embeddings` 批量下载 + `POST /api/embed` 降级备用
 
 ### P3-03: 本地 Reranker（前端 ONNX Runtime Web）
 - 安装 `onnxruntime-web`
@@ -383,22 +423,75 @@ backend/app/middleware/
 frontend/src/utils/capabilities.ts
 ```
 
+### Phase 3 已完成 新增
+```
+frontend/src/workers/embedding.worker.ts   # Transformers.js embedding worker
+frontend/src/services/localEmbedding.ts    # 本地/服务端 embedding 路由
+frontend/src/services/chunkCache.ts        # IndexedDB chunk 缓存
+frontend/src/services/localSearch.ts       # 本地余弦搜索 + 分组
+backend/app/routers/ai.py                  # POST /api/embed 降级备用
+backend/app/routers/books.py               # GET /api/books/chunks/embeddings
+```
+
+### 增量功能 关键文件
+```
+frontend/src/components/NativePDFViewer.tsx
+frontend/src/components/MobileNav.tsx
+frontend/src/components/TTSControlBar.tsx
+frontend/src/components/BookListRow.tsx
+frontend/src/hooks/useTTS.ts
+backend/app/services/pdf_render_service.py
+backend/app/routers/books.py               # share/comment/users search
+backend/app/models.py                      # BookShare + BookComment
+```
+
 ---
 
 ## 九、验收标准
 
 ### Phase 0
-- [ ] 所有 AI 端点返回 `provider` 字段
-- [ ] 前端聊天界面显示 Local/Cloud/Mock 标签
+- [x] 所有 AI 端点返回 `provider` 字段
+- [x] 前端聊天界面显示 Local/Cloud/Mock 标签
 
 ### Phase 1
-- [ ] `AIProvider` 接口定义完整
-- [ ] `CloudProvider` 封装后，现有 API 行为无变化
-- [ ] `ProviderRegistry` 正确注册所有 provider
-- [ ] `is_available()` 能正确判断 provider 可用性
+- [x] `AIProvider` 接口定义完整
+- [x] `CloudProvider` 封装后，现有 API 行为无变化
+- [x] `ProviderRegistry` 正确注册所有 provider
+- [x] `is_available()` 能正确判断 provider 可用性
 
 ### Phase 2
-- [ ] `CapabilityScanner` 正确探测环境
-- [ ] `Scheduler` 对每种任务返回正确路由
-- [ ] `ConfidenceGate` 低分时升级到 cloud
-- [ ] `OfflineQueue` 持久化 + 恢复流程完整
+- [x] `CapabilityScanner` 正确探测环境
+- [x] `Scheduler` 对每种任务返回正确路由
+- [x] `ConfidenceGate` 低分时升级到 cloud
+- [x] `OfflineQueue` 持久化 + 恢复流程完整
+
+
+## 十、增量功能记录（Plan 外新增）
+
+| 功能 | 关键文件 | 状态 |
+|------|----------|------|
+| **Android 移动端** | `src-tauri/` + Android gen | ✅ |
+| **Native PDF Viewer** | `pdf_render_service.py`, `NativePDFViewer.tsx` | ✅ |
+| **TTS 朗读** | `useTTS.ts`, `TTSControlBar.tsx` | ✅ |
+| **书本分享 + 评论** | `books.py` share/comments, `Library.tsx` | ✅ |
+| **移动端底部 TabBar** | `MobileNav.tsx` | ✅ |
+| **PDF 阅读主题** | Reader + NativePDFViewer | ✅ |
+| **删除确认弹窗** | `Library.tsx` | ✅ |
+| **BookCard 分享按钮** | `BookCard.tsx` | ✅ |
+| **BookListRow 组件提取** | `BookListRow.tsx` | ✅ |
+| **uv 包管理迁移** | `pyproject.toml` + `uv.lock` | ✅ |
+| **安全区适配** | `index.html` + CSS + Layout | ✅ |
+| **Android 状态栏隐藏** | `MainActivity.kt` | ✅ |
+| **知识图谱移动端适配** | `KnowledgeGraph.tsx` | ✅ |
+| **Promise/URL polyfill** | `main.tsx` | ✅ |
+| **本地 Embedding + 全局搜索** | `localSearch.ts`, `chunkCache.ts`, Worker | ✅ |
+| **搜索下拉列表选择用户** | `books.py` users/search, `Library.tsx` | ✅ |
+
+---
+
+## 十一、Immediate Next Steps
+
+1. **补完 Phase 4 安全项** — Privacy Guard 中间件 + 文档防泄漏策略（低复杂度，架构影响大）
+2. **AI Agent 搜索不收口本地** — Agent tool calls 保持服务端 embedding，不改动（用户确认）
+3. **Review / Knowledge Graph 搜索走本地** — 复用 `localSearch.ts`，减少服务端 embedding 调用
+4. **P3-03 ONNX Reranker** — 低优先级，需评估前端模型大小和加载延迟
