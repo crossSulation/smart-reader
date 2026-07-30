@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { SkeletonText, SkeletonCard } from "../components/Skeleton";
+import { fetcher } from "../api";
 
 type UsageStats = {
   period: string;
@@ -115,20 +116,15 @@ export default function Billing() {
     setPurchasing(packId);
     setPurchaseMsg("");
     try {
-      const res = await fetch("/api/billing/purchase", {
+      await fetcher("/billing/purchase", {
         method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pack_id: packId }),
       });
-      if (res.ok) {
-        setPurchaseMsg("Purchase successful!");
-        loadAll();
-      } else {
-        const err = await res.json();
-        setPurchaseMsg(err.detail?.message || "Purchase failed");
-      }
-    } catch {
-      setPurchaseMsg("Network error");
+      setPurchaseMsg("Purchase successful!");
+      loadAll();
+    } catch (err: any) {
+      setPurchaseMsg(err.message || "Purchase failed");
     }
     setPurchasing(null);
   };

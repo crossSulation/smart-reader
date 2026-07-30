@@ -1,14 +1,7 @@
-import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Tooltip, IconButton } from "@mui/material";
 import { BoltOutlined } from "@mui/icons-material";
-
-type CreditStats = {
-  balance: number;
-  monthly_tokens: number;
-  monthly_cost: number;
-  reset_at: string | null;
-};
+import { useBillingStats } from "../api";
 
 function formatCredits(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -24,37 +17,23 @@ function creditColor(balance: number): string {
 
 export default function CreditIndicator() {
   const navigate = useNavigate();
-  const [stats, setStats] = useState<CreditStats | null>(null);
-
-  const fetchStats = useCallback(async () => {
-    try {
-      const res = await fetch("/api/billing/stats", {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      });
-      if (res.ok) {
-        setStats(await res.json());
-      }
-    } catch { /* ignore */ }
-  }, []);
-
-  useEffect(() => {
-    fetchStats();
-    const interval = setInterval(fetchStats, 30000);
-    return () => clearInterval(interval);
-  }, [fetchStats]);
+  const { data: stats } = useBillingStats();
 
   if (!stats) return null;
 
-  const color = creditColor(stats.balance);
+  const balance = (stats as any).balance ?? 0;
+  const monthlyTokens = (stats as any).monthly_tokens ?? 0;
+  const resetAt = (stats as any).reset_at ?? null;
+  const color = creditColor(balance);
 
   return (
     <Tooltip
       title={
         <div style={{ fontSize: 12, lineHeight: 1.6 }}>
-          <div>Balance: {formatCredits(stats.balance)} credits</div>
-          <div>Monthly usage: {formatCredits(stats.monthly_tokens)} tokens</div>
-          {stats.reset_at && (
-            <div>Resets: {new Date(stats.reset_at).toLocaleDateString()}</div>
+          <div>Balance: {formatCredits(balance)} credits</div>
+          <div>Monthly usage: {formatCredits(monthlyTokens)} tokens</div>
+          {resetAt && (
+            <div>Resets: {new Date(resetAt).toLocaleDateString()}</div>
           )}
         </div>
       }
@@ -67,7 +46,7 @@ export default function CreditIndicator() {
       >
         <BoltOutlined sx={{ fontSize: 18, color }} />
         <span style={{ fontSize: 12, marginLeft: 4, color, fontWeight: 600 }}>
-          {formatCredits(stats.balance)}
+          {formatCredits(balance)}
         </span>
       </IconButton>
     </Tooltip>

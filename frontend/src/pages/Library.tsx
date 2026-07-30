@@ -1,9 +1,11 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from 'react-i18next';
 import { SortOutlined, GridViewOutlined, ViewListOutlined, SearchOffOutlined, LibraryBooksOutlined, ArrowForwardOutlined } from '@mui/icons-material';
 import BookCard from "../components/BookCard";
 import BookListRow from "../components/BookListRow";
+import { localSearch, ensureChunkCache } from "../services/localSearch";
+import { useBooks, useSharedBooks, useBookShares, useShareActions } from "../api";
 import FileUpload from "../components/FileUpload";
 import type { Book } from "../types/Book";
 import NoBooks from "../components/NoBooks";
@@ -28,12 +30,10 @@ function Library() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [books, setBooks] = useState<Book[]>([]);
   const searchQuery = searchParams.get('q') || '';
   const [sortBy, setSortBy] = useState<SortOption>('title');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [showUpload, setShowUpload] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
     const saved = localStorage.getItem('library-view-mode');
     return saved === 'list' ? 'list' : 'grid';
@@ -41,7 +41,6 @@ function Library() {
   const [groupBy, setGroupBy] = useState<GroupOption>('none');
   const [searchResults, setSearchResults] = useState<SearchResultItem[] | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
-  const hasFetchedRef = useRef(false);
 
   // Share
   const [shareTarget, setShareTarget] = useState<Book | null>(null);
@@ -52,115 +51,50 @@ function Library() {
   const [userSearchLoading, setUserSearchLoading] = useState(false);
   const [shareStatus, setShareStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
   const [shareMsg, setShareMsg] = useState("");
-  const [currentShares, setCurrentShares] = useState<{ id: number; username: string; created_at: string }[]>([]);
-  const [unsharingId, setUnsharingId] = useState<number | null>(null);
+  const [currentBookId, setCurrentBookId] = useState<number | null>(null);
 
-  const fetchShares = useCallback(async (bookId: number) => {
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`/api/books/${bookId}/shares`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) setCurrentShares(await res.json());
-    } catch { setCurrentShares([]); }
-  }, []);
-
-  const handleUnshare = useCallback(async (bookId: number, shareId: number) => {
-    setUnsharingId(shareId);
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`/api/books/${bookId}/shares/${shareId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        setCurrentShares((prev) => prev.filter((s) => s.id !== shareId));
-      }
-    } catch { /* ignore */ }
-    setUnsharingId(null);
-  }, []);
+  const { data: sharedBooks = [] } = useSharedBooks();
+  const { data: currentShares = [] } = useBookShares(currentBookId);
+  const { shareBook, unshareBook, searchUsers: searchUsersApi } = useShareActions();
 
   const searchUsers = useCallback(async (query: string) => {
     if (!query.trim()) { setUserSearchResults([]); setShowUserDropdown(false); return; }
     setUserSearchLoading(true);
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`/api/auth/users/search?q=${encodeURIComponent(query)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setUserSearchResults(data);
-        setShowUserDropdown(data.length > 0);
-      }
+      const data = await searchUsersApi(query);
+      setUserSearchResults(data);
+      setShowUserDropdown(data.length > 0);
     } catch { /* ignore */ }
     setUserSearchLoading(false);
-  }, []);
+  }, [searchUsersApi]);
 
   const handleShare = useCallback(async () => {
     if (!shareTarget || !shareUsername.trim()) return;
     setShareStatus("loading");
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`/api/books/${shareTarget.id}/share`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ username: shareUsername.trim() }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setShareStatus("ok");
-        setShareMsg(`Shared with ${shareUsername.trim()}`);
-        setTimeout(() => { setShareTarget(null); setShareUsername(""); setShareStatus("idle"); }, 2000);
-      } else {
-        setShareStatus("error");
-        setShareMsg(data.detail || "Failed");
-      }
-    } catch {
+      await shareBook(shareTarget.id, shareUsername.trim());
+      setShareStatus("ok");
+      setShareMsg(`Shared with ${shareUsername.trim()}`);
+      setTimeout(() => { setShareTarget(null); setShareUsername(""); setShareStatus("idle"); }, 2000);
+    } catch (err: any) {
       setShareStatus("error");
-      setShareMsg("Network error");
+      setShareMsg(err.message || "Failed");
     }
-  }, [shareTarget, shareUsername]);
+  }, [shareTarget, shareUsername, shareBook]);
   
   useEffect(() => {
     localStorage.setItem('library-view-mode', viewMode);
   }, [viewMode]);
   
 
-  const fetchBooks = useCallback(async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch("/api/books/", {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+  const { data: books = [], isLoading: loading, mutate: setBooks } = useBooks();
 
-      if (res.status === 401 || res.status === 403) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-        navigate("/login", { replace: true });
-        return;
-      }
-
-      if (!res.ok) {
-        throw new Error(`Failed to load books: ${res.status}`);
-      }
-
-      const data = await res.json();
-      setBooks(data);
-    } catch (error) {
-      console.error("Failed to fetch books:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [navigate]);
-
+  // Preload chunk cache for local search
   useEffect(() => {
-    if (hasFetchedRef.current) return;
-    hasFetchedRef.current = true;
-    fetchBooks();
-  }, [fetchBooks]);
+    ensureChunkCache();
+  }, []);
 
-  // Semantic search via API
+  // Semantic search (local first, fallback to server)
   useEffect(() => {
     if (!searchQuery.trim()) {
       setSearchResults(null);
@@ -169,6 +103,20 @@ function Library() {
 
     const doSearch = async () => {
       setSearchLoading(true);
+      try {
+        // Try local search
+        const localResults = await localSearch(
+          searchQuery.trim(),
+          books.map((b) => ({ id: b.id, title: b.title, author: b.author ?? null, file_type: b.file_type ?? null })),
+          20,
+        );
+        if (localResults.length > 0) {
+          setSearchResults(localResults);
+          setSearchLoading(false);
+          return;
+        }
+      } catch { /* fall through to server */ }
+
       try {
         const token = localStorage.getItem("token");
         const params = new URLSearchParams();
@@ -191,7 +139,7 @@ function Library() {
     };
 
     doSearch();
-  }, [searchQuery]);
+  }, [searchQuery, books]);
 
   // Filter and sort books (only when not in semantic search mode)
   const filteredBooks = useMemo(() => {
@@ -261,7 +209,7 @@ function Library() {
   const confirmDeleteBook = useCallback(async (book: Book) => {
     setDeletingId(book.id);
     setDeletedBook(book);
-    setBooks((prev) => prev.filter((b) => b.id !== book.id));
+    setBooks((prev) => prev!.filter((b) => b.id !== book.id), { revalidate: false });
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(`/api/books/${book.id}`, {
@@ -269,11 +217,11 @@ function Library() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) {
-        setBooks((prev) => [...prev, book]);
+        setBooks((prev) => [...prev!, book], { revalidate: false });
         setDeletedBook(null);
       }
     } catch {
-      setBooks((prev) => [...prev, book]);
+      setBooks((prev) => [...prev!, book], { revalidate: false });
       setDeletedBook(null);
     } finally {
       setDeletingId(null);
@@ -297,7 +245,7 @@ function Library() {
 
   const handleUndoDelete = useCallback(() => {
     if (deletedBook) {
-      setBooks((prev) => [...prev, deletedBook]);
+      setBooks((prev) => [...prev!, deletedBook], { revalidate: false });
       setDeletedBook(null);
     }
   }, [deletedBook]);
@@ -411,7 +359,7 @@ function Library() {
         <FileUpload
           onUploadComplete={() => {
             setShowUpload(false);
-            fetchBooks();
+            setBooks();
           }}
           onClose={() => setShowUpload(false)}
         />
@@ -474,24 +422,45 @@ function Library() {
                     </h2>
                     {viewMode === 'grid' ? (
                       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
-                        {groupedBooks[status].map((book) => <BookCard key={book.id} book={book} onDelete={handleDeleteBook} onShare={(b) => { setShareTarget(b); setShareStatus("idle"); setShareUsername(""); setShareMsg(""); setCurrentShares([]); fetchShares(b.id); }} />)}
+                        {groupedBooks[status].map((book) => <BookCard key={book.id} book={book} onDelete={handleDeleteBook} onShare={(b) => { setShareTarget(b); setShareStatus("idle"); setShareUsername(""); setShareMsg(""); setCurrentBookId(b.id); }} />)}
                       </div>
                     ) : (
                       <div className="flex flex-col gap-3">
-                        {groupedBooks[status].map((book) => <BookListRow key={book.id} book={book} onDelete={handleDeleteBook} onShare={(b) => { setShareTarget(b); setShareStatus("idle"); setShareUsername(""); setShareMsg(""); setCurrentShares([]); fetchShares(b.id); }} />)}
+                        {groupedBooks[status].map((book) => <BookListRow key={book.id} book={book} onDelete={handleDeleteBook} onShare={(b) => { setShareTarget(b); setShareStatus("idle"); setShareUsername(""); setShareMsg(""); setCurrentBookId(b.id); }} />)}
                       </div>
-                    )}
+      )}
+
+      {/* Shared with me */}
+      {sharedBooks.length > 0 && (
+        <div className="mb-6">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Shared with me</h2>
+          <div className="flex flex-col gap-2">
+            {sharedBooks.map((sb) => (
+              <div key={sb.share_id} className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 dark:border-blue-800 dark:bg-blue-900/20">
+                <span className="text-sm font-medium text-blue-900 dark:text-blue-200 flex-1">{sb.title}</span>
+                <span className="text-xs text-blue-600 dark:text-blue-400">by {sb.owner_username}</span>
+                <button
+                  onClick={() => navigate(`/reader/${sb.book_id}`)}
+                  className="rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700"
+                >
+                  Read
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
                   </section>
                 )
               )}
             </div>
           ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
-              {filteredBooks.map((book) => <BookCard key={book.id} book={book} onDelete={handleDeleteBook} onShare={(b) => { setShareTarget(b); setShareStatus("idle"); setShareUsername(""); setShareMsg(""); setCurrentShares([]); fetchShares(b.id); }} />)}
+              {filteredBooks.map((book) => <BookCard key={book.id} book={book} onDelete={handleDeleteBook} onShare={(b) => { setShareTarget(b); setShareStatus("idle"); setShareUsername(""); setShareMsg(""); setCurrentBookId(b.id); }} />)}
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              {filteredBooks.map((book) => <BookListRow key={book.id} book={book} onDelete={handleDeleteBook} onShare={(b) => { setShareTarget(b); setShareStatus("idle"); setShareUsername(""); setShareMsg(""); setCurrentShares([]); fetchShares(b.id); }} />)}
+              {filteredBooks.map((book) => <BookListRow key={book.id} book={book} onDelete={handleDeleteBook} onShare={(b) => { setShareTarget(b); setShareStatus("idle"); setShareUsername(""); setShareMsg(""); setCurrentBookId(b.id); }} />)}
             </div>
           )}
         </>
@@ -545,11 +514,10 @@ function Library() {
                     <div key={s.id} className="flex items-center justify-between rounded bg-gray-50 px-2 py-1 dark:bg-gray-800">
                       <span className="text-sm text-gray-700 dark:text-gray-300">@{s.username}</span>
                       <button
-                        onClick={() => handleUnshare(shareTarget.id, s.id)}
-                        disabled={unsharingId === s.id}
-                        className="text-[11px] text-red-500 hover:text-red-700 disabled:opacity-50"
+                        onClick={() => unshareBook(shareTarget.id, s.id)}
+                        className="text-[11px] text-red-500 hover:text-red-700"
                       >
-                        {unsharingId === s.id ? "Removing..." : "Unshare"}
+                        Unshare
                       </button>
                     </div>
                   ))}

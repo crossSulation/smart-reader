@@ -1,6 +1,8 @@
 import { useMemo } from "react";
+import { SWRConfig } from "swr";
 import { ThemeProvider as MuiThemeProvider, createTheme } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
+import { swrConfig } from "./api";
 import "./i18n";
 import "./App.css";
 import RouterContainer from "./routers";
@@ -42,7 +44,9 @@ function App() {
   return (
     <AppThemeProvider>
       <MuiThemeWrapper>
-        <RouterContainer />
+        <SWRConfig value={swrConfig}>
+          <RouterContainer />
+        </SWRConfig>
       </MuiThemeWrapper>
     </AppThemeProvider>
   );

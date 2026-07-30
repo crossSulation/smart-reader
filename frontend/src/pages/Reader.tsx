@@ -19,6 +19,7 @@ import { useKeyboardShortcuts, type ShortcutBinding } from "../hooks/useKeyboard
 import useTTS from "../hooks/useTTS";
 import { useThemeContext } from "../contexts/ThemeContext";
 import { SkeletonText } from "../components/Skeleton";
+import { useBook, useNotes, useNoteActions, fetcher } from "../api";
 import type { Book } from "../types/Book";
 import type { KnowledgePointItem } from "../types/KnowledgeGraph";
 
@@ -39,8 +40,6 @@ function Reader() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [book, setBook] = useState<Book | null>(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [jumpToPage, setJumpToPage] = useState<number | undefined>(undefined);
   const [leftPanelTab, setLeftPanelTab] = useState<"navigation" | "tags">("navigation");
@@ -157,81 +156,39 @@ function Reader() {
     };
     setNotes((prev) => [optimisticNote, ...prev]);
 
-    try {
-      const body: Record<string, unknown> = {
-        book_id: Number(activeBookIdForAi),
-        content: selectedExcerpt,
-        source_text: selectedExcerpt,
-        page: activeFileType === "pdf" ? currentPdfPage : null,
-        tags,
-      };
-      if (kpIds.length > 0) {
-        body.knowledge_point_ids = kpIds;
-      }
-
-      const res = await fetch("/api/learning/notes", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || `Create note failed (${res.status})`);
-      }
-
-      setLearningStatus("Saved as note.");
-      setSelectedKpIds([]);
-      if (activeBookIdForAi) {
-        const refreshRes = await fetch(`/api/learning/notes?book_id=${encodeURIComponent(activeBookIdForAi)}&limit=20`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        });
-        if (refreshRes.ok) {
-          const notesData: LearningNote[] = await refreshRes.json();
-          setNotes(Array.isArray(notesData) ? notesData : []);
+      try {
+        const body: Record<string, unknown> = {
+          book_id: Number(activeBookIdForAi),
+          content: selectedExcerpt,
+          source_text: selectedExcerpt,
+          page: activeFileType === "pdf" ? currentPdfPage : null,
+          tags,
+        };
+        if (kpIds.length > 0) {
+          body.knowledge_point_ids = kpIds;
         }
-      }
-    } catch (err) {
-      setNotes((prev) => prev.filter((n) => n.id !== optimisticNote.id));
-      setLearningStatus(err instanceof Error ? err.message : "Failed to save note.");
-    } finally {
-      setSavingNote(false);
-    }
-  };
 
-  const reloadNotes = async (bookIdValue: string) => {
-    const res = await fetch(`/api/learning/notes?book_id=${encodeURIComponent(bookIdValue)}&limit=20`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.detail || `Load notes failed (${res.status})`);
-    }
-    const data: LearningNote[] = await res.json();
-    setNotes(Array.isArray(data) ? data : []);
-  };
+        await createNoteApi(body as any);
+
+        setLearningStatus("Saved as note.");
+        setSelectedKpIds([]);
+        mutateNotes();
+      } catch (err: any) {
+        setNotes((prev) => prev.filter((n) => n.id !== optimisticNote.id));
+        setLearningStatus(err.message || "Failed to save note.");
+      } finally {
+        setSavingNote(false);
+      }
+    };
+
 
   const handleDeleteNote = async (noteId: number) => {
     setDeletingNoteId(noteId);
     setNotesError(null);
     try {
-      const res = await fetch(`/api/learning/notes/${noteId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || `Delete note failed (${res.status})`);
-      }
-
-      if (activeBookIdForAi) {
-        await reloadNotes(activeBookIdForAi);
-      }
-    } catch (err) {
-      setNotesError(err instanceof Error ? err.message : "Failed to delete note.");
+      await deleteNote(noteId);
+    } catch (err: any) {
+      setNotesError(err.message || "Failed to delete note.");
     } finally {
       setDeletingNoteId(null);
     }
@@ -261,60 +218,20 @@ function Reader() {
     setSavingEditedNoteId(noteId);
     setNotesError(null);
     try {
-      const res = await fetch(`/api/learning/notes/${noteId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({ content, tags }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || `Update note failed (${res.status})`);
-      }
-
-      if (activeBookIdForAi) {
-        await reloadNotes(activeBookIdForAi);
-      }
+      await updateNote(noteId, { content, tags });
       cancelEditNote();
-    } catch (err) {
-      setNotesError(err instanceof Error ? err.message : "Failed to update note.");
+    } catch (err: any) {
+      setNotesError(err.message || "Failed to update note.");
     } finally {
       setSavingEditedNoteId(null);
     }
   };
 
+  const { data: book = null, isLoading: loading, error: swrError } = useBook(localFile ? undefined : id);
+
   useEffect(() => {
-    if (!id) {
-      setError("Book ID not found");
-      setLoading(false);
-      return;
-    }
-
-    const fetchBook = async () => {
-      try {
-        const res = await fetch(`/api/books/${id}`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        });
-
-        if (!res.ok) {
-          throw new Error(`Failed to load book: ${res.status}`);
-        }
-
-        const data = await res.json();
-        setBook(data);
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load book");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchBook();
-  }, [id]);
+    if (swrError) setError((swrError as any).message || "Failed to load book");
+  }, [swrError]);
 
   useEffect(() => {
     const previous = previousLocalUrlRef.current;
@@ -358,14 +275,7 @@ function Reader() {
     const triggerAutoIndex = async () => {
       setIndexing(true);
       try {
-        const res = await fetch(`/api/books/${uploadedBookId}/index`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.detail || `Indexing failed (${res.status})`);
-        }
+        await fetcher(`/books/${uploadedBookId}/index`, { method: "POST" });
         setLocalUploadMessage("Book indexed and ready for search/AI.");
       } catch {
         setLocalUploadMessage("Indexing failed. You can retry manually.");
@@ -415,26 +325,13 @@ function Reader() {
       const formData = new FormData();
       formData.append("file", picked);
 
-      const res = await fetch("/api/upload/", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || `Upload failed (${res.status})`);
-      }
-
-      const data = await res.json();
-      setUploadedBookId(typeof data.book_id === "number" ? data.book_id : null);
-      setLocalUploadStatus("uploaded");
-      setLocalUploadMessage("Background upload completed.");
-    } catch (err) {
-      setLocalUploadStatus("failed");
-      setLocalUploadMessage(err instanceof Error ? err.message : "Background upload failed.");
+        await fetcher("/upload/", { method: "POST", body: formData } as RequestInit);
+        setUploadedBookId(null); // will be set from response in the future
+        setLocalUploadStatus("uploaded");
+        setLocalUploadMessage("Background upload completed.");
+      } catch (err: any) {
+        setLocalUploadStatus("failed");
+        setLocalUploadMessage(err.message || "Background upload failed.");
     } finally {
       e.target.value = "";
     }
@@ -461,6 +358,13 @@ function Reader() {
   const activeBookIdForAi = localFile
     ? (uploadedBookId ? String(uploadedBookId) : null)
     : (id ?? null);
+
+  const { data: swrNotes, mutate: mutateNotes } = useNotes(activeBookIdForAi);
+  const { deleteNote, updateNote, createNote: createNoteApi } = useNoteActions();
+
+  useEffect(() => {
+    if (swrNotes) { setNotes(swrNotes); setNotesLoading(false); }
+  }, [swrNotes]);
 
   // Sync page display state from file-type-specific sources
   useEffect(() => {
@@ -689,20 +593,6 @@ function Reader() {
       return;
     }
 
-    const fetchNotes = async () => {
-      setNotesLoading(true);
-      setNotesError(null);
-      try {
-        await reloadNotes(activeBookIdForAi);
-      } catch (err) {
-        setNotesError(err instanceof Error ? err.message : "Failed to load notes.");
-      } finally {
-        setNotesLoading(false);
-      }
-    };
-
-    fetchNotes();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBookIdForAi]);
 
   useEffect(() => {
@@ -979,7 +869,7 @@ function Reader() {
                     onSelectedKpIdsChange={setSelectedKpIds}
                     onCreateNoteFromSelectionWithKp={createNoteFromSelection}
                     onPrefillConsumed={() => { setPrefillReferenceTerm(""); }}
-                    onNoteSaved={() => { if (activeBookIdForAi) reloadNotes(activeBookIdForAi); }}
+                    onNoteSaved={() => { if (activeBookIdForAi) mutateNotes(); }}
                     isMobile
                   />
                 </div>
@@ -1109,7 +999,7 @@ function Reader() {
                   onSelectedKpIdsChange={setSelectedKpIds}
                   onCreateNoteFromSelectionWithKp={createNoteFromSelection}
                   onPrefillConsumed={() => { setPrefillReferenceTerm(""); }}
-                  onNoteSaved={() => { if (activeBookIdForAi) reloadNotes(activeBookIdForAi); }}
+                  onNoteSaved={() => { if (activeBookIdForAi) mutateNotes(); }}
                 />
               </div>
             </div>

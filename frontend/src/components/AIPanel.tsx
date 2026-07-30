@@ -6,6 +6,7 @@ import BookAgentChat from "./BookAgentChat";
 import SelectionPopup from "./SelectionPopup";
 import RecentNotesList from "./RecentNotesList";
 import type { KnowledgePointItem } from "../types/KnowledgeGraph";
+import { useBillingStats } from "../api";
 import Skeleton from "./Skeleton";
 
 export type AIPanelLearningNote = {
@@ -115,24 +116,15 @@ export default function AIPanel({
     setSelectedNoteForChat(null);
   }, [activeBookIdForAi]);
 
+  const { data: billingStats } = useBillingStats();
+
   useEffect(() => {
-    const checkCredits = async () => {
-      try {
-        const res = await fetch("/api/billing/stats", {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setCreditBalance(data.balance || 0);
-          const headerStatus = res.headers.get("X-Credit-Status");
-          setCreditStatus((headerStatus as "ok" | "low" | "exhausted") || "ok");
-        }
-      } catch { /* ignore */ }
-    };
-    checkCredits();
-    const interval = setInterval(checkCredits, 60000);
-    return () => clearInterval(interval);
-  }, []);
+    const balance = (billingStats as any)?.balance;
+    if (typeof balance === "number") {
+      setCreditBalance(balance);
+      setCreditStatus(balance <= 0 ? "exhausted" : balance <= 10000 ? "low" : "ok");
+    }
+  }, [billingStats]);
 
   return (
     <>
