@@ -1,8 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
-import { SearchOutlined, ImportContactsOutlined, AssignmentOutlined, HubOutlined, PersonOutlined } from "@mui/icons-material";
+import { SearchOutlined, ImportContactsOutlined, AssignmentOutlined, HubOutlined, PersonOutlined, LogoutOutlined } from "@mui/icons-material";
 import { useTranslation } from "react-i18next";
-import CreditIndicator from "./CreditIndicator";
 
 interface TabItem {
   path: string;
@@ -31,6 +30,7 @@ export default function MobileNav() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const [searchValue, setSearchValue] = useState("");
+  const [profileOpen, setProfileOpen] = useState(false);
 
   useEffect(() => {
     setSearchValue(searchParams.get('q') || '');
@@ -42,6 +42,12 @@ export default function MobileNav() {
     const q = searchValue.trim();
     navigate(q ? `/library?q=${encodeURIComponent(q)}` : "/library");
   }, [searchValue, navigate]);
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    navigate("/login", { replace: true });
+  };
 
   return (
     <>
@@ -68,7 +74,41 @@ export default function MobileNav() {
             </button>
           )}
         </div>
-        <CreditIndicator />
+        <div className="relative">
+          <button
+            onClick={() => setProfileOpen(!profileOpen)}
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+          >
+            <PersonOutlined sx={{ fontSize: 20 }} />
+          </button>
+          {profileOpen && (
+            <div className="absolute right-0 top-full z-30 mt-1 w-40 rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+              <Link
+                to="/profile"
+                onClick={() => setProfileOpen(false)}
+                className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                <PersonOutlined sx={{ fontSize: 16 }} />
+                我的
+              </Link>
+              <Link
+                to="/billing"
+                onClick={() => setProfileOpen(false)}
+                className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                积分
+              </Link>
+              <button
+                onClick={() => { setProfileOpen(false); handleLogout(); }}
+                className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+              >
+                <LogoutOutlined sx={{ fontSize: 16 }} />
+                登出
+              </button>
+            </div>
+          )}
+        </div>
       </header>
 
       <nav
