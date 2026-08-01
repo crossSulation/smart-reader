@@ -147,12 +147,12 @@ def search_books(
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Semantic search across all user books. Returns matched books with snippets."""
-    from app.services.embedding_service import embed_single, search_chunks
+    """Hybrid search (title + BM25 + vector + reranker) across all user books."""
+    from app.services.embedding_service import embed_single
+    from app.services.retrieval_service import HybridRetriever
 
     file_service = FileService(db)
     books = file_service.get_user_books(user["id"])
-
     if not books:
         return []
 
@@ -160,6 +160,7 @@ def search_books(
     settings_obj = get_settings()
     q_lower = q.lower()
 
+    # Stage 1: title/author exact match (instant, always top)
     title_author_matches = []
     for b in books:
         title_match = q_lower in (b.title or "").lower()
@@ -167,26 +168,24 @@ def search_books(
         author_match = q_lower in author.lower()
         if title_match or author_match:
             title_author_matches.append(BookSearchResult(
-                book_id=b.id,
-                title=b.title,
-                author=getattr(b, "author", None),
+                book_id=b.id, title=b.title, author=getattr(b, "author", None),
                 file_type=getattr(b, "file_type", None),
-                score=1.0 if title_match else 0.5,
-                snippet=b.title or "",
+                score=1.0 if title_match else 0.5, snippet=b.title or "",
             ))
 
-    rows = (
-        db.query(DocumentChunk.id, DocumentChunk.embedding, DocumentChunk.book_id, DocumentChunk.text)
-        .filter(
-            DocumentChunk.book_id.in_(book_ids),
-            DocumentChunk.embedding.isnot(None),
-        )
+    # Stage 2: build cross-book hybrid retriever (BM25 + vector)
+    chunk_rows = (
+        db.query(DocumentChunk.id, DocumentChunk.book_id, DocumentChunk.embedding, DocumentChunk.text, DocumentChunk.page_start)
+        .filter(DocumentChunk.book_id.in_(book_ids), DocumentChunk.embedding.isnot(None))
         .all()
     )
-
-    if not rows:
+    if not chunk_rows:
         title_author_matches.sort(key=lambda x: x.score, reverse=True)
         return title_author_matches[:top_k]
+
+    chunks_for_index = [(cid, text or "", emb or "") for cid, _, emb, text, _ in chunk_rows]
+    retriever = HybridRetriever(bm25_weight=0.3, vector_weight=0.7)
+    retriever.build_index(chunks_for_index)
 
     try:
         query_vector = embed_single(q, settings_obj.EMBEDDING_MODEL)
@@ -194,36 +193,77 @@ def search_books(
         title_author_matches.sort(key=lambda x: x.score, reverse=True)
         return title_author_matches[:top_k]
 
-    candidates = [(cid, emb) for cid, emb, _, _ in rows]
-    top = search_chunks(query_vector, candidates, top_k=max(top_k * 3, 20))
+    # Stage 3: hybrid retrieval (BM25 + vector)
+    hybrid_hits = retriever.retrieve(query=q, query_vector=query_vector, top_k=top_k * 3)
 
-    chunk_book_map = {cid: bid for cid, _, bid, _ in rows}
-    chunk_text_map = {cid: (text or "") for cid, _, _, text in rows}
-    book_hits = {}
-    for cid, score in top:
-        bid = chunk_book_map.get(cid)
+    chunk_book = {cid: bid for cid, bid, _, _, _ in chunk_rows}
+    chunk_text = {cid: text or "" for cid, _, _, text, _ in chunk_rows}
+    chunk_page = {cid: page for cid, _, _, _, page in chunk_rows}
+
+    # Stage 4: book-level dedup (keep best chunk per book)
+    book_hits: dict[int, tuple[float, str, int | None]] = {}
+    for cid, score in hybrid_hits:
+        bid = chunk_book.get(cid)
         if bid is None:
             continue
         if bid not in book_hits or score > book_hits[bid][0]:
-            snippet = chunk_text_map.get(cid, "")[:200]
-            book_hits[bid] = (score, snippet)
+            book_hits[bid] = (score, chunk_text.get(cid, "")[:200], chunk_page.get(cid))
 
+    # Stage 5: rerank with cross-encoder
+    from app.services.reranker_service import rerank_candidates
+    rerank_input = [
+        (bid, chunk_text.get(list(chunk_book.keys())[0], ""), score)
+        for bid, (score, _, _) in book_hits.items()
+    ]
+    # Map chunk IDs to book IDs for reranker
+    chunk_id_for_book: dict[int, int] = {}
+    for cid, bid in chunk_book.items():
+        if bid in book_hits and bid not in chunk_id_for_book.values():
+            chunk_id_for_book[cid] = bid
+
+    rerank_candidates_list = [
+        (cid, chunk_text.get(cid, ""), book_hits[bid][0])
+        for cid, bid in chunk_id_for_book.items()
+    ]
+    try:
+        reranked = rerank_candidates(query=q, candidates=rerank_candidates_list, top_k=top_k * 2)
+    except Exception:
+        reranked = [(cid, score) for cid, _, score in rerank_candidates_list[:top_k * 2]]
+
+    # Map reranked chunk scores back to books
+    final_book_hits: dict[int, tuple[float, str, int | None]] = {}
+    for cid, score in reranked:
+        bid = chunk_book.get(cid)
+        if bid is None:
+            continue
+        if bid not in final_book_hits or score > final_book_hits[bid][0]:
+            final_book_hits[bid] = (score, chunk_text.get(cid, "")[:200], chunk_page.get(cid))
+
+    # Normalize scores to [0, 1] for consistent thresholding
+    if final_book_hits:
+        all_scores = [s for s, _, _ in final_book_hits.values()]
+        min_s, max_s = min(all_scores), max(all_scores)
+        delta = max_s - min_s
+        if delta > 0:
+            for bid in list(final_book_hits.keys()):
+                s, txt, pg = final_book_hits[bid]
+                final_book_hits[bid] = ((s - min_s) / delta, txt, pg)
+
+    # Stage 6: build results, filter below 50%
+    SCORE_THRESHOLD = 0.5
     seen_books = {b.book_id for b in title_author_matches}
     semantic_results = []
     for b in books:
-        if b.id in book_hits and b.id not in seen_books:
-            score, snippet = book_hits[b.id]
+        if b.id in final_book_hits and b.id not in seen_books:
+            score, snippet, page = final_book_hits[b.id]
             semantic_results.append(BookSearchResult(
-                book_id=b.id,
-                title=b.title,
-                author=getattr(b, "author", None),
+                book_id=b.id, title=b.title, author=getattr(b, "author", None),
                 file_type=getattr(b, "file_type", None),
-                score=round(score, 4),
-                snippet=snippet,
+                score=round(score, 4), snippet=snippet, chunk_page=page,
             ))
 
     semantic_results.sort(key=lambda x: x.score, reverse=True)
-    results = title_author_matches + semantic_results
+    results = [r for r in title_author_matches + semantic_results if r.score >= SCORE_THRESHOLD]
     return results[:top_k]
 
 

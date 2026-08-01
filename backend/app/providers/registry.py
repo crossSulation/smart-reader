@@ -43,7 +43,9 @@ def init_providers(settings):
     from app.providers.cloud_provider import CloudProvider
     from app.providers.mock_provider import MockProvider
     from app.providers.local_provider import LocalProvider
+    from app.providers.hybrid_provider import HybridLLMProvider
 
     registry.register(CloudProvider(settings))
     registry.register(MockProvider())
     registry.register(LocalProvider(settings))
+    registry.register(HybridLLMProvider())

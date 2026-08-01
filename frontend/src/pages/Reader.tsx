@@ -68,6 +68,8 @@ function Reader() {
   const [markdownJumpSection, setMarkdownJumpSection] = useState<number | undefined>(undefined);
   const [markdownSidebarEntries, setMarkdownSidebarEntries] = useState<MarkdownSidebarEntry[]>([]);
   const [activeMarkdownSectionIndex, setActiveMarkdownSectionIndex] = useState(0);
+  const [tocItems, setTocItems] = useState<{ id: string; title: string; level: number; page: number | null; }[]>([]);
+  const [showToc, setShowToc] = useState(false);
   const [localFile, setLocalFile] = useState<{ name: string; type: "pdf" | "epub" | "markdown"; url: string } | null>(null);
   const [localUploadStatus, setLocalUploadStatus] = useState<"idle" | "uploading" | "uploaded" | "failed">("idle");
   const [localUploadMessage, setLocalUploadMessage] = useState("");
@@ -228,6 +230,15 @@ function Reader() {
   };
 
   const { data: book = null, isLoading: loading, error: swrError } = useBook(localFile ? undefined : id);
+
+  useEffect(() => {
+    if (!id || localFile) { setTocItems([]); return; }
+    const token = localStorage.getItem("token");
+    fetch(`/api/books/${id}/toc`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then(res => res.ok ? res.json() : [])
+      .then(setTocItems)
+      .catch(() => setTocItems([]));
+  }, [id, localFile]);
 
   useEffect(() => {
     if (swrError) setError((swrError as any).message || "Failed to load book");
@@ -738,7 +749,18 @@ function Reader() {
 
           <h1 className="max-w-[55vw] truncate text-xl font-bold text-gray-900 md:text-2xl text-center dark:text-gray-100">{activeTitle}</h1>
 
-          <div className="justify-self-end">
+          <div className="justify-self-end flex items-center gap-2">
+            {tocItems.length > 0 && (
+              <button
+                onClick={() => setShowToc(!showToc)}
+                className={`rounded-lg border px-3 py-1.5 text-sm transition ${
+                  showToc ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                    : "border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                }`}
+              >
+                Chapters
+              </button>
+            )}
             <div className="flex items-center gap-2">
               {(localUploadStatus !== "idle" || indexing) && (
                 <span className={`rounded px-2 py-1 text-xs font-medium ${
@@ -810,6 +832,27 @@ function Reader() {
       </header>
 
       {tts.status !== "idle" && <TTSControlBar tts={tts} />}
+
+      {showToc && tocItems.length > 0 && (
+        <div className="border-b border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
+          <div className="max-h-64 overflow-y-auto px-4 py-2">
+            {tocItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => {
+                  if (item.page) setJumpToPage(item.page);
+                  setShowToc(false);
+                }}
+                className="block w-full py-1 text-left text-sm text-gray-700 transition hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400"
+                style={{ paddingLeft: `${item.level * 12 + 8}px` }}
+              >
+                {item.title}
+                {item.page && <span className="ml-2 text-xs text-gray-400">p.{item.page}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 min-h-0">
       {!isDesktop ? (

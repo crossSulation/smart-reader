@@ -228,6 +228,7 @@ class TocItem(BaseModel):
     level: int
     anchor: str
     order_index: int
+    page: Optional[int] = None
 
 
 class IngestionMetricsResponse(BaseModel):

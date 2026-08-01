@@ -343,6 +343,10 @@ def ask_book(
             "Try rephrasing your question or selecting a different section from the book."
         )
     else:
+        from app.middleware.privacy_guard import extract_privacy_context, validate_document_safety
+        privacy = extract_privacy_context(request)
+        validate_document_safety(context_texts, privacy.enabled)
+
         system, user_prompt = build_qa_prompt(
             body.question,
             context_texts,
@@ -441,8 +445,12 @@ def get_book_summary(
             status_code=422,
             detail="Invalid template. Use one of: cornell, bullet_points, sq3r",
         )
-
     context_texts = _truncate_context([r.text for r in rows])
+
+    from app.middleware.privacy_guard import extract_privacy_context, validate_document_safety
+    privacy = extract_privacy_context(request)
+    validate_document_safety(context_texts, privacy.enabled)
+
     system, user_prompt = build_summary_prompt(
         context_texts,
         book.title,

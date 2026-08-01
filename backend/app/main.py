@@ -96,25 +96,12 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
-# Auto-create tables + migrate on startup
+# Auto-create tables on startup
 @app.on_event("startup")
 def on_startup():
     from app.database import Base, sync_engine
     from app.models import BookShare, BookComment, User, Book, FileMetadata, DocumentChunk, AIInteraction, AICitation, Note, Flashcard, ReviewItem, KnowledgePoint, KnowledgeLink, AgentMemory, TokenUsageLog, CreditTransaction, CreditPack  # noqa
     Base.metadata.create_all(bind=sync_engine)
-
-    # Migration: add columns to existing books table
-    import sqlalchemy as sa
-    from sqlalchemy import inspect, text
-    inspector = inspect(sync_engine)
-    existing_cols = {c["name"] for c in inspector.get_columns("books")}
-    with sync_engine.connect() as conn:
-        if "shared_by" not in existing_cols:
-            conn.execute(text("ALTER TABLE books ADD COLUMN shared_by TEXT"))
-            conn.commit()
-        if "original_book_id" not in existing_cols:
-            conn.execute(text("ALTER TABLE books ADD COLUMN original_book_id INTEGER REFERENCES books(id)"))
-            conn.commit()
 
 # CORS中间件
 app.add_middleware(
@@ -125,6 +112,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# Global exception handlers
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(RuntimeError)
+async def runtime_error_handler(request: Request, exc: RuntimeError):
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger = logging.getLogger("app.main")
+    logger.error("Unhandled exception: %s %s — %s", request.method, request.url.path, str(exc))
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
+
+# Privacy Guard middleware — block cloud calls when X-Privacy-Mode is true
+from app.middleware.privacy_guard import privacy_middleware
+app.middleware("http")(privacy_middleware)
 
 # Credit status middleware — adds X-Credit-* headers to authenticated responses
 @app.middleware("http")

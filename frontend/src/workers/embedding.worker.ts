@@ -9,7 +9,17 @@ let pipe: FeatureExtractionPipeline | null = null;
 
 async function getPipeline(): Promise<FeatureExtractionPipeline> {
   if (!pipe) {
-    pipe = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
+    pipe = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2", {
+      progress_callback: (progress: any) => {
+        if (progress?.status === "progress") {
+          const pct = Math.round((progress.loaded / progress.total) * 100);
+          self.postMessage({ type: "model_progress", status: "downloading", progress: pct });
+        } else if (progress?.status === "ready") {
+          self.postMessage({ type: "model_progress", status: "ready", progress: 100 });
+        }
+      },
+    });
+    self.postMessage({ type: "model_progress", status: "ready", progress: 100 });
   }
   return pipe;
 }

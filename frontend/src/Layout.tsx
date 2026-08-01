@@ -8,6 +8,8 @@ import { ThemeToggleButton } from './components/ThemeToggle';
 import CreditIndicator from './components/CreditIndicator';
 import CustomTitleBar from './components/CustomTitleBar';
 import MobileNav from './components/MobileNav';
+import OfflineIndicator from './components/OfflineIndicator';
+import ModelDownloadProgress from './components/ModelDownloadProgress';
 
 const Layout: React.FC = () => {
   const { t } = useTranslation();
@@ -121,6 +123,10 @@ const Layout: React.FC = () => {
       )}
 
       <Box component="main" sx={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ px: 2, pt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <OfflineIndicator />
+          <ModelDownloadProgress />
+        </Box>
         <Outlet />
       </Box>
     </Box>

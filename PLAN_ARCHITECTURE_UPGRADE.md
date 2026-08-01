@@ -2,8 +2,8 @@
 
 > 基于 `ARCHITECTURE.md` 对比当前代码库实际状态，制定分层改造计划。
 >
-> **进度：** Phase 0 ✅ | Phase 1 ✅ | Phase 2 ✅ | Phase 3 ⚠️ | Phase 4 ⚠️ | Phase 5 ⬜ | Phase 6 ⬜
-> **最后更新：** 2026-07-29
+> **进度：** Phase 0 ✅ | Phase 1 ✅ | Phase 2 ✅ | Phase 3 ⚠️ | Phase 4 ✅ | Phase 5 ✅ | Phase 6 ✅
+> **最后更新：** 2026-08-01
 
 ## Current Status Snapshot (2026-07-29)
 
@@ -28,18 +28,26 @@
 ### Phase 4 完成项
 - [x] 隐私模式路由（`privacy_mode` 参数贯穿 Agent/QA/Summary 端点）
 - [x] Provider 层抽象隔离（CloudProvider / LocalProvider / MockProvider）
+- [x] Privacy Guard FastAPI 中间件（自动拦截云端请求）
+- [x] 文档防泄漏（`validate_document_safety` 接入 QA + Summary 端点）
 
 ### Phase 4 未完成项
-- [ ] Privacy Guard 中间件
-- [ ] 文档防泄漏策略
+_全部完成_
 
 ### Phase 5-6（H2 规划）
+
+| Task | Notes | 状态 |
+|------|-------|------|
+| Hybrid Provider（本地优先 + 云端兜底） | `HybridLLMProvider` → Scheduler 路由 → 本地优先 → 云端兜底 | ✅ |
+| CapabilityScanner 前端上报 | `POST /api/capabilities/report` + `main.tsx` 启动上报 | ✅ |
+| 前端适配（离线指示器、模型下载进度） | `OfflineIndicator` + `ModelDownloadProgress` + Worker 进度回调 | ✅ |
+| E2E 测试 | Provider 单元测试 + 中间件集成测试 | ⬜ |
+
+### Phase 3 剩余未完成项（低优先级）
 | Task | Notes |
 |------|-------|
-| Hybrid Provider（本地优先 + 云端兜底） | Embed/LLM/Rerank 三路混合路由 |
-| CapabilityScanner 前端上报 | `POST /api/capabilities/report` |
-| 前端适配（离线指示器、模型下载进度） | Desktop/Web/Mobile 差异检测 |
-| E2E 测试 | Provider 单元测试 + 中间件集成测试 |
+| P3-03 ONNX Reranker | 先不做（前端混合搜索 + 服务端 reranker 已足够） |
+| P3-05 Tesseract WASM OCR | 后续评估 |
 
 ---
 
@@ -491,7 +499,8 @@ backend/app/models.py                      # BookShare + BookComment
 
 ## 十一、Immediate Next Steps
 
-1. **补完 Phase 4 安全项** — Privacy Guard 中间件 + 文档防泄漏策略（低复杂度，架构影响大）
-2. **AI Agent 搜索不收口本地** — Agent tool calls 保持服务端 embedding，不改动（用户确认）
-3. **Review / Knowledge Graph 搜索走本地** — 复用 `localSearch.ts`，减少服务端 embedding 调用
-4. **P3-03 ONNX Reranker** — 低优先级，需评估前端模型大小和加载延迟
+1. **~~补完 Phase 4 安全项~~** ✅
+2. **~~Review / Knowledge Graph 搜索走语义搜索~~** ✅
+3. **~~Phase 5: Hybrid Provider~~** ✅ — `HybridLLMProvider` + Scheduler 路由
+4. **~~Phase 6: 前端适配~~** ✅ — 能力上报 + 离线指示器 + 模型下载进度
+5. **Phase 7: 测试** — Provider 单元测试 + 中间件集成测试 + E2E 回归

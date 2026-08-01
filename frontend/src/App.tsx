@@ -7,6 +7,7 @@ import "./i18n";
 import "./App.css";
 import RouterContainer from "./routers";
 import { ThemeProvider as AppThemeProvider, useThemeContext } from "./contexts/ThemeContext";
+import { ToastProvider } from "./components/Toast";
 
 function MuiThemeWrapper({ children }: { children: React.ReactNode }) {
   const { resolved } = useThemeContext();
@@ -45,7 +46,9 @@ function App() {
     <AppThemeProvider>
       <MuiThemeWrapper>
         <SWRConfig value={swrConfig}>
-          <RouterContainer />
+          <ToastProvider>
+            <RouterContainer />
+          </ToastProvider>
         </SWRConfig>
       </MuiThemeWrapper>
     </AppThemeProvider>

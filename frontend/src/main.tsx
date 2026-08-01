@@ -53,6 +53,9 @@ if (isTauri) {
   };
 }
 
+// Report frontend capabilities on startup
+import('./utils/capabilities').then((m) => m.reportCapabilities());
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />

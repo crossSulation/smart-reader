@@ -1,3 +1,5 @@
+import { setModelStatus } from "../components/ModelDownloadProgress";
+
 type PendingRequest = {
   resolve: (vectors: number[][]) => void;
   reject: (err: Error) => void;
@@ -15,7 +17,11 @@ function getWorker(): Worker {
         type: "module",
       });
       worker.onmessage = (e: MessageEvent) => {
-        const { type, id, vectors, error } = e.data;
+        const { type, id, vectors, error, status, progress } = e.data;
+        if (type === "model_progress") {
+          setModelStatus(status, progress);
+          return;
+        }
         const p = pending.get(id);
         if (!p) return;
         pending.delete(id);

@@ -58,7 +58,34 @@ def list_knowledge_points(
         query = query.filter(KnowledgePoint.entity_type == entity_type)
 
     if search:
-        query = query.filter(KnowledgePoint.label.ilike(f"%{search}%"))
+        from app.services.embedding_service import embed_single, embed_texts, cosine_similarity
+        from app.config import get_settings
+        settings = get_settings()
+
+        all_kps = query.all()
+        if not all_kps:
+            return []
+
+        query_vec = embed_single(search, settings.EMBEDDING_MODEL)
+
+        kp_texts = [(kp.label or "") + " " + (kp.description or "") for kp in all_kps]
+        kp_vectors = embed_texts(kp_texts, settings.EMBEDDING_MODEL)
+
+        scored = []
+        for i, kp in enumerate(all_kps):
+            label_match = search.lower() in (kp.label or "").lower()
+            keyword_bonus = 0.3 if label_match else 0.0
+            sim = cosine_similarity(query_vec, kp_vectors[i])
+            scored.append((kp, keyword_bonus + sim))
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+
+        if book_id:
+            cid_set = {row[0] for row in db.query(DocumentChunk.id).filter(DocumentChunk.book_id == book_id).all()}
+            filtered = [(kp, s) for kp, s in scored if set(_parse_json(kp.source_chunk_ids)) & cid_set]
+            return [_to_kp_response(kp, db) for kp, _ in filtered[offset:offset + limit]]
+
+        return [_to_kp_response(kp, db) for kp, _ in scored[offset:offset + limit]]
 
     if book_id:
         chunk_ids = (

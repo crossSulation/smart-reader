@@ -194,6 +194,7 @@ def get_book_toc(
                 level=level,
                 anchor=_slugify(row.section_path),
                 order_index=row.chunk_index,
+                page=row.page_start,
             )
         )
 

@@ -94,29 +94,36 @@ function Library() {
     ensureChunkCache();
   }, []);
 
-  // Semantic search (local first, fallback to server)
+  // Semantic search (local first, server for quality)
   useEffect(() => {
     if (!searchQuery.trim()) {
       setSearchResults(null);
       return;
     }
 
+    let cancelled = false;
+
     const doSearch = async () => {
       setSearchLoading(true);
+
+      // Stage 1: instant local search (keyword + vector hybrid)
+      let topLocalScore = 0;
       try {
-        // Try local search
         const localResults = await localSearch(
           searchQuery.trim(),
           books.map((b) => ({ id: b.id, title: b.title, author: b.author ?? null, file_type: b.file_type ?? null })),
           20,
         );
-        if (localResults.length > 0) {
+        if (!cancelled && localResults.length > 0) {
           setSearchResults(localResults);
           setSearchLoading(false);
-          return;
+          topLocalScore = localResults[0]?.score ?? 0;
         }
-      } catch { /* fall through to server */ }
+      } catch { topLocalScore = 0; }
 
+      // Stage 2: server search for better quality (hybrid + reranker)
+      // Always run server if local was weak (< 0.5 confidence)
+      if (cancelled) return;
       try {
         const token = localStorage.getItem("token");
         const params = new URLSearchParams();
@@ -125,20 +132,18 @@ function Library() {
         const res = await fetch(`/api/books/search?${params}`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
-        if (res.ok) {
-          const data: SearchResultItem[] = await res.json();
-          setSearchResults(data);
-        } else {
-          setSearchResults([]);
+        if (res.ok && !cancelled) {
+          const serverResults: SearchResultItem[] = await res.json();
+          if (serverResults.length > 0 && (topLocalScore < 0.5 || serverResults[0].score > topLocalScore)) {
+            setSearchResults(serverResults);
+          }
         }
-      } catch {
-        setSearchResults([]);
-      } finally {
-        setSearchLoading(false);
-      }
+      } catch { /* keep local results */ }
+      if (!cancelled) setSearchLoading(false);
     };
 
     doSearch();
+    return () => { cancelled = true; };
   }, [searchQuery, books]);
 
   // Filter and sort books (only when not in semantic search mode)
