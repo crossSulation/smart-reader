@@ -259,7 +259,7 @@ def ask_book(
     4. Returns the answer and source passages.
     """
     from app.middleware.llm_settings import get_effective_settings
-    settings = get_effective_settings(request)
+    settings = get_effective_settings(request, db)
     evidence_threshold = max(0.0, min(1.0, settings.QA_EVIDENCE_THRESHOLD))
     book = _get_book_or_404(book_id, user["id"], db)
     db_user = db.query(User).filter(User.id == user["id"]).first()
@@ -423,7 +423,7 @@ def get_book_summary(
     Results are NOT cached — call with care on large books.
     """
     from app.middleware.llm_settings import get_effective_settings
-    settings = get_effective_settings(request)
+    settings = get_effective_settings(request, db)
     book = _get_book_or_404(book_id, user["id"], db)
 
     # Fetch first max_chunks in order (no embedding required for summary)
@@ -514,7 +514,7 @@ def run_book_agent(
 ):
     """LangChain tool-calling agent endpoint for read/write/search/web_search/quiz."""
     from app.middleware.llm_settings import get_effective_settings
-    settings = get_effective_settings(request)
+    settings = get_effective_settings(request, db)
     from app.middleware.privacy_guard import extract_privacy_context
     privacy = extract_privacy_context(request)
     provider_label = f"local-{settings.LLM_PROVIDER}" if privacy.enabled else settings.LLM_PROVIDER
@@ -571,7 +571,7 @@ async def run_book_agent_stream(
 ):
     """SSE stream for real-time LangChain tool execution events and final output."""
     from app.middleware.llm_settings import get_effective_settings
-    settings = get_effective_settings(request)
+    settings = get_effective_settings(request, db)
     from app.middleware.privacy_guard import extract_privacy_context
     privacy = extract_privacy_context(request)
     provider_label = f"local-{settings.LLM_PROVIDER}" if privacy.enabled else settings.LLM_PROVIDER

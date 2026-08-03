@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from fastapi.openapi.utils import get_openapi
 from app.routers import ai, auth, books, files, upload, ingestion, learning, personalization, knowledge, billing
+from app.routers.settings import router as settings_router
 import logging
 import os
 
@@ -185,6 +186,7 @@ app.include_router(personalization.profile_router, prefix="/api")
 app.include_router(personalization.analytics_router, prefix="/api")
 app.include_router(knowledge.router)
 app.include_router(billing.router)
+app.include_router(settings_router)
 
 @app.get("/")
 def read_root():

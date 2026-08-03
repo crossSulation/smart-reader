@@ -26,8 +26,6 @@ import { READER_SHORTCUTS, type ShortcutDef } from "../constants/shortcuts";
 import { clearCache } from "../utils/fileCache";
 import { usePrivacyMode } from "../hooks/usePrivacyMode";
 
-const STORAGE_KEY_LLM = "llm-settings";
-
 interface LLMSettings {
   provider: string;
   model: string;
@@ -37,28 +35,50 @@ interface LLMSettings {
   temperature: number;
 }
 
-function loadLLMSettings(): LLMSettings {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_LLM);
-    if (raw) return JSON.parse(raw);
-  } catch { /* ignore */ }
-  return { provider: "mock", model: "llama3", baseUrl: "http://localhost:11434", apiKey: "", maxTokens: 512, temperature: 0.3 };
+const DEFAULT_LLM: LLMSettings = {
+  provider: "mock", model: "llama3", baseUrl: "http://localhost:11434", apiKey: "", maxTokens: 512, temperature: 0.3
+};
+
+async function fetchLLMSettings(): Promise<LLMSettings> {
+  const token = localStorage.getItem("token");
+  const res = await fetch("/api/settings/llm", {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (res.ok) {
+    const data = await res.json();
+    return {
+      provider: data.provider || "mock",
+      model: data.model || "llama3",
+      baseUrl: data.base_url || "http://localhost:11434",
+      apiKey: data.api_key || "",
+      maxTokens: data.max_tokens ?? 512,
+      temperature: data.temperature ?? 0.3,
+    };
+  }
+  return DEFAULT_LLM;
 }
 
-function saveLLMSettings(s: LLMSettings) {
-  localStorage.setItem(STORAGE_KEY_LLM, JSON.stringify(s));
+async function saveLLMSettings(s: LLMSettings): Promise<void> {
+  const token = localStorage.getItem("token");
+  await fetch("/api/settings/llm", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      provider: s.provider,
+      model: s.model,
+      base_url: s.baseUrl,
+      api_key: s.apiKey,
+      max_tokens: s.maxTokens,
+      temperature: s.temperature,
+    }),
+  });
 }
 
 export function getLLMHeaders(): Record<string, string> {
-  const s = loadLLMSettings();
-  return {
-    "X-LLM-Provider": s.provider,
-    "X-LLM-Model": s.model,
-    "X-LLM-Base-URL": s.baseUrl,
-    "X-LLM-API-Key": s.apiKey,
-    "X-LLM-Max-Tokens": String(s.maxTokens),
-    "X-LLM-Temperature": String(s.temperature),
-  };
+  return {};  // No longer needed; settings are stored server-side
 }
 
 const shortcutActionLabels: Record<string, { zh: string; en: string }> = {
@@ -95,18 +115,21 @@ export default function Settings() {
   const [clearingCache, setClearingCache] = useState(false);
   const [exportStatus, setExportStatus] = useState<{ severity: "success" | "error"; message: string } | null>(null);
 
-  const [llmSettings, setLLMSettings] = useState<LLMSettings>(loadLLMSettings);
+  const [llmSettings, setLLMSettings] = useState<LLMSettings>(DEFAULT_LLM);
   const [llmSaved, setLLMSaved] = useState(false);
 
   useEffect(() => {
-    const settings = loadLLMSettings();
-    setLLMSettings(settings);
+    fetchLLMSettings().then(setLLMSettings).catch(() => {});
   }, []);
 
-  const saveLLM = useCallback(() => {
-    saveLLMSettings(llmSettings);
-    setLLMSaved(true);
-    setTimeout(() => setLLMSaved(false), 2000);
+  const saveLLM = useCallback(async () => {
+    try {
+      await saveLLMSettings(llmSettings);
+      setLLMSaved(true);
+      setTimeout(() => setLLMSaved(false), 2000);
+    } catch {
+      setLLMSaved(false);
+    }
   }, [llmSettings]);
 
   const getAuthHeaders = () => ({
