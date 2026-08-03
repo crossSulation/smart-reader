@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Box,
   Paper,
@@ -14,12 +14,52 @@ import {
   Alert,
   Switch,
   FormControlLabel,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
 } from "@mui/material";
 import LanguageSwitcher from "../components/LanguageSwitcher";
 import { ThemeSegmentedToggle } from "../components/ThemeToggle";
 import { READER_SHORTCUTS, type ShortcutDef } from "../constants/shortcuts";
 import { clearCache } from "../utils/fileCache";
 import { usePrivacyMode } from "../hooks/usePrivacyMode";
+
+const STORAGE_KEY_LLM = "llm-settings";
+
+interface LLMSettings {
+  provider: string;
+  model: string;
+  baseUrl: string;
+  apiKey: string;
+  maxTokens: number;
+  temperature: number;
+}
+
+function loadLLMSettings(): LLMSettings {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_LLM);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return { provider: "mock", model: "llama3", baseUrl: "http://localhost:11434", apiKey: "", maxTokens: 512, temperature: 0.3 };
+}
+
+function saveLLMSettings(s: LLMSettings) {
+  localStorage.setItem(STORAGE_KEY_LLM, JSON.stringify(s));
+}
+
+export function getLLMHeaders(): Record<string, string> {
+  const s = loadLLMSettings();
+  return {
+    "X-LLM-Provider": s.provider,
+    "X-LLM-Model": s.model,
+    "X-LLM-Base-URL": s.baseUrl,
+    "X-LLM-API-Key": s.apiKey,
+    "X-LLM-Max-Tokens": String(s.maxTokens),
+    "X-LLM-Temperature": String(s.temperature),
+  };
+}
 
 const shortcutActionLabels: Record<string, { zh: string; en: string }> = {
   "reader.nextPage": { zh: "下一页", en: "Next page" },
@@ -54,6 +94,20 @@ export default function Settings() {
   const [exportingFlashcards, setExportingFlashcards] = useState(false);
   const [clearingCache, setClearingCache] = useState(false);
   const [exportStatus, setExportStatus] = useState<{ severity: "success" | "error"; message: string } | null>(null);
+
+  const [llmSettings, setLLMSettings] = useState<LLMSettings>(loadLLMSettings);
+  const [llmSaved, setLLMSaved] = useState(false);
+
+  useEffect(() => {
+    const settings = loadLLMSettings();
+    setLLMSettings(settings);
+  }, []);
+
+  const saveLLM = useCallback(() => {
+    saveLLMSettings(llmSettings);
+    setLLMSaved(true);
+    setTimeout(() => setLLMSaved(false), 2000);
+  }, [llmSettings]);
 
   const getAuthHeaders = () => ({
     Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -102,18 +156,11 @@ export default function Settings() {
     try {
       const res = await fetch("/api/learning/flashcards?limit=1000", { headers: getAuthHeaders() });
       if (!res.ok) throw new Error(`Failed to fetch flashcards (${res.status})`);
-      const cards: { front: string; back: string; tags: string[] }[] = await res.json();
+      const cards: { front: string; back: string; created_at: string }[] = await res.json();
 
-      const header = "front,back,tags";
-      const rows = cards.map((c) => {
-        const front = `"${(c.front || "").replace(/"/g, '""')}"`;
-        const back = `"${(c.back || "").replace(/"/g, '""')}"`;
-        const tags = c.tags.length > 0 ? `"${c.tags.join(" ")}"` : "";
-        return `${front},${back},${tags}`;
-      });
-      const csv = [header, ...rows].join("\n");
-
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const csvHeader = "Front,Back,Created\n";
+      const csvRows = cards.map((c) => `"${(c.front || "").replace(/"/g, '""')}","${(c.back || "").replace(/"/g, '""')}","${c.created_at}"`).join("\n");
+      const blob = new Blob([csvHeader + csvRows], { type: "text/csv;charset=utf-8" });
       downloadBlob(blob, `smart-reader-flashcards-${new Date().toISOString().slice(0, 10)}.csv`);
       setExportStatus({ severity: "success", message: t("settings.exportSuccess", "Exported successfully.") });
     } catch (err) {
@@ -127,9 +174,9 @@ export default function Settings() {
     setClearingCache(true);
     try {
       await clearCache();
-      setExportStatus({ severity: "success", message: t("settings.cacheCleared", "Cache cleared.") });
-    } catch (err) {
-      setExportStatus({ severity: "error", message: err instanceof Error ? err.message : "Failed to clear cache" });
+      setExportStatus({ severity: "success", message: t("settings.cacheCleared") });
+    } catch {
+      setExportStatus({ severity: "error", message: "Failed to clear cache" });
     } finally {
       setClearingCache(false);
     }
@@ -144,127 +191,214 @@ export default function Settings() {
   }, []);
 
   return (
-    <div className="p-8 max-w-2xl mx-auto">
+    <div className="p-8 mx-auto" style={{ maxWidth: 960 }}>
       <Typography variant="h4" component="h1" gutterBottom>
         {t("common.settings")}
       </Typography>
 
-      <Paper elevation={2} className="p-6 mb-8">
-        <Typography variant="h6" gutterBottom>
-          {t("settings.appearance")}
-        </Typography>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Appearance */}
+        <Paper elevation={2} className="p-5">
+          <Typography variant="h6" gutterBottom>
+            {t("settings.appearance")}
+          </Typography>
 
-        <Box display="flex" alignItems="center" gap={3} flexWrap="wrap" mb={2}>
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>
-              {t("settings.language")}
-            </Typography>
-            <LanguageSwitcher />
+          <Box display="flex" alignItems="center" gap={3} flexWrap="wrap" mb={2}>
+            <Box>
+              <Typography variant="subtitle2" gutterBottom>
+                {t("settings.language")}
+              </Typography>
+              <LanguageSwitcher />
+            </Box>
+            <Box>
+              <Typography variant="subtitle2" gutterBottom>
+                {t("settings.theme")}
+              </Typography>
+              <ThemeSegmentedToggle />
+            </Box>
           </Box>
+
           <Box>
-            <Typography variant="subtitle2" gutterBottom>
-              {t("settings.theme")}
-            </Typography>
-            <ThemeSegmentedToggle />
+            <FormControlLabel
+              control={<Switch checked={privacyMode} onChange={togglePrivacyMode} />}
+              label="Privacy Mode — keep all data local, never send to cloud"
+            />
           </Box>
-        </Box>
+        </Paper>
 
-        <Box mt={2}>
-          <FormControlLabel
-            control={<Switch checked={privacyMode} onChange={togglePrivacyMode} />}
-            label="Privacy Mode — keep all data local, never send to cloud"
-          />
-        </Box>
-      </Paper>
+        {/* LLM Configuration */}
+        <Paper elevation={2} className="p-5">
+          <Typography variant="h6" gutterBottom>
+            LLM Configuration
+          </Typography>
+          <Typography variant="caption" color="text.secondary" gutterBottom display="block" mb={2}>
+            Configure the AI model. Changes apply to knowledge extraction, Q&A, summarization, and quiz generation.
+          </Typography>
 
-      <Paper elevation={2} className="p-6">
-        <Typography variant="h6" gutterBottom>
-          {t("settings.shortcuts")}
-        </Typography>
+          <div className="grid grid-cols-2 gap-3">
+            <FormControl size="small" fullWidth>
+              <InputLabel>Provider</InputLabel>
+              <Select
+                value={llmSettings.provider}
+                label="Provider"
+                onChange={(e) => setLLMSettings({ ...llmSettings, provider: e.target.value })}
+              >
+                <MenuItem value="mock">mock (no API key)</MenuItem>
+                <MenuItem value="openai">openai</MenuItem>
+                <MenuItem value="ollama">ollama (local)</MenuItem>
+              </Select>
+            </FormControl>
 
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600 }}>
-                  {t("settings.shortcutsAction")}
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>
-                  {t("settings.shortcutsKey")}
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {deduped.map((def) => (
-                <TableRow key={`${def.key}-${def.ctrl}-${def.shift}`}>
-                  <TableCell>
-                    {shortcutActionLabels[def.action]?.[lang] ?? def.action}
+            <TextField
+              size="small"
+              label="Model"
+              value={llmSettings.model}
+              onChange={(e) => setLLMSettings({ ...llmSettings, model: e.target.value })}
+              fullWidth
+            />
+
+            <TextField
+              size="small"
+              label="API Key"
+              type="password"
+              value={llmSettings.apiKey}
+              onChange={(e) => setLLMSettings({ ...llmSettings, apiKey: e.target.value })}
+              fullWidth
+              className="col-span-2"
+            />
+
+            <TextField
+              size="small"
+              label="Base URL"
+              value={llmSettings.baseUrl}
+              onChange={(e) => setLLMSettings({ ...llmSettings, baseUrl: e.target.value })}
+              fullWidth
+              className="col-span-2"
+            />
+
+            <TextField
+              size="small"
+              label="Max Tokens"
+              type="number"
+              value={llmSettings.maxTokens}
+              onChange={(e) => setLLMSettings({ ...llmSettings, maxTokens: Number(e.target.value) })}
+              fullWidth
+            />
+
+            <TextField
+              size="small"
+              label="Temperature"
+              type="number"
+              inputProps={{ step: 0.1, min: 0, max: 2 }}
+              value={llmSettings.temperature}
+              onChange={(e) => setLLMSettings({ ...llmSettings, temperature: Number(e.target.value) })}
+              fullWidth
+            />
+          </div>
+
+          <Box mt={2} display="flex" alignItems="center" gap={2}>
+            <Button variant="contained" size="small" onClick={saveLLM}>
+              Save LLM Config
+            </Button>
+            {llmSaved && (
+              <Typography variant="caption" color="success.main">Saved</Typography>
+            )}
+          </Box>
+        </Paper>
+
+        {/* Shortcuts */}
+        <Paper elevation={2} className="p-5">
+          <Typography variant="h6" gutterBottom>
+            {t("settings.shortcuts")}
+          </Typography>
+
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 600 }}>
+                    {t("settings.shortcutsAction")}
                   </TableCell>
-                  <TableCell>
-                    <Box
-                      component="kbd"
-                      sx={{
-                        display: "inline-block",
-                        px: 1,
-                        py: 0.25,
-                        fontSize: "0.8rem",
-                        fontFamily: "monospace",
-                        bgcolor: "grey.100",
-                        border: "1px solid",
-                        borderColor: "grey.300",
-                        borderRadius: 0.75,
-                      }}
-                    >
-                      {formatShortcutKey(def)}
-                    </Box>
+                  <TableCell sx={{ fontWeight: 600 }}>
+                    {t("settings.shortcutsKey")}
                   </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
+              </TableHead>
+              <TableBody>
+                {deduped.map((def) => (
+                  <TableRow key={`${def.key}-${def.ctrl}-${def.shift}`}>
+                    <TableCell>
+                      {shortcutActionLabels[def.action]?.[lang] ?? def.action}
+                    </TableCell>
+                    <TableCell>
+                      <Box
+                        component="kbd"
+                        sx={{
+                          display: "inline-block",
+                          px: 1,
+                          py: 0.25,
+                          fontSize: "0.8rem",
+                          fontFamily: "monospace",
+                          bgcolor: "grey.100",
+                          border: "1px solid",
+                          borderColor: "grey.300",
+                          borderRadius: 0.75,
+                        }}
+                      >
+                        {formatShortcutKey(def)}
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
 
-      <Paper elevation={2} className="p-6">
-        <Typography variant="h6" gutterBottom>
-          {t("settings.exportData")}
-        </Typography>
+        {/* Data Export & Cache */}
+        <Paper elevation={2} className="p-5">
+          <Typography variant="h6" gutterBottom>
+            {t("settings.exportData")}
+          </Typography>
 
-        {exportStatus && (
-          <Alert severity={exportStatus.severity} sx={{ mb: 2 }} onClose={() => setExportStatus(null)}>
-            {exportStatus.message}
-          </Alert>
-        )}
+          {exportStatus && (
+            <Alert severity={exportStatus.severity} sx={{ mb: 2 }} onClose={() => setExportStatus(null)}>
+              {exportStatus.message}
+            </Alert>
+          )}
 
-        <Box display="flex" flexWrap="wrap" gap={2}>
-          <Button
-            variant="outlined"
-            onClick={exportNotes}
-            disabled={exportingNotes}
-          >
-            {exportingNotes ? t("common.loading") : t("settings.exportNotesMd")}
-          </Button>
-          <Button
-            variant="outlined"
-            onClick={exportFlashcards}
-            disabled={exportingFlashcards}
-          >
-            {exportingFlashcards ? t("common.loading") : t("settings.exportFlashcardsCsv")}
-          </Button>
-        </Box>
+          <Box display="flex" flexWrap="wrap" gap={2}>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={exportNotes}
+              disabled={exportingNotes}
+            >
+              {exportingNotes ? t("common.loading") : t("settings.exportNotesMd")}
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={exportFlashcards}
+              disabled={exportingFlashcards}
+            >
+              {exportingFlashcards ? t("common.loading") : t("settings.exportFlashcardsCsv")}
+            </Button>
+          </Box>
 
-        <Box mt={2}>
-          <Button
-            variant="outlined"
-            color="secondary"
-            size="small"
-            onClick={handleClearCache}
-            disabled={clearingCache}
-          >
-            {clearingCache ? t("common.loading") : t("settings.clearCache")}
-          </Button>
-        </Box>
-      </Paper>
+          <Box mt={2}>
+            <Button
+              variant="outlined"
+              color="secondary"
+              size="small"
+              onClick={handleClearCache}
+              disabled={clearingCache}
+            >
+              {clearingCache ? t("common.loading") : t("settings.clearCache")}
+            </Button>
+          </Box>
+        </Paper>
+      </div>
     </div>
   );
 }

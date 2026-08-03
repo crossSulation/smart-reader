@@ -11,6 +11,7 @@ function BookCard({ book, onDelete, onShare }: { book: Book; onDelete?: (id: num
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [extractDone, setExtractDone] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const indexed = book.indexed ?? false;
 
@@ -60,13 +61,16 @@ function BookCard({ book, onDelete, onShare }: { book: Book; onDelete?: (id: num
           setExtractDone(true);
           setTimeout(() => setExtractDone(false), 4000);
         }
-      } else {
-        const err = await res.json().catch(() => ({ detail: res.statusText }));
-        setExtractError(err.detail || 'Failed to extract knowledge points');
+        } else {
+          const err = await res.json().catch(() => ({ detail: res.statusText }));
+          const msg = err.detail || "Failed to extract knowledge points";
+          setExtractError(msg.includes("requires a real LLM") ? "Knowledge extraction needs a real LLM. Configure LLM_PROVIDER in .env.dev" : msg);
+          setShowErrorModal(true);
+        }
+      } catch {
+        setExtractError("Network error. Please try again.");
+        setShowErrorModal(true);
       }
-    } catch {
-      setExtractError('Network error. Please try again.');
-    }
     setExtracting(false);
   };
 
@@ -148,7 +152,6 @@ function BookCard({ book, onDelete, onShare }: { book: Book; onDelete?: (id: num
         {extractDone && (
           <p className="mt-1 text-[10px] text-amber-600">All knowledge points already extracted</p>
         )}
-        {extractError && <p className="mt-1 text-[10px] text-red-500">{extractError}</p>}
 
         <button
           type="button"
@@ -190,6 +193,20 @@ function BookCard({ book, onDelete, onShare }: { book: Book; onDelete?: (id: num
           </div>
         )}
       </div>
+
+      {showErrorModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowErrorModal(false)}>
+          <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl dark:bg-gray-900" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-3 text-lg font-semibold text-red-600 dark:text-red-400">Extraction Failed</h3>
+            <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">{extractError}</p>
+            <div className="flex justify-end">
+              <button onClick={() => setShowErrorModal(false)} className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600">
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
