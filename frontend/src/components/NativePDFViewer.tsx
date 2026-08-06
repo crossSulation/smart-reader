@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo, type TouchEvent, type PointerEvent } from "react";
 import Skeleton from "./Skeleton";
+import { getCachedPage, putCachedPage, preloadPages } from "../services/pageCache";
 
 type AnnotationType = 'highlight' | 'underline';
 
@@ -64,6 +65,7 @@ export default function NativePDFViewer({
 
   const viewerRef = useRef<HTMLDivElement>(null);
   const pageContainerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -75,6 +77,7 @@ export default function NativePDFViewer({
 
   useEffect(() => { pageNumberRef.current = pageNumber; }, [pageNumber]);
   useEffect(() => { totalPagesRef.current = totalPages; }, [totalPages]);
+  useEffect(() => { lastSavedPageRef.current = null; }, [pageNumber]);
 
   const activeToolRef = useRef(activeTool);
   const activeColorRef = useRef(activeColor);
@@ -111,6 +114,26 @@ export default function NativePDFViewer({
     if (!bookId) return;
     setLoading(true);
     setError(null);
+
+    const load = async (data: PageData) => {
+      setPageData(data);
+      setTotalPages(data.total_pages);
+      onTotalPagesChange?.(data.total_pages);
+      setPageNumber(data.page);
+      onPageChange?.(data.page);
+      setLoading(false);
+
+      preloadPages(bookId, data.page, data.total_pages).catch(() => {});
+    };
+
+    try {
+      const cached = await getCachedPage(bookId, page);
+      if (cached) {
+        load(cached as PageData);
+        return;
+      }
+    } catch { /* fall through to server */ }
+
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(`/api/books/${bookId}/pages/${page}`, {
@@ -118,17 +141,14 @@ export default function NativePDFViewer({
       });
       if (!res.ok) {
         setError(res.status === 404 ? "Page not found" : "Failed to load page");
+        setLoading(false);
         return;
       }
       const data: PageData = await res.json();
-      setPageData(data);
-      setTotalPages(data.total_pages);
-      onTotalPagesChange?.(data.total_pages);
-      setPageNumber(data.page);
-      onPageChange?.(data.page);
+      putCachedPage(bookId, page, data).catch(() => {});
+      load(data);
     } catch {
       setError("Network error loading page");
-    } finally {
       setLoading(false);
     }
   }, [bookId, onTotalPagesChange, onPageChange]);
@@ -170,7 +190,7 @@ export default function NativePDFViewer({
 
   const handleTouchEnd = useCallback((e: TouchEvent) => {
     if (!touchStartX.current) return;
-    if (dragStartRef.current) return; // ignore pagination during annotation drag
+    if (dragStartRef.current) return;
     const deltaX = touchStartX.current - e.changedTouches[0].clientX;
     const deltaY = touchStartY.current - e.changedTouches[0].clientY;
 
@@ -189,7 +209,6 @@ export default function NativePDFViewer({
     touchStartY.current = 0;
   }, [handleNext, handlePrev]);
 
-  // --- Rectangle drag annotation ---
   const getRelativeCoords = useCallback((clientX: number, clientY: number): { x: number; y: number } | null => {
     if (!pageContainerRef.current) return null;
     const r = pageContainerRef.current.getBoundingClientRect();
@@ -287,6 +306,80 @@ export default function NativePDFViewer({
   );
 
   const containerRatio = pageData ? pageData.width / pageData.height : 1;
+
+  // ── Canvas drawing ───────────────────────────────────────────
+
+  const canvasW = pageWidth;
+  const canvasH = pageData ? Math.round(pageWidth / containerRatio) : canvasW;
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !pageData) return;
+
+    canvas.width = canvasW;
+    canvas.height = canvasH;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const img = new Image();
+    let cancelled = false;
+
+    img.onload = () => {
+      if (cancelled) return;
+
+      ctx.clearRect(0, 0, canvasW, canvasH);
+      ctx.drawImage(img, 0, 0, canvasW, canvasH);
+
+      for (const a of pageAnnotations) {
+        for (const r of a.rects) {
+          const x = r.x * canvasW;
+          const y = r.y * canvasH;
+          const w = r.width * canvasW;
+          const h = r.height * canvasH;
+
+          if (a.type === 'highlight') {
+            ctx.fillStyle = a.color;
+            ctx.fillRect(x, y, w, h);
+          } else {
+            ctx.strokeStyle = a.color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x, y + h);
+            ctx.lineTo(x + w, y + h);
+            ctx.stroke();
+          }
+        }
+      }
+
+      if (previewRect) {
+        const px = previewRect.x * canvasW;
+        const py = previewRect.y * canvasH;
+        const pw = previewRect.width * canvasW;
+        const ph = previewRect.height * canvasH;
+
+        if (activeToolRef.current === 'highlight') {
+          ctx.fillStyle = activeColorRef.current;
+          ctx.globalAlpha = 0.7;
+          ctx.fillRect(px, py, pw, ph);
+          ctx.globalAlpha = 1;
+        } else if (activeToolRef.current === 'underline') {
+          ctx.strokeStyle = activeColorRef.current;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(px, py + ph);
+          ctx.lineTo(px + pw, py + ph);
+          ctx.stroke();
+        }
+      }
+    };
+
+    img.src = pageData.image;
+
+    return () => { cancelled = true; };
+  }, [pageData, pageAnnotations, previewRect, canvasW, canvasH]);
+
+  // ── Render ───────────────────────────────────────────────────
 
   return (
     <div className="flex w-full min-h-full flex-col items-stretch px-4 md:px-6 pt-4 pb-4">
@@ -399,65 +492,14 @@ export default function NativePDFViewer({
             }}
             onTouchEndCapture={() => handleDragEnd()}
           >
-            <img
-              src={pageData.image}
-              alt={`Page ${pageData.page}`}
-              className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-              draggable={false}
+            <canvas
+              ref={canvasRef}
+              className="absolute inset-0 w-full h-full pointer-events-none"
               style={{ zIndex: 0 }}
             />
-
-            {/* Saved annotations */}
-            <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 1 }}>
-              {pageAnnotations.map((a) => (
-                a.type === 'highlight' ? (
-                  a.rects.map((r, i) => (
-                    <div key={`${a.id}-${i}`} className="absolute"
-                      style={{
-                        left: `${r.x * 100}%`, top: `${r.y * 100}%`,
-                        width: `${r.width * 100}%`, height: `${r.height * 100}%`,
-                        backgroundColor: a.color,
-                      }}
-                    />
-                  ))
-                ) : (
-                  a.rects.map((r, i) => (
-                    <div key={`${a.id}-${i}`} className="absolute"
-                      style={{
-                        left: `${r.x * 100}%`,
-                        top: `${(r.y + r.height) * 100}%`,
-                        width: `${r.width * 100}%`,
-                        borderBottom: `2px solid ${a.color}`,
-                      }}
-                    />
-                  ))
-                )
-              ))}
-
-              {/* Live drag preview */}
-              {previewRect && (
-                activeToolRef.current === 'highlight' ? (
-                  <div className="absolute" style={{
-                    left: `${previewRect.x * 100}%`, top: `${previewRect.y * 100}%`,
-                    width: `${previewRect.width * 100}%`, height: `${previewRect.height * 100}%`,
-                    backgroundColor: activeColorRef.current,
-                    opacity: 0.7,
-                  }} />
-                ) : activeToolRef.current === 'underline' ? (
-                  <div className="absolute" style={{
-                    left: `${previewRect.x * 100}%`,
-                    top: `${(previewRect.y + previewRect.height) * 100}%`,
-                    width: `${previewRect.width * 100}%`,
-                    borderBottom: `2px solid ${activeColorRef.current}`,
-                    opacity: 0.7,
-                  }} />
-                ) : null
-              )}
-            </div>
           </div>
         )}
       </div>
-
     </div>
   );
 }
