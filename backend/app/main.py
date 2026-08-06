@@ -4,6 +4,7 @@ from fastapi.responses import Response
 from fastapi.openapi.utils import get_openapi
 from app.routers import ai, auth, books, files, upload, ingestion, learning, personalization, knowledge, billing
 from app.routers.settings import router as settings_router
+from app.routers.admin import router as admin_router
 import logging
 import os
 
@@ -97,12 +98,70 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
+def _ensure_admin_user():
+    from app.database import SessionLocal
+    from app.models import User
+    from app.routers.auth import AuthService
+    from app.config import get_settings
+    import logging
+
+    log = logging.getLogger(__name__)
+    s = get_settings()
+    db = SessionLocal()
+    try:
+        existing = db.query(User).filter(User.username == s.ADMIN_USERNAME).first()
+        if not existing:
+            admin = User(
+                username=s.ADMIN_USERNAME,
+                email=s.ADMIN_EMAIL,
+                hashed_password=AuthService.get_password_hash(s.ADMIN_PASSWORD),
+                is_admin=True,
+                credits=99999999,
+            )
+            db.add(admin)
+            db.commit()
+            log.info("Default admin user created: %s", s.ADMIN_USERNAME)
+        elif not existing.is_admin:
+            existing.is_admin = True
+            db.commit()
+            log.info("Existing user '%s' promoted to admin", s.ADMIN_USERNAME)
+    except Exception as e:
+        log.warning("Failed to ensure admin user: %s", e)
+        db.rollback()
+    finally:
+        db.close()
+
+
 # Auto-create tables on startup
 @app.on_event("startup")
 def on_startup():
     from app.database import Base, sync_engine
     from app.models import BookShare, BookComment, User, Book, FileMetadata, DocumentChunk, AIInteraction, AICitation, Note, Flashcard, ReviewItem, KnowledgePoint, KnowledgeLink, AgentMemory, TokenUsageLog, CreditTransaction, CreditPack  # noqa
     Base.metadata.create_all(bind=sync_engine)
+
+    import os
+
+    init_sql = os.path.join(os.path.dirname(__file__), "..", "init_data.sql")
+    if os.path.exists(init_sql):
+        import logging
+        log = logging.getLogger(__name__)
+        try:
+            with sync_engine.connect() as conn:
+                with open(init_sql) as f:
+                    for stmt in f.read().split(";"):
+                        stmt = stmt.strip()
+                        if not stmt or stmt.startswith("--"):
+                            continue
+                        try:
+                            conn.exec_driver_sql(stmt)
+                        except Exception:
+                            pass
+                conn.commit()
+            log.info("Init SQL executed: %s", init_sql)
+        except Exception as e:
+            log.warning("Init SQL skipped: %s", e)
+
+    _ensure_admin_user()
 
 # CORS中间件
 app.add_middleware(
@@ -187,6 +246,7 @@ app.include_router(personalization.analytics_router, prefix="/api")
 app.include_router(knowledge.router)
 app.include_router(billing.router)
 app.include_router(settings_router)
+app.include_router(admin_router)
 
 @app.get("/")
 def read_root():

@@ -38,6 +38,7 @@ class UserResponse(BaseModel):
     id: int
     username: str
     email: str
+    is_admin: bool = False
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -114,7 +115,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    return {"id": user.id, "username": user.username, "email": user.email}
+    return {"id": user.id, "username": user.username, "email": user.email, "is_admin": user.is_admin}
 
 @router.post("/register", response_model=Token)
 def register(user_create: UserCreate, db: Session = Depends(get_db)):
@@ -182,11 +183,11 @@ def get_current_user_info(current_user: dict = Depends(get_current_user), db: Se
         id=user.id,
         username=user.username,
         email=user.email,
+        is_admin=user.is_admin,
         created_at=user.created_at,
         updated_at=user.updated_at,
         books=user.books
     )
-
 
 @router.get("/users/search")
 def search_users(q: str, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -241,7 +242,14 @@ def get_me(current_user: dict = Depends(get_current_user), db: Session = Depends
         id=user.id,
         username=user.username,
         email=user.email,
+        is_admin=user.is_admin,
         created_at=user.created_at,
         updated_at=user.updated_at,
         books=user.books
     )
+
+
+def require_admin(current_user: dict = Depends(get_current_user)):
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user

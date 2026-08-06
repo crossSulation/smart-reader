@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Outlet, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AppBar, Toolbar, Typography, Box, IconButton, Tooltip, InputBase } from '@mui/material';
-import { SearchOutlined, AssignmentOutlined, HubOutlined, SettingsOutlined, PersonOutlined, LogoutOutlined, ImportContactsOutlined } from '@mui/icons-material';
+import { SearchOutlined, AssignmentOutlined, HubOutlined, SettingsOutlined, PersonOutlined, LogoutOutlined, ImportContactsOutlined, AdminPanelSettingsOutlined } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
 import { ThemeToggleButton } from './components/ThemeToggle';
@@ -10,9 +10,11 @@ import CustomTitleBar from './components/CustomTitleBar';
 import MobileNav from './components/MobileNav';
 import OfflineIndicator from './components/OfflineIndicator';
 import ModelDownloadProgress from './components/ModelDownloadProgress';
+import useAuth from './hooks/useAuth';
 
 const Layout: React.FC = () => {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [isNativeDesktop, setIsNativeDesktop] = useState(false);
@@ -104,6 +106,13 @@ const Layout: React.FC = () => {
                   <SettingsOutlined />
                 </IconButton>
               </Tooltip>
+              {user?.is_admin && (
+                <Tooltip title="Admin">
+                  <IconButton color="inherit" component={Link} to="/admin">
+                    <AdminPanelSettingsOutlined />
+                  </IconButton>
+                </Tooltip>
+              )}
               <Tooltip title={t('common.profile')}>
                 <IconButton color="inherit" component={Link} to="/profile">
                   <PersonOutlined />

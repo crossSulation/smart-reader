@@ -36,11 +36,13 @@ const Login: React.FC = () => {
         const data = await response.json();
         localStorage.setItem('token', data.access_token);
         
-        // Store user info if provided in response
-        if (data.user) {
-          localStorage.setItem('user', JSON.stringify(data.user));
+        const meRes = await fetch('/api/auth/currentuser', {
+          headers: { Authorization: `Bearer ${data.access_token}` },
+        });
+        if (meRes.ok) {
+          const meData = await meRes.json();
+          localStorage.setItem('user', JSON.stringify(meData));
         } else {
-          // Store basic user info if not provided
           localStorage.setItem('user', JSON.stringify({ username }));
         }
         

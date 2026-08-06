@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Float, DECIMAL
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Float, DECIMAL, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -11,6 +11,7 @@ class User(Base):
     username = Column(String, unique=True, index=True, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
+    is_admin = Column(Boolean, default=False, nullable=False)
     explanation_level = Column(String, nullable=False, default="intermediate")
     study_goal = Column(String, nullable=True)
     weak_topics = Column(Text, nullable=True)  # comma-separated weak topics

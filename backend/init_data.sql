@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
     hashed_password TEXT NOT NULL,
+    is_admin INTEGER DEFAULT 0,
     explanation_level TEXT DEFAULT 'intermediate',
     study_goal TEXT,
     weak_topics TEXT,
@@ -309,3 +310,11 @@ INSERT OR IGNORE INTO credit_packs (id, name, credits, price_cents, is_active, s
     (1, 'Starter',       100000, 199,  1, 1),
     (2, 'Standard',      500000, 899,  1, 2),
     (3, 'Premium',      2000000, 2999, 1, 3);
+
+-- =====================
+-- 种子数据: 默认管理员
+-- username: admin, password: admin123
+-- =====================
+INSERT OR IGNORE INTO users (id, username, email, hashed_password, is_admin)
+VALUES (1, 'admin', 'admin@smartreader.local',
+    '$5$rounds=535000$nVYNqcL2ZKwpgiTe$KK7MUBDb03ENwX9KkUehROJJxxG9ThV2xu0an7ev.52', 1);

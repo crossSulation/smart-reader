@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     # AI Router
     ENABLE_AI_ROUTER: bool = False  # Feature flag for Phase 1+2 middleware
     PROVIDER_PREFER: str = "cloud"  # "cloud" | "local" | "mock"
+    # Admin
+    ADMIN_USERNAME: str = "admin"
+    ADMIN_EMAIL: str = "admin@smartreader.local"
+    ADMIN_PASSWORD: str = "admin123"
 
 
 class DevelopmentSettings(Settings):
